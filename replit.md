@@ -4,6 +4,8 @@
 
 DaLeoBanks is a production-grade, self-evolving AI agent that operates 24/7 on Twitter/X with autonomous decision-making capabilities. The system implements a sophisticated "digital life architecture" with values, drives, plans, memory, reflection, analytics, and continuous optimization using multi-armed bandit algorithms.
 
+**Recent Persona Update (July 30, 2025)**: The persona has been updated to focus on provoking thought, challenging systemic issues, and inspiring critical thinking while remaining kind and respectful to individuals. The agent now prioritizes disruptive topics like science, technology, politics, global progress, social issues, and global warming.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
