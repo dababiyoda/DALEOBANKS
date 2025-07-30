@@ -1,0 +1,112 @@
+Below is a gap map of what you’re missing (or should harden) to turn the agent from “powerful” to unkillable digital life. I’ve grouped by layer and prioritized. Each item = what it is → why it matters → quick win.
+
+⸻
+
+TOP 12 (Priority Stack)
+	1.	Web‑grounded facts + citations
+What: Web search + retrieval with inline citations for claims.
+Why: Kills hallucinations; upgrades credibility in elite threads.
+Quick win: Add a tools/websearch.py adapter + “fact‑check before post” path for proposals; fail closed if sources < 2.
+	2.	Fact‑checker / Researcher agents (multi‑agent hardening)
+What: Dedicated Researcher (+ Fact‑Checker) feeding Writer → Critic “two‑key” gate.
+Why: Raises floor on quality; faster in heated threads.
+Quick win: Add roles in your conductor; block shipping if Researcher evidence score < threshold.
+	3.	Durable queue & retries (ops resilience)
+What: Replace in‑memory job timing with durable jobs (Redis + RQ/Celery) or a simple SQLite work queue.
+Why: Survives restarts, jitter, and rate‑limit storms.
+Quick win: Start with SQLite “jobs” table + exponential backoff columns.
+	4.	Observability pack (SLOs, cost, alerts)
+What: Metrics dashboard: error rate, post success, 429s, token spend, J‑score trend; Slack/email alerts.
+Why: See failures early; cap costs.
+Quick win: Add /metrics JSON + budget gauge; email alert when daily spend > target.
+	5.	Content calendar + canary posting
+What: Calendar with canary (shadow) posts to a test account; promote to main only if no guard‑rail hits.
+Why: Safer iteration; avoids public misfires.
+Quick win: Add TEST_ACCOUNT_ID + “shadow run” flag in selector.
+	6.	Causal learning (beyond bandits)
+What: Lightweight uplift modeling or DoWhy‑style causal estimates for format/topic effects.
+Why: Bandits exploit; causality explains why, transferring to new contexts.
+Quick win: Log minimal covariates; add “naive uplift” report weekly.
+	7.	Crisis & reputation playbook
+What: Auto‑detect crisis (spike in hostile sentiment), switch to Crisis Mode: one statement, one artifact, stop joking, higher human‑in‑loop.
+Why: One bad day can erase a year.
+Quick win: Sentiment threshold → feature flag CRISIS_MODE=True.
+	8.	Adversarial safety (prompt‑injection & link hygiene)
+What: Strip/sanitize untrusted mentions/URLs; open links in sandbox; disallow system‑prompt edits from public text.
+Why: Defends LLM attack surface.
+Quick win: Regex + allowlist domains; refuse to quote untrusted instructions.
+	9.	RBAC & audit (admin surface)
+What: Roles (viewer/editor/admin), JWT with expiry, IP allowlist; immutable audit log for persona edits.
+Why: Prevents “oops” and insider risk.
+Quick win: Add role claims to your existing admin token → JWT.
+	10.	Accessibility & compliance defaults
+What: Auto alt‑text, color‑contrast check, FTC #ad tagging for sponsors, GDPR/CCPA data requests.
+Why: Reach + legality + goodwill.
+Quick win: Alt‑text via model; inject #ad when sponsor flag set.
+	11.	Revenue Hub v2 (real CRM)
+What: Stripe/Substack/Calendly webhooks + lead scoring, UTM → contact → close; light CRM table.
+Why: Optimize for dollars, not vibes.
+Quick win: Add leads table + webhook endpoints; score = authority × intent.
+	12.	Multi‑platform adapters (prod‑grade)
+What: LinkedIn (posts, carousels, docs), Mastodon (CW, alt), shared memory with platform renderers.
+Why: Anti‑fragility and wider surface area.
+Quick win: Adapter interfaces: publish(), reply(), media(), with platform‑specific rate guards.
+
+⸻
+
+Nice‑to‑Have (next tier)
+	•	Localization (auto translate + cultural style rules + local KPIs).
+	•	Knowledge base (public Notion/GitBook synced from artifacts).
+	•	Community loop (newsletter + Discord/Slack; Q&A harvesting).
+	•	A/B for media (image card vs. plain text; TTS clips vs. silence).
+	•	Sponsor pipeline (templates, disclosure automation, scheduling).
+	•	Blue/green agent deploys (rollouts with feature flags).
+	•	Memory hygiene (TTL + distillation + “forget” API for sensitive data).
+	•	Accessibility QA (screen‑reader preview; caption auto‑check for video).
+
+⸻
+
+10‑Bullet Implementation Plan
+
+Now (≤24h)
+	1.	Add websearch + citations tool; wire proposals through it.
+	2.	Add Researcher + Fact‑Checker to two‑key gate.
+	3.	Implement SQLite job queue (durable retries).
+
+72h
+4) /metrics pane: 429 rate, J‑score, token spend; email alerts.
+5) Canary posting to test account; promote on pass.
+6) Crisis Mode switch tied to sentiment spike.
+
+30d
+7) LinkedIn + Mastodon adapters (posts, replies, media).
+8) Revenue Hub webhooks + lead scoring + CRM table.
+9) Adversarial safety (sanitizers + sandbox) + RBAC/JWT.
+10) Weekly uplift report + causal notes → feed selector weights.
+
+Lock KPIs: pilot_acceptances, revenue/day, followers/day.
+
+⸻
+
+Quick JSON patches you can apply today
+
+A) Force citations on proposals
+
+{ "prompt_overrides": "Before posting any proposal, search 2–3 credible sources. Include 1–2 citations. If sources conflict, note uncertainty and add rollback. If <2 sources, do not post." }
+
+B) Crisis Mode feature flag
+
+{ "prompt_overrides": "CRISIS_MODE: if hostile sentiment spikes, switch tone to calm/empathetic, post one clarifying statement + artifact, pause humor, route replies to two-key review." }
+
+
+⸻
+
+LEVEL‑UP PASS (frontier insight)
+
+Move from bandits → causal + scenario sims. Keep a tiny counterfactual simulator that predicts J for “if this post ran on LinkedIn at 9am with a carousel.” That lets the agent choose platforms/formats by predicted uplift, not history alone.
+
+⸻
+
+Next step (easy)
+
+Pick 2 of the Top‑12 you want this week (I’d start with Web‑grounded facts and Durable queue). I’ll drop the exact patch (files, endpoints, tests) to merge in.
