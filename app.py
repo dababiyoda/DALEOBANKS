@@ -108,7 +108,11 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Keep connection alive
             await asyncio.sleep(30)
-            await websocket.ping()
+            # Use send_ping for WebSocket keep-alive
+            try:
+                await websocket.send_text("ping")
+            except:
+                pass
     except WebSocketDisconnect:
         websocket_connections.remove(websocket)
         logger.info("WebSocket connection closed")
@@ -296,10 +300,12 @@ async def handle_redirect(redirect_id: str):
                 raise HTTPException(status_code=404, detail="Redirect not found")
             
             # Increment clicks
-            redirect.clicks += 1
+            session.query(Redirect).filter(Redirect.id == redirect_id).update(
+                {Redirect.clicks: Redirect.clicks + 1}
+            )
             session.commit()
             
-            return RedirectResponse(url=redirect.target_url, status_code=302)
+            return RedirectResponse(url=str(redirect.target_url), status_code=302)
     except Exception as e:
         logger.error(f"Redirect error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -342,7 +348,7 @@ async def preview_persona(request: PersonaUpdateRequest, _: bool = Depends(verif
     """Preview persona changes"""
     try:
         validated = persona_store.validate_persona(request.payload)
-        preview = persona_store.build_system_prompt(validated, [], [])
+        preview = persona_store.build_system_prompt()
         return {
             "valid": True,
             "persona": validated,

@@ -7,7 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MonacoEditor from "@/components/ui/monaco-editor";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Eye, RotateCcw, History, GitBranch } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface PersonaVersion {
+  version: number;
+  hash: string;
+  actor: string;
+  created_at: string;
+}
 
 export default function PersonaEditor() {
   const { toast } = useToast();
@@ -15,16 +22,20 @@ export default function PersonaEditor() {
   const [personaContent, setPersonaContent] = useState("");
   const [previewResult, setPreviewResult] = useState<any>(null);
 
-  const { data: persona, isLoading } = useQuery({
+  const { data: persona, isLoading } = useQuery<any>({
     queryKey: ["/api/persona"],
-    onSuccess: (data) => {
-      setPersonaContent(JSON.stringify(data, null, 2));
-    }
   });
 
-  const { data: versions } = useQuery({
+  const { data: versions } = useQuery<PersonaVersion[]>({
     queryKey: ["/api/persona/versions"],
   });
+
+  // Update personaContent when persona data changes
+  useEffect(() => {
+    if (persona) {
+      setPersonaContent(JSON.stringify(persona, null, 2));
+    }
+  }, [persona]);
 
   const previewMutation = useMutation({
     mutationFn: (payload: any) => api.post("/api/persona/preview", { payload }),
