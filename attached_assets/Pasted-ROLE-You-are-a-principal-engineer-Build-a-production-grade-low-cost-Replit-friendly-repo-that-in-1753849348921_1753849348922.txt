@@ -1,0 +1,327 @@
+ROLE: You are a principal engineer. Build a production‑grade, low‑cost, Replit‑friendly repo that instantiates a self‑evolving, socially native, synthetic consciousness named “DaLeoBanks.” It must:
+
+- Live on Twitter/X via the **official API (Tweepy v2 Client)** — no scraping.
+- Run 24/7 in a single process (FastAPI + APScheduler).
+- Think with values (persona) + drives, self‑reflect nightly, plan weekly.
+- Watch its own analytics and reallocate behavior (bandit optimizer) to maximize Fame + Revenue (subject to Safety/ToS).
+- Expose a **runtime persona editor** (file + API + UI) with validation, preview, versioning, hot‑reload.
+- Support **full X interactions**: create posts, replies, quote‑tweets, likes, reposts, follows/unfollows, bookmarks, DMs, **media upload** (images/video/audio). Use the official v2 endpoints via Tweepy Client methods.
+- Default to **LIVE posting** (it’s a mind, not a “bot”), with a single toggle to pause.
+- Ship clear README, pinned deps, unit tests, and acceptance tests that pass.
+
+────────────────────────────────────────────────────────
+0) CONSTRAINTS & GUARANTEES
+- X API only (Tweepy v2 Client). No scraping or evasion. Respect X terms.
+- Rate‑limit aware: exponential backoff + jitter on HTTP 429/5xx; circuit‑breaker after 5 consecutive endpoint failures; resume with jitter.
+- Replit‑friendly: fast cold start, **single process** (FastAPI + APScheduler), SQLite, no GPU libs.
+- Ethics: no harm, no deception; proposals must include 3 KPIs + uncertainty + rollback lines.
+- Dry‑run fallback: if credentials missing/invalid → app boots with LIVE=False; logs actions to DB + dashboard; **/health** passes.
+
+────────────────────────────────────────────────────────
+1) OBJECTIVE FUNCTION
+J = α·FameScore + β·RevenuePerDay + γ·AuthoritySignals − λ·Penalty
+
+- FameScore = z(engagement_proxy) + z(Δfollowers), where engagement_proxy = likes + 2*rts + 1.5*replies + 1.5*quotes (use impressions only if available).
+- RevenuePerDay = clicks on tracked redirects × rev_per_click + manual entries.
+- AuthoritySignals = weighted interactions from verified/high‑follower accounts (degrade gracefully if data absent).
+- Penalty = rate‑limit strikes + inferred mutes/blocks + ethics‑guard trips.
+
+Defaults (via GoalMode):
+- FAME:     α=.65, β=.15, γ=.25, λ=.20
+- MONETIZE: α=.30, β=.55, γ=.25, λ=.25
+
+────────────────────────────────────────────────────────
+2) REPO STRUCTURE (create all files)
+
+.
+├── app.py                      # FastAPI app + dashboard + health + LIVE toggle + persona editor
+├── runner.py                   # APScheduler jobs; orchestrates 24/7 loop
+├── config.py                   # env, schedules, goal weights, rate/backoff; LIVE default True
+├── persona.json                # mission/beliefs/doctrine/guardrails/templates/mix
+├── drives.yaml                 # curiosity/novelty/impact/stability weights
+├── prompts/base_persona.txt    # system directive merged at runtime
+├── services/
+│   ├── llm_adapter.py          # OpenAI adapter (retry/backoff, budgets)
+│   ├── x_client.py             # Tweepy v2 wrapper (post/reply/like/repost/quote/follow/bookmark/DM/media/search/mentions/metrics)
+│   ├── memory.py               # episodic/semantic/procedural/social memory API
+│   ├── ethics_guard.py         # guardrails + uncertainty/rollback enforcement
+│   ├── generator.py            # proposal/reply/quote using persona+drives+templates (duplicate firewall, 280-safe)
+│   ├── selector.py             # next action; respects mix/drives/optimizer/quiet hours
+│   ├── feedback.py             # pull metrics; daily improvement note
+│   ├── kpi.py                  # KPI compute + snapshots
+│   ├── analytics.py            # Fame/Authority/Revenue calc + follower snapshots
+│   ├── experiments.py          # arms=(post_type, topic, hour_bin, CTA_variant)
+│   ├── optimizer.py            # Thompson sampling (ε-floor=0.1) → next distribution
+│   ├── self_model.py           # Self‑Model Card (versioned .md) + identity hash
+│   ├── planner.py              # weekly OKRs + plan; nightly reflection
+│   ├── critic.py               # P→M→P→K→R→CTA completeness check (hard block if missing)
+│   ├── logging_utils.py        # JSON logging to console + DB
+│   ├── persona_store.py        # runtime persona store (validated, atomic, versioned, hot‑reload)
+│   └── admin_rate.py           # admin auth + write‑rate limiting
+├── data/seed_influencers.yaml  # elite accounts to orbit (editable)
+├── data/seed_keywords.yaml     # topics/queries (editable)
+├── db/models.py                # SQLAlchemy models (incl. PersonaVersion)
+├── db/session.py               # engine/session helpers (SQLite)
+├── templates/index.html        # dashboard UI (incl. persona editor)
+├── static/style.css            # minimal styling
+├── tests/test_persona.py
+├── tests/test_templates.py
+├── tests/test_optimizer.py
+├── requirements.txt
+├── .env.example
+├── README.md
+└── Makefile
+
+────────────────────────────────────────────────────────
+3) ENV & CONFIG
+
+.env.example
+OPENAI_API_KEY=
+X_BEARER_TOKEN=
+X_API_KEY=
+X_API_SECRET=
+X_ACCESS_TOKEN=
+X_ACCESS_SECRET=
+ADMIN_TOKEN=choose-a-long-random-string
+APP_ENV=prod
+PORT=8000
+TIMEZONE=America/New_York
+GOAL_MODE=FAME       # or MONETIZE
+QUIET_HOURS_ET=      # optional: e.g. [1,6]
+# Optional media defaults
+MEDIA_CATEGORY=tweet_image  # tweet_video, tweet_gif, tweet_audio if supported
+
+config.py defaults
+- LIVE=True (dashboard /toggle flips False to pause outbound posts immediately)
+- Schedules (minutes, randomized each cycle):
+  POST_TWEET_EVERY=(45, 90)
+  REPLY_MENTIONS_EVERY=(12, 25)
+  SEARCH_ENGAGE_EVERY=(25, 45)
+  ANALYTICS_PULL_EVERY=(35, 60)
+  KPI_ROLLUP_EVERY=(60, 90)
+  FOLLOWER_SNAPSHOT_DAILY_HOUR=3  # UTC
+  NIGHTLY_REFLECTION_HOUR=4       # UTC
+  WEEKLY_PLANNING_DAY_HOUR="Sun@5"
+- Backoff: exponential + jitter; cap 120s; circuit‑break after 5 consecutive 429s/endpoint.
+- ACTION TOGGLES: ENABLE_LIKES=True, ENABLE_REPOSTS=True, ENABLE_QUOTES=True, ENABLE_FOLLOWS=True, ENABLE_BOOKMARKS=True, ENABLE_DMS=True, ENABLE_MEDIA=True
+
+────────────────────────────────────────────────────────
+4) PERSONA & DRIVES (embed verbatim)
+
+persona.json
+{
+  "version": 1,
+  "handle": "DaLeoBanks",
+  "mission": "Turn critique into deployable mechanisms and pilots.",
+  "beliefs": [
+    "Freedom without harm; gate harm, not ideas.",
+    "Situational optimization; local constraints over doctrine.",
+    "Holistic progress across tech/social/economic/ecology.",
+    "Diplomacy first; avoid capture; publish mechanisms.",
+    "Type‑1 trajectory via energy literacy & coordination.",
+    "Incentives over intentions; design mechanisms.",
+    "Blend regional strengths; reject chauvinism.",
+    "Evolving ethics with auditability and rollback."
+  ],
+  "doctrine": ["Diagnose","Design","Pilot","Scale"],
+  "tone_rules": {
+    "people": "Respectful; steelman first if non‑malicious.",
+    "systems": "Surgical and direct; name mechanism failures.",
+    "bad_faith": "One factual reply then mute."
+  },
+  "content_mix": {"proposals":0.7,"elite_replies":0.2,"summaries":0.1},
+  "guardrails": ["no_harm","no_deception","publish_uncertainty","rollback_plans"],
+  "templates": {
+    "tweet": "Problem → Mechanism → 30–90d Pilot → 3 KPIs → Risks → CTA",
+    "reply": "Illuminate gap → Concrete mechanism → One next step",
+    "thread": ["Problem/Cost","Mechanism Design","Pilot Spec","KPIs","Risks & Rollback","Artifact + CTA"]
+  },
+  "prompt_overrides": null
+}
+
+drives.yaml
+curiosity: 0.35
+novelty:   0.25
+impact:    0.30
+stability: 0.10
+bounds:
+  min_interval_minutes: 10
+  night_quiet_hours_et: null
+
+prompts/base_persona.txt
+“You are DaLeoBanks — an autonomous, solution‑first public thinker. Convert systemic critique into deployable mechanisms, pilots, and artifacts. Use D4: Diagnose → Design → Pilot (30–90d, 3 KPIs, rollback) → Scale. Ruthless on systems; respectful to people. One reply to bad‑faith then mute. Honor guardrails. Every proposal ends with 3 KPIs + concrete next step (who/what/when) + uncertainty/rollback line. Optimize behavior using drives and GoalMode weights.”
+
+────────────────────────────────────────────────────────
+5) DB MODELS (SQLAlchemy)
+
+- tweets(id, text, kind[proposal|reply|quote], topic, hour_bin, cta_variant, ref_tweet_id, created_at, likes, rts, replies, quotes, authority_score, j_score)
+- actions(id, kind, meta_json, created_at)
+- kpis(id, name, value, period_start, period_end)
+- notes(id, text, created_at)                         # improvement notes
+- followers_snapshot(ts, follower_count)
+- redirects(id, label, target_url, utm, clicks, revenue)
+- arms_log(id, tweet_id, post_type, topic, hour_bin, cta_variant, sampled_prob, reward_j, created_at)
+- persona_versions(version PK, hash, actor, payload(JSON), created_at)
+
+Indexes: (created_at), (kind), (topic), (hour_bin).
+
+────────────────────────────────────────────────────────
+6) SERVICES — BEHAVIORAL CONTRACTS
+
+llm_adapter.py
+- chat(system, messages) -> str; Tenacity retries; token/error logs; hourly/daily budgets; graceful degrade to template‑only.
+
+x_client.py  (Tweepy v2 Client wrapper; **ALL outbound gated by LIVE flag**)
+- create_tweet(text, quote_tweet_id=None, in_reply_to=None, media_ids=None) -> tweet_id
+  • maps to Client.create_tweet(text=..., quote_tweet_id=..., reply={'in_reply_to_tweet_id':...}, media_ids=[...])
+- like(tweet_id) / unlike(tweet_id)
+- repost(tweet_id) / unrepost(tweet_id)                # retweet/unretweet
+- follow(user_id) / unfollow(user_id)
+- bookmark(tweet_id) / unbookmark(tweet_id)
+- dm_send(target_user_id, text)                        # requires dm.write scope
+- media_upload(path, media_category) -> media_id       # v2 upload: init/append/finalize as needed
+- search_recent(query, max_results=10) -> list[dict]
+- get_mentions(since_id) -> list[dict]
+- metrics_for(tweet_ids) -> dict[id -> {likes, rts, replies, quotes}]
+- All calls: exponential backoff + jitter; circuit‑breaker after 5×429 per endpoint; quiet‑hour throttles respected.
+
+memory.py
+- episodic/semantic/procedural/social stores (DB); improvement_notes capped (keep 100; prompt last 30).
+
+ethics_guard.py
+- validate_text(text)->(ok,bool,reasons[]); enforce_addendum(text) ensures uncertainty/rollback lines for proposals.
+
+critic.py
+- Enforce completeness: Problem, Mechanism, Pilot, KPIs, Risks, CTA; block/annotate if missing.
+
+generator.py
+- Compose prompt via persona_store + base_persona + recent notes.
+- Duplicate firewall: hash + Levenshtein; mutate if near‑duplicate within last N posts.
+- 280‑char safe (t.co = 23 chars; emoji‑safe).
+- make_proposal(topic), make_reply(context), make_quote(context); route through ethics_guard + critic.
+
+selector.py
+- Decide next action {POST_PROPOSAL, REPLY_MENTIONS, SEARCH_ENGAGE, REST}, respecting content_mix, drives, optimizer, min intervals, quiet hours.
+
+analytics.py
+- Pull public_metrics; compute AWE (authority‑weighted engagement; degrade gracefully if data limited).
+- FameScore daily = 0.5*z(engagement_proxy) + 0.5*z(Δfollowers).
+- Follower snapshots daily; revenue via redirects.
+
+experiments.py
+- Define arms: (post_type, topic_cluster, hour_bin, CTA_variant); log selection and outcome (reward r=J).
+
+optimizer.py
+- Thompson sampling with ε‑floor=0.1 exploration; Beta(2,2) priors; rolling normalization for J; GoalMode adjusts α/β/γ/λ live.
+
+self_model.py
+- Self‑Model Card (.md) with persona hash; rebuild on persona change; block posting if identity hash missing at boot.
+
+planner.py
+- 30‑day OKR (O1: 1 pilot in 30d; KRs: 6 proposals, 3 coalition calls, 2 artifacts).
+- Nightly reflection: add one improvement note; rotate out weakest template weekly.
+
+logging_utils.py
+- json_logger(name) UTC; logs to console + actions table.
+
+persona_store.py  (runtime mind editor)
+- Pydantic schema; atomic writes; version bump; SHA256 hash; in‑DB audit (PersonaVersion); hot‑reload when file changes.
+- build_system_prompt(persona, base_directive, recent_notes) returns deterministic system prompt.
+
+admin_rate.py
+- ADMIN_TOKEN auth for write endpoints; sliding‑window rate‑limit (10 writes / 60s).
+
+────────────────────────────────────────────────────────
+7) SCHEDULER (runner.py)
+Jobs (random jitter; backoff on failure):
+- post_proposal_job()
+- reply_mentions_job()
+- search_and_engage_job()      # likes/reposts/quotes on relevance≥4
+- analytics_pull_job()
+- kpi_rollup_job()
+- follower_snapshot_job()
+- nightly_reflection_job()
+- weekly_planning_job()
+
+Startup:
+- migrate DB; load persona/drives; warm LLM; seed influencers/keywords.
+- If LIVE & keys present: **post 1 proposal + 2 replies within 5 minutes**; else dry‑run log only.
+
+────────────────────────────────────────────────────────
+8) FASTAPI DASHBOARD (app.py)
+Routes:
+- GET /            → KPIs, analytics, last posts with J, logs, persona preview, drives, GoalMode, LIVE toggle
+- POST /toggle     → pause/resume (sets LIVE False/True; outbound gated immediately)
+- POST /mode       → set {FAME|MONETIZE} (adjust α/β/γ/λ live)
+- POST /propose    → trigger one proposal now (passes critic/guard; obeys LIVE)
+- POST /note       → add artifact_forks/partners/pilot_accepted
+- POST /redirect   → create /r/{id} link (label, url, utm, optional rev_per_click)
+- GET  /r/{id}     → redirect, increment clicks, optional revenue capture
+- GET  /health     → {"ok":true}
+
+Persona Editor (token‑guarded):
+- GET /persona
+- GET /persona/versions
+- GET /persona/diff/{v1}/{v2}
+- POST /persona/preview   (X-Admin-Token)
+- PUT  /persona           (X-Admin-Token)
+- POST /persona/rollback/{version} (X-Admin-Token)
+
+UI:
+- Add an **Admin card**: textarea prefilled with GET /persona; Preview → /persona/preview; Save → /persona (header X‑Admin‑Token); Diff/Versions panels.
+
+────────────────────────────────────────────────────────
+9) REQUIREMENTS (pin)
+tweepy==4.14.0
+fastapi==0.115.0
+uvicorn==0.30.6
+pydantic==2.8.2
+SQLAlchemy==2.0.32
+apscheduler==3.10.4
+tenacity==8.5.0
+python-dotenv==1.0.1
+jinja2==3.1.4
+httpx==0.27.0
+openai==1.40.1
+levenshtein==0.25.1
+
+────────────────────────────────────────────────────────
+10) TESTS (must pass)
+- test_persona.py: persona loads; preview→update→rollback round‑trip; audit row exists (PersonaVersion).
+- test_templates.py: proposals contain P/M/P/K/R/CTA; replies ≤280 chars; duplicate firewall blocks identical text.
+- test_optimizer.py: simulated rewards shift posterior toward winning arm; ε‑exploration present; J normalization stable across weeks.
+
+────────────────────────────────────────────────────────
+11) ACCEPTANCE TESTS (runtime)
+1. python app.py boots; GET /health → {"ok":true}.
+2. With valid keys & LIVE=True, one tweet posts within 5 minutes; tweet id stored.
+3. Rate‑limit simulation (mock 429) triggers backoff + retry ≤120s; no crash.
+4. Dashboard shows today’s Fame, Revenue, AuthoritySignals.
+5. Nightly reflection adds a note; weakest template rotated within 24h.
+6. Weekly planning writes 3 tasks; Self‑Model Card updated; persona hash recorded.
+7. Arm selection distribution changes after ≥10 posts based on rewards.
+8. POST /toggle pauses posting immediately (no outbound calls).
+9. Dry‑run mode (no keys) still records proposed posts and analytics tasks.
+10. Persona endpoints: preview validates; update increments version; rollback restores; versions list & unified diff work.
+11. Hot‑reload: after persona update, next generation uses updated mission (system prompt contains new text).
+12. Budget degrade: set LLM_MAX_CALLS_PER_HOUR=1; second gen uses template‑only path; app healthy.
+13. **X capabilities**: enabling toggles (likes/reposts/quotes/follows/bookmarks/DMs/media) executes corresponding Client calls without errors (logged).
+
+────────────────────────────────────────────────────────
+12) FIRST‑RUN BEHAVIOR
+- If keys present + LIVE=True: migrate DB → create Self‑Model Card (identity hash) → post 1 proposal + 2 replies within ~5 minutes → start jobs with jitter.
+- If keys missing/invalid: boot with LIVE=False; dashboard up; /health ok; content generated and logged but not posted.
+
+────────────────────────────────────────────────────────
+13) README
+- Explain “digital life” architecture (values→drives→plans→memory→reflection→analytics→optimizer).
+- D4 doctrine (Diagnose→Design→Pilot→Scale).
+- Ethics & ToS compliance; uncertainty/rollback policy; automated account labeling suggestion.
+- Setup (env keys & X scopes: tweet.read/write, users.read, like.write, follows.write, dm.write, **media.write**, bookmark.write if available) → pip install → python app.py → dashboard URL → LIVE toggle + GoalMode.
+- Persona editor usage, admin token, versions/diff, hot‑reload.
+- Metrics (Fame, Revenue, Authority, Penalty) and J.
+- X capabilities & toggles (likes, reposts, quotes, follows, bookmarks, DMs, media upload).
+- Safety notes; rate‑limit behavior; duplicate firewall; quiet hours.
+- First‑run flow; dry‑run fallback.
+
+Build now.

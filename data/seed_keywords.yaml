@@ -1,0 +1,161 @@
+# Topics and search queries for content discovery and engagement
+
+primary_topics:
+  coordination:
+    keywords:
+      - "coordination mechanisms"
+      - "collective action"
+      - "mechanism design"
+      - "incentive alignment"
+      - "governance systems"
+      - "institutional design"
+    search_queries:
+      - "coordination failure solution"
+      - "mechanism design proposal"
+      - "collective action problem"
+      - "governance innovation"
+    priority: "very_high"
+    
+  mechanisms:
+    keywords:
+      - "voting mechanisms"
+      - "auction design"
+      - "matching markets"
+      - "prediction markets"
+      - "quadratic funding"
+      - "harberger tax"
+    search_queries:
+      - "voting mechanism proposal"
+      - "auction mechanism design"
+      - "market mechanism innovation"
+      - "funding mechanism experiment"
+    priority: "very_high"
+
+  energy:
+    keywords:
+      - "energy coordination"
+      - "grid optimization"
+      - "renewable coordination"
+      - "energy markets"
+      - "carbon mechanisms"
+      - "energy policy"
+    search_queries:
+      - "energy grid coordination"
+      - "renewable energy mechanism"
+      - "carbon pricing mechanism"
+      - "energy market design"
+    priority: "high"
+
+secondary_topics:
+  technology:
+    keywords:
+      - "technology governance"
+      - "AI coordination"
+      - "protocol design"
+      - "platform mechanisms"
+      - "network effects"
+      - "digital institutions"
+    search_queries:
+      - "AI governance mechanism"
+      - "technology coordination"
+      - "platform governance"
+      - "protocol mechanism"
+    priority: "high"
+    
+  economics:
+    keywords:
+      - "economic mechanisms"
+      - "market design"
+      - "behavioral economics"
+      - "mechanism theory"
+      - "institutional economics"
+      - "public choice"
+    search_queries:
+      - "economic mechanism proposal"
+      - "market design innovation"
+      - "institutional reform"
+      - "public choice mechanism"
+    priority: "medium"
+    
+  policy:
+    keywords:
+      - "policy mechanisms"
+      - "regulatory design"
+      - "public policy innovation"
+      - "government coordination"
+      - "policy experimentation"
+      - "institutional reform"
+    search_queries:
+      - "policy mechanism design"
+      - "regulatory innovation"
+      - "government coordination"
+      - "policy experiment"
+    priority: "medium"
+
+emerging_topics:
+  automation:
+    keywords:
+      - "automation coordination"
+      - "labor transition mechanisms"
+      - "automation policy"
+      - "work coordination"
+      - "productivity sharing"
+    search_queries:
+      - "automation coordination mechanism"
+      - "labor transition policy"
+      - "automation governance"
+    priority: "medium"
+    
+  climate:
+    keywords:
+      - "climate coordination"
+      - "carbon mechanisms"
+      - "climate governance"
+      - "environmental coordination"
+      - "sustainability mechanisms"
+    search_queries:
+      - "climate coordination mechanism"
+      - "environmental governance"
+      - "sustainability policy"
+    priority: "medium"
+
+# Search strategy:
+search_strategy:
+  frequency:
+    very_high: "every 2-4 hours"
+    high: "every 4-8 hours" 
+    medium: "every 8-12 hours"
+    low: "daily"
+    
+  engagement_threshold:
+    very_high: 3  # Engage if relevance score >= 3
+    high: 4       # Engage if relevance score >= 4
+    medium: 5     # Engage if relevance score >= 5
+    low: 6        # Engage if relevance score >= 6
+    
+  daily_limits:
+    very_high: 15 # Max 15 engagements per day
+    high: 10      # Max 10 engagements per day
+    medium: 5     # Max 5 engagements per day
+    low: 2        # Max 2 engagements per day
+
+# Relevance scoring factors:
+relevance_factors:
+  keyword_match: 2    # Points for direct keyword match
+  semantic_match: 1   # Points for semantic similarity
+  author_authority: 2 # Points for high-authority author
+  engagement_level: 1 # Points for high engagement
+  recency: 1         # Points for recent content
+  
+# Negative indicators (reduce relevance):
+negative_indicators:
+  - "crypto scam"
+  - "get rich quick"
+  - "guaranteed returns"
+  - "conspiracy theory"
+  - "political partisanship"
+  
+# Update schedule:
+# - Weekly: Review performance of keywords and queries
+# - Monthly: Add new emerging topics based on trends
+# - Quarterly: Major restructuring based on strategic focus

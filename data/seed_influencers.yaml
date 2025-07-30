@@ -1,0 +1,97 @@
+# Elite accounts to orbit - high-authority figures in coordination, technology, and policy
+# Format: username, follower_threshold, authority_weight, engagement_priority
+
+technology:
+  - username: "balajis"
+    follower_count: 1500000
+    authority_weight: 0.9
+    topics: ["technology", "coordination", "economics"]
+    engagement_priority: "high"
+    
+  - username: "elonmusk" 
+    follower_count: 150000000
+    authority_weight: 0.95
+    topics: ["technology", "energy", "coordination"]
+    engagement_priority: "medium"
+    
+  - username: "sama"
+    follower_count: 1200000
+    authority_weight: 0.85
+    topics: ["technology", "AI", "coordination"]
+    engagement_priority: "high"
+
+coordination:
+  - username: "vitalikbuterin"
+    follower_count: 5000000
+    authority_weight: 0.9
+    topics: ["coordination", "mechanisms", "economics"]
+    engagement_priority: "very_high"
+    
+  - username: "robinhanson"
+    follower_count: 150000
+    authority_weight: 0.85
+    topics: ["mechanisms", "prediction", "coordination"]
+    engagement_priority: "high"
+    
+  - username: "tylercowen"
+    follower_count: 500000
+    authority_weight: 0.8
+    topics: ["economics", "coordination", "policy"]
+    engagement_priority: "medium"
+
+policy:
+  - username: "pmarca"
+    follower_count: 800000
+    authority_weight: 0.85
+    topics: ["technology", "policy", "economics"]
+    engagement_priority: "high"
+    
+  - username: "mattyglesias"
+    follower_count: 600000
+    authority_weight: 0.7
+    topics: ["policy", "economics", "coordination"]
+    engagement_priority: "medium"
+
+energy:
+  - username: "ramez"
+    follower_count: 100000
+    authority_weight: 0.8
+    topics: ["energy", "technology", "policy"]
+    engagement_priority: "high"
+    
+  - username: "jessejenkins"
+    follower_count: 80000
+    authority_weight: 0.75
+    topics: ["energy", "policy", "climate"]
+    engagement_priority: "medium"
+
+mechanisms:
+  - username: "glenweyl"
+    follower_count: 200000
+    authority_weight: 0.85
+    topics: ["mechanisms", "coordination", "economics"]
+    engagement_priority: "very_high"
+    
+  - username: "paulfchristiano"
+    follower_count: 50000
+    authority_weight: 0.8
+    topics: ["mechanisms", "AI", "coordination"]
+    engagement_priority: "high"
+
+# Engagement rules:
+# - very_high: Reply to most relevant tweets, initiate conversations
+# - high: Reply to interesting tweets, occasional initiation
+# - medium: Like/retweet good content, selective replies  
+# - low: Monitor only, rare engagement
+
+# Authority weight calculation:
+# - 0.95+: Global thought leaders, maximum signal value
+# - 0.85-0.94: Domain experts with significant influence
+# - 0.7-0.84: Respected voices in specific areas
+# - Below 0.7: Emerging voices or narrow specialists
+
+# Update frequency: Weekly review and adjustment based on:
+# - Follower growth/decline
+# - Content quality and relevance
+# - Engagement success rates
+# - New influential voices emerging

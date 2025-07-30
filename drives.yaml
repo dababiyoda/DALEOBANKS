@@ -1,0 +1,7 @@
+curiosity: 0.35
+novelty: 0.25
+impact: 0.30
+stability: 0.10
+bounds:
+  min_interval_minutes: 10
+  night_quiet_hours_et: null
