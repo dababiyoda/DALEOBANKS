@@ -136,6 +136,7 @@ async def broadcast_update(data: Dict[str, Any]):
 
 # Dashboard API endpoints
 @app.get("/api/dashboard")
+@app.get("/dashboard")  # Support both routes
 async def get_dashboard():
     """Get dashboard overview data"""
     try:
@@ -400,6 +401,7 @@ async def rollback_persona(version: int, _: bool = Depends(verify_admin_token)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics")
+@app.get("/analytics")  # Support both routes
 async def get_analytics():
     """Get analytics data"""
     try:

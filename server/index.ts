@@ -39,7 +39,10 @@ const server = createServer(app);
 app.use('/api', createProxyMiddleware({
   target: `http://localhost:${BACKEND_PORT}`,
   changeOrigin: true,
-  ws: false
+  ws: false,
+  pathRewrite: {
+    '^/api': '/api'  // Keep the /api prefix
+  }
 }));
 
 app.use('/ws', createProxyMiddleware({
