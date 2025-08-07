@@ -22,11 +22,11 @@ from services.generator import Generator
 from services.selector import Selector
 from services.analytics import AnalyticsService
 from services.kpi import KPIService
-from services.feedback import FeedbackService
 from services.planner import PlannerService
 from services.persona_store import PersonaStore
 from services.self_model import SelfModelService
 from services.optimizer import Optimizer
+from services.reflection import ReflectionService
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -44,7 +44,7 @@ generator = Generator(persona_store, llm_adapter)
 selector = Selector(persona_store)
 analytics_service = AnalyticsService()
 kpi_service = KPIService()
-feedback_service = FeedbackService()
+reflection_service = ReflectionService()
 planner_service = PlannerService()
 self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
@@ -374,10 +374,10 @@ async def nightly_reflection_job():
     """Perform nightly reflection and generate improvement note"""
     try:
         with get_db_session() as session:
-            improvement_note = feedback_service.generate_daily_improvement_note(session)
+            improvement_note = reflection_service.generate_reflection(session)
             await _log_action("nightly_reflection", {"note": improvement_note})
             logger.info(f"Nightly reflection completed: {improvement_note}")
-            
+
     except Exception as e:
         logger.error(f"Nightly reflection job failed: {e}")
 
