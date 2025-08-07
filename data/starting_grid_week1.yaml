@@ -1,0 +1,109 @@
+topic: "How to move fast with a brake pedal: practical guardrails for responsible AI."
+schedule:
+  - day: Mon
+    engagements:
+      - account: "benshapiro"
+        time: "9:00 AM ET"
+        line: "Free debate sharpens ideas; doxxing just burns trust. Tag the smoke, don't snuff the speech."
+        source: "Knight Foundation study on content labels"
+      - account: "sama"
+        time: "10:00 AM PT"
+        line: "Speed unlocks breakthroughs; blind spots sink them. Ship fast—with a brake pedal."
+        source: "NIST AI Risk Management Framework"
+    standalone:
+      problem: "agencies buying black-box AI"
+      mechanism: "60-day pilot with public audit logs"
+      measure: "error rate vs manual review"
+      rollback: "revert if errors double"
+      source: "NIST AI RMF"
+
+  - day: Tue
+    engagements:
+      - account: "AOC"
+        time: "11:00 AM ET"
+        line: "Climate goals need paychecks too. Let markets race on clean energy; policy sets the track."
+        source: "IEA clean-energy jobs report"
+      - account: "pmarca"
+        time: "2:00 PM PT"
+        line: "Open code widens talent; staged release keeps guardrails. Do both."
+        source: "Mozilla security review on open source"
+    standalone:
+      problem: "bias in AI hiring tools"
+      mechanism: "counterfactual fairness test in one department for 30 days"
+      measure: "gap in approvals"
+      rollback: "freeze model if gap widens"
+      source: "Brookings paper on algorithmic bias"
+
+  - day: Wed
+    engagements:
+      - account: "NikkiHaley"
+        time: "8:30 AM ET"
+        line: "Security needs agility; backdoors invite chaos. Aim for clarity, not blanket bans."
+        source: "EFF report on encryption"
+      - account: "jack"
+        time: "1:00 PM PT"
+        line: "Decentralizing power is good; community tools keep it livable. Give mods levers, not gags."
+        source: "Wired piece on Mastodon moderation"
+    standalone:
+      problem: "deepfake campaign ads"
+      mechanism: "watermark + independent auditor for 90-day pilot"
+      measure: "flagged vs unflagged clips"
+      rollback: "drop watermark if false positives swamp"
+      source: "EU AI Act guidance"
+
+  - day: Thu
+    engagements:
+      - account: "SenWarren"
+        time: "10:00 AM ET"
+        line: "Fintech can widen access; unregulated fees cut deep. Try a capped-fee sandbox and track churn."
+        source: "CFPB sandbox data"
+      - account: "DouthatNYT"
+        time: "3:00 PM ET"
+        line: "Culture wars are loud; shared fixes are quiet. Test neighborhood forums mixing incomes—see if trust budges."
+        source: "Pew study on civic life"
+    standalone:
+      problem: "credit scoring models"
+      mechanism: "add human review on edge cases for 45 days"
+      measure: "approval variance"
+      rollback: "if human review adds <1% accuracy, drop it"
+      source: "CFPB report"
+
+  - day: Fri
+    engagements:
+      - account: "BernieSanders"
+        time: "9:00 AM ET"
+        line: "Drug prices hurt; innovation matters too. Pilot a public buyout on one drug, compare cost vs R&D."
+        source: "JAMA analysis on public acquisitions"
+    standalone:
+      problem: "AI in policing"
+      mechanism: "30-day trial with mandatory human sign-off"
+      measure: "false-positive stops"
+      rollback: "suspend if FP rate > baseline"
+      source: "ACLU review of predictive policing"
+
+  - day: Sat
+    engagements:
+      - account: "NikkiHaley"
+        time: "10:00 AM ET"
+        line: "Energy dominance is strong; so's clean competition. Let markets race, set the safety rails."
+        source: "IEA renewable competitiveness note"
+    standalone:
+      problem: "algorithmic transparency"
+      mechanism: "publish model cards for one service"
+      measure: "support tickets pre/post"
+      rollback: "pull cards if sensitive info leaks"
+      source: "Google model card template"
+
+  - day: Sun
+    engagements:
+      - account: "follow_up"
+        time: "TBD"
+        line: "Appreciate the debate this week—testing small fixes beats trading slogans. More pilots coming."
+        source: "Recap doc or article mentioned earlier"
+    standalone:
+      problem: "weekly wrap: which pilots gained traction, which paused"
+      mechanism: "short summary card"
+      measure: "engagement on card"
+      rollback: "none—just learn quietly"
+      source: "Recap doc"
+

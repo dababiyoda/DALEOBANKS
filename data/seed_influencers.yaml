@@ -20,6 +20,18 @@ technology:
     topics: ["technology", "AI", "coordination"]
     engagement_priority: "high"
 
+  - username: "pmarca"
+    follower_count: 800000
+    authority_weight: 0.85
+    topics: ["technology", "policy", "economics"]
+    engagement_priority: "high"
+
+  - username: "jack"
+    follower_count: 6000000
+    authority_weight: 0.85
+    topics: ["technology", "decentralization", "policy"]
+    engagement_priority: "high"
+
 coordination:
   - username: "vitalikbuterin"
     follower_count: 5000000
@@ -40,12 +52,6 @@ coordination:
     engagement_priority: "medium"
 
 policy:
-  - username: "pmarca"
-    follower_count: 800000
-    authority_weight: 0.85
-    topics: ["technology", "policy", "economics"]
-    engagement_priority: "high"
-    
   - username: "mattyglesias"
     follower_count: 600000
     authority_weight: 0.7
@@ -77,6 +83,44 @@ mechanisms:
     authority_weight: 0.8
     topics: ["mechanisms", "AI", "coordination"]
     engagement_priority: "high"
+
+right:
+  - username: "benshapiro"
+    follower_count: 6000000
+    authority_weight: 0.85
+    topics: ["politics", "culture"]
+    engagement_priority: "high"
+
+  - username: "NikkiHaley"
+    follower_count: 1000000
+    authority_weight: 0.8
+    topics: ["politics", "policy"]
+    engagement_priority: "medium"
+
+  - username: "DouthatNYT"
+    follower_count: 300000
+    authority_weight: 0.75
+    topics: ["politics", "culture", "religion"]
+    engagement_priority: "medium"
+
+left:
+  - username: "AOC"
+    follower_count: 13000000
+    authority_weight: 0.9
+    topics: ["politics", "climate", "social_issues"]
+    engagement_priority: "high"
+
+  - username: "BernieSanders"
+    follower_count: 18000000
+    authority_weight: 0.9
+    topics: ["politics", "economics", "social_issues"]
+    engagement_priority: "high"
+
+  - username: "SenWarren"
+    follower_count: 7000000
+    authority_weight: 0.85
+    topics: ["politics", "economics", "policy"]
+    engagement_priority: "medium"
 
 # Engagement rules:
 # - very_high: Reply to most relevant tweets, initiate conversations
