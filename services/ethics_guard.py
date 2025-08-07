@@ -40,6 +40,18 @@ class EthicsGuard:
             "rollback", "revert", "undo", "cancel", "abort", "stop",
             "fail-safe", "backup plan", "exit strategy"
         ]
+
+    def has_receipt(self, text: str) -> bool:
+        """Check if text includes a citation/link"""
+        return bool(re.search(r"https?://\S+", text))
+
+    def has_constructive_step(self, text: str) -> bool:
+        """Simple heuristic for constructive next steps"""
+        keywords = [
+            "try", "pilot", "test", "fix", "rollback", "next step", "cta", "call to action"
+        ]
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in keywords)
     
     def validate_text(self, text: str) -> EthicsResult:
         """

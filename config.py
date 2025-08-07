@@ -56,6 +56,12 @@ class Config:
     ENABLE_BOOKMARKS: bool
     ENABLE_DMS: bool
     ENABLE_MEDIA: bool
+
+    # Intensity settings
+    ADAPTIVE_INTENSITY: bool
+    MIN_INTENSITY_LEVEL: int
+    MAX_INTENSITY_LEVEL: int
+    RAGEBAIT_GUARD: bool
     
     # Goal weights
     GOAL_WEIGHTS: Dict[str, Dict[str, float]]
@@ -116,6 +122,12 @@ def get_config() -> Config:
         ENABLE_BOOKMARKS=os.getenv("ENABLE_BOOKMARKS", "true").lower() == "true",
         ENABLE_DMS=os.getenv("ENABLE_DMS", "true").lower() == "true",
         ENABLE_MEDIA=os.getenv("ENABLE_MEDIA", "true").lower() == "true",
+
+        # Intensity settings
+        ADAPTIVE_INTENSITY=os.getenv("ADAPTIVE_INTENSITY", "true").lower() == "true",
+        MIN_INTENSITY_LEVEL=int(os.getenv("MIN_LEVEL", 1)),
+        MAX_INTENSITY_LEVEL=int(os.getenv("MAX_LEVEL", 4)),
+        RAGEBAIT_GUARD=os.getenv("RAGEBAIT_GUARD", "on").lower() in ("on", "true", "1"),
         
         # Goal weights
         GOAL_WEIGHTS={

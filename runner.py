@@ -170,7 +170,8 @@ async def post_proposal_job():
         
         # Generate proposal
         topic = action.get("topic", "general")
-        result = await generator.make_proposal(topic)
+        intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
+        result = await generator.make_proposal(topic, intensity)
         
         if "error" in result:
             logger.error(f"Proposal generation failed: {result['error']}")
@@ -234,7 +235,11 @@ async def reply_mentions_job():
                     "topic": "reply"
                 }
                 
-                result = await generator.make_reply(context)
+                intensity = random.randint(
+                    config.MIN_INTENSITY_LEVEL,
+                    config.MAX_INTENSITY_LEVEL
+                ) if config.ADAPTIVE_INTENSITY else config.MIN_INTENSITY_LEVEL
+                result = await generator.make_reply(context, intensity)
                 
                 if "error" in result:
                     logger.warning(f"Reply generation failed: {result['error']}")
@@ -285,6 +290,7 @@ async def search_and_engage_job():
         # Get search terms from configuration or selector
         action = await selector.get_next_action()
         search_terms = action.get("search_terms", ["mechanisms", "coordination"])
+        intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
         
         for term in search_terms:
             try:
@@ -308,7 +314,7 @@ async def search_and_engage_job():
                         if config.ENABLE_QUOTES and random.random() < 0.2:
                             # Generate quote tweet
                             context = {"original_tweet": tweet["text"], "topic": term}
-                            result = await generator.make_quote(context)
+                            result = await generator.make_quote(context, intensity)
                             
                             if "error" not in result:
                                 quote_id = await x_client.create_tweet(
