@@ -52,7 +52,7 @@ class TestOptimizer:
         assert 0 <= high_score <= 1
         assert low_score < mid_score < high_score
     
-    @patch('services.optimizer.get_db_session')
+    @patch('db.session.get_db_session')
     def test_arm_combination_sampling(self, mock_db_session):
         """Test arm combination sampling logic"""
         # Mock database session
@@ -103,7 +103,7 @@ class TestOptimizer:
             MagicMock(sampled_prob=0.8),  # Exploitation
         ]
         
-        with patch('services.experiments.get_db_session') as mock_db:
+        with patch('db.session.get_db_session') as mock_db:
             mock_session = MagicMock()
             mock_db.return_value.__enter__.return_value = mock_session
             mock_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_logs
@@ -152,7 +152,7 @@ class TestOptimizer:
         assert result["total_regret"] >= 0
         assert result["final_regret"] >= 0
     
-    @patch('services.optimizer.get_db_session')
+    @patch('db.session.get_db_session')
     def test_j_score_history_update(self, mock_db_session):
         """Test J-score history maintenance for normalization"""
         # Mock database with tweet data
@@ -193,14 +193,14 @@ class TestOptimizer:
         }
         
         with patch.object(self.experiments, 'get_arm_performance', return_value=mock_performance):
-            with patch('services.experiments.get_db_session'):
+            with patch('db.session.get_db_session'):
                 recommendations = self.experiments.get_arm_recommendations(MagicMock())
                 
                 # Should recommend best performing arms
                 assert recommendations["post_type"] == "proposal"
                 assert recommendations["topic"] == "technology"
     
-    @patch('services.optimizer.get_db_session')
+    @patch('db.session.get_db_session')
     def test_optimization_status(self, mock_db_session):
         """Test optimization status reporting"""
         mock_session = MagicMock()
@@ -215,8 +215,8 @@ class TestOptimizer:
             }
         }
         
-        with patch.object(self.experiments, 'get_experiment_summary', return_value=mock_summary):
-            with patch.object(self.experiments, 'get_arm_recommendations', return_value={"post_type": "proposal"}):
+        with patch.object(self.optimizer.experiments, 'get_experiment_summary', return_value=mock_summary):
+            with patch.object(self.optimizer.experiments, 'get_arm_recommendations', return_value={"post_type": "proposal"}):
                 
                 status = self.optimizer.get_optimization_status(mock_session)
                 
@@ -275,7 +275,7 @@ class TestExperimentsService:
             assert combo[2] in self.experiments.arms["hour_bin"]
             assert combo[3] in self.experiments.arms["cta_variant"]
     
-    @patch('services.experiments.get_db_session')
+    @patch('db.session.get_db_session')
     def test_arm_logging(self, mock_db_session):
         """Test arm selection logging"""
         mock_session = MagicMock()
@@ -302,7 +302,7 @@ class TestExperimentsService:
         assert call_args.post_type == "proposal"
         assert call_args.sampled_prob == 0.7
     
-    @patch('services.experiments.get_db_session')
+    @patch('db.session.get_db_session')
     def test_reward_updates(self, mock_db_session):
         """Test updating rewards when tweet metrics become available"""
         mock_session = MagicMock()

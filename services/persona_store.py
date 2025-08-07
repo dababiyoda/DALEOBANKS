@@ -62,6 +62,7 @@ class PersonaStore:
         self.current_version: int = 1
         self.file_watch_enabled = True
         self._last_modified = 0
+        self._current_hash = ""
         
         # Load initial persona
         self.load_persona()
@@ -81,6 +82,7 @@ class PersonaStore:
             self.current_persona = validated_persona
             self.current_version = validated_persona.get('version', 1)
             self._last_modified = os.path.getmtime(self.persona_file)
+            self._current_hash = self._calculate_hash(validated_persona)
             
             logger.info(f"Loaded persona v{self.current_version}: {validated_persona['handle']}")
             return validated_persona
@@ -101,6 +103,12 @@ class PersonaStore:
         except ValidationError as e:
             logger.error(f"Persona validation failed: {e}")
             raise ValueError(f"Invalid persona format: {e}")
+
+    def preview_persona(self, persona_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate persona and build preview prompt without saving"""
+        validated = self.validate_persona(persona_data)
+        prompt = self.build_system_prompt()
+        return {"validated": validated, "system_preview": prompt[:500]}
     
     def get_current_persona(self) -> Dict[str, Any]:
         """Get current persona, checking for file changes"""
@@ -143,12 +151,13 @@ class PersonaStore:
                 json.dump(validated_persona, f, indent=2)
             
             os.replace(temp_file, self.persona_file)
-            
+
             # Update internal state
             self.current_persona = validated_persona
             self.current_version = new_version
             self._last_modified = os.path.getmtime(self.persona_file)
-            
+            self._current_hash = persona_hash
+
             logger.info(f"Updated persona to v{new_version} by {actor}")
             return new_version
             
@@ -170,10 +179,9 @@ class PersonaStore:
                 
                 # Create new version based on old one
                 rollback_data = persona_version.payload.copy()
-                new_version = self.current_version + 1
-                rollback_data['version'] = new_version
-                
-                # Save as new version
+                rollback_data['version'] = self.current_version
+
+                # Save as new version (will increment inside update_persona)
                 return self.update_persona(rollback_data, actor=f"{actor}_rollback_to_v{version}")
                 
         except Exception as e:
@@ -314,7 +322,14 @@ class PersonaStore:
                 return False
             
             current_modified = os.path.getmtime(self.persona_file)
-            return current_modified > self._last_modified
+            if current_modified > self._last_modified:
+                return True
+
+            # Hash-based fallback
+            with open(self.persona_file, 'r') as f:
+                data = json.load(f)
+            current_hash = self._calculate_hash(data)
+            return current_hash != self._current_hash
             
         except Exception as e:
             logger.error(f"File change check failed: {e}")
@@ -368,7 +383,7 @@ class PersonaStore:
         """Get hash of current persona"""
         if not self.current_persona:
             return ""
-        return self._calculate_hash(self.current_persona)
+        return self._current_hash or self._calculate_hash(self.current_persona)
     
     def export_persona(self, version: Optional[int] = None) -> Dict[str, Any]:
         """Export persona (current or specific version)"""

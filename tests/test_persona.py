@@ -99,6 +99,12 @@ class TestPersonaStore:
             updated_persona = json.load(f)
         assert updated_persona["mission"] == "Updated test mission"
         assert updated_persona["version"] == 2
+
+    def test_persona_preview(self):
+        """Validate persona preview without saving"""
+        preview = self.persona_store.preview_persona(self.test_persona)
+        assert preview["validated"]["handle"] == "TestBot"
+        assert "system" in preview["system_preview"]
     
     def test_system_prompt_building(self):
         """Test system prompt construction"""

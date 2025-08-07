@@ -35,6 +35,13 @@ class Generator:
         self.duplicate_check_days = 30
         self.similarity_threshold = 0.8
         self.max_mutation_attempts = 3
+
+    def compose_system_prompt(self, notes: List[str]) -> str:
+        """Compose system prompt with persona and recent notes."""
+        prompt = self.persona_store.build_system_prompt(notes)
+        prompt += "\n\nUse contractions, short lines, and helpful examples. Follow the Debate Protocol: define problem, propose mechanism, test pilot, list KPIs, note risks, end with a call to action." \
+                " Always speak in a warm, human tone."
+        return prompt
     
     async def make_proposal(self, topic: str = "general") -> Dict[str, Any]:
         """Generate a proposal tweet"""
@@ -44,9 +51,7 @@ class Generator:
                 context = self.memory.get_context_for_generation(session)
                 
                 # Build system prompt
-                system_prompt = self.persona_store.build_system_prompt(
-                    context["improvement_notes"]
-                )
+                system_prompt = self.compose_system_prompt(context["improvement_notes"])
                 
                 # Prepare user message
                 user_message = self._build_proposal_prompt(topic, context)
@@ -73,9 +78,7 @@ class Generator:
                 memory_context = self.memory.get_context_for_generation(session)
                 
                 # Build system prompt
-                system_prompt = self.persona_store.build_system_prompt(
-                    memory_context["improvement_notes"]
-                )
+                system_prompt = self.compose_system_prompt(memory_context["improvement_notes"])
                 
                 # Prepare user message
                 user_message = self._build_reply_prompt(context, memory_context)
@@ -102,9 +105,7 @@ class Generator:
                 memory_context = self.memory.get_context_for_generation(session)
                 
                 # Build system prompt
-                system_prompt = self.persona_store.build_system_prompt(
-                    memory_context["improvement_notes"]
-                )
+                system_prompt = self.compose_system_prompt(memory_context["improvement_notes"])
                 
                 # Prepare user message
                 user_message = self._build_quote_prompt(context, memory_context)
