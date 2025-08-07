@@ -226,17 +226,40 @@ class Selector:
             
             # Hour bin for analysis
             params["hour_bin"] = datetime.now().hour
-            
+
+            # Intensity arm
+            if self.config.ADAPTIVE_INTENSITY:
+                params["intensity"] = random.randint(
+                    self.config.MIN_INTENSITY_LEVEL,
+                    self.config.MAX_INTENSITY_LEVEL
+                )
+            else:
+                params["intensity"] = self.config.MIN_INTENSITY_LEVEL
+
         elif action_type == "REPLY_MENTIONS":
             params["max_mentions"] = 5
             params["priority"] = "high_authority_first"
-            
+            if self.config.ADAPTIVE_INTENSITY:
+                params["intensity"] = random.randint(
+                    self.config.MIN_INTENSITY_LEVEL,
+                    self.config.MAX_INTENSITY_LEVEL
+                )
+            else:
+                params["intensity"] = self.config.MIN_INTENSITY_LEVEL
+
         elif action_type == "SEARCH_ENGAGE":
             # Select search terms based on persona interests
             persona = self.persona_store.get_current_persona()
             interests = ["mechanisms", "pilots", "coordination", "energy", "policy"]
             params["search_terms"] = random.sample(interests, k=2)
             params["max_results"] = 10
+            if self.config.ADAPTIVE_INTENSITY:
+                params["intensity"] = random.randint(
+                    self.config.MIN_INTENSITY_LEVEL,
+                    self.config.MAX_INTENSITY_LEVEL
+                )
+            else:
+                params["intensity"] = self.config.MIN_INTENSITY_LEVEL
             
         elif action_type == "REST":
             params["duration_minutes"] = random.randint(5, 15)

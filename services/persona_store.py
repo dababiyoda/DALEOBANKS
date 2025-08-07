@@ -29,6 +29,7 @@ class PersonaSchema(BaseModel):
     guardrails: List[str]
     templates: Dict[str, Any]
     prompt_overrides: Optional[Dict[str, str]] = None
+    intensity_settings: Optional[Dict[str, Any]] = None
     
     @validator('content_mix')
     def validate_content_mix(cls, v):

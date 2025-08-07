@@ -18,6 +18,7 @@ from services.memory import MemoryService
 from services.logging_utils import get_logger
 from db.session import get_db_session
 from db.models import Tweet
+from config import get_config
 
 logger = get_logger(__name__)
 
@@ -30,13 +31,14 @@ class Generator:
         self.ethics_guard = EthicsGuard()
         self.critic = Critic()
         self.memory = MemoryService()
-        
+        self.config = get_config()
+
         # Duplicate detection settings
         self.duplicate_check_days = 30
         self.similarity_threshold = 0.8
         self.max_mutation_attempts = 3
     
-    async def make_proposal(self, topic: str = "general") -> Dict[str, Any]:
+    async def make_proposal(self, topic: str = "general", intensity: int = 1) -> Dict[str, Any]:
         """Generate a proposal tweet"""
         try:
             with get_db_session() as session:
@@ -49,7 +51,7 @@ class Generator:
                 )
                 
                 # Prepare user message
-                user_message = self._build_proposal_prompt(topic, context)
+                user_message = self._build_proposal_prompt(topic, context, intensity)
                 
                 # Generate content
                 content = await self.llm_adapter.chat(
@@ -59,13 +61,13 @@ class Generator:
                 )
                 
                 # Validate and refine
-                return await self._validate_and_refine(content, "proposal", topic, session)
+                return await self._validate_and_refine(content, "proposal", topic, session, intensity)
                 
         except Exception as e:
             logger.error(f"Proposal generation failed: {e}")
             return {"error": str(e)}
     
-    async def make_reply(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def make_reply(self, context: Dict[str, Any], intensity: int = 1) -> Dict[str, Any]:
         """Generate a reply to a mention or tweet"""
         try:
             with get_db_session() as session:
@@ -78,7 +80,7 @@ class Generator:
                 )
                 
                 # Prepare user message
-                user_message = self._build_reply_prompt(context, memory_context)
+                user_message = self._build_reply_prompt(context, memory_context, intensity)
                 
                 # Generate content
                 content = await self.llm_adapter.chat(
@@ -88,13 +90,13 @@ class Generator:
                 )
                 
                 # Validate and refine
-                return await self._validate_and_refine(content, "reply", context.get("topic", "general"), session)
+                return await self._validate_and_refine(content, "reply", context.get("topic", "general"), session, intensity)
                 
         except Exception as e:
             logger.error(f"Reply generation failed: {e}")
             return {"error": str(e)}
     
-    async def make_quote(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def make_quote(self, context: Dict[str, Any], intensity: int = 1) -> Dict[str, Any]:
         """Generate a quote tweet"""
         try:
             with get_db_session() as session:
@@ -107,7 +109,7 @@ class Generator:
                 )
                 
                 # Prepare user message
-                user_message = self._build_quote_prompt(context, memory_context)
+                user_message = self._build_quote_prompt(context, memory_context, intensity)
                 
                 # Generate content
                 content = await self.llm_adapter.chat(
@@ -117,13 +119,13 @@ class Generator:
                 )
                 
                 # Validate and refine
-                return await self._validate_and_refine(content, "quote", context.get("topic", "general"), session)
+                return await self._validate_and_refine(content, "quote", context.get("topic", "general"), session, intensity)
                 
         except Exception as e:
             logger.error(f"Quote generation failed: {e}")
             return {"error": str(e)}
     
-    def _build_proposal_prompt(self, topic: str, context: Dict[str, Any]) -> str:
+    def _build_proposal_prompt(self, topic: str, context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for proposal generation"""
         persona = self.persona_store.get_current_persona()
         template = persona.get("templates", {}).get("tweet", "")
@@ -141,12 +143,13 @@ Requirements:
 - Include uncertainty and rollback plan
 - End with actionable CTA
 - Be specific and concrete
+- Intensity level: {intensity} on scale 0-5
 
 Topic focus: {topic}"""
         
         return prompt
     
-    def _build_reply_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any]) -> str:
+    def _build_reply_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for reply generation"""
         persona = self.persona_store.get_current_persona()
         template = persona.get("templates", {}).get("reply", "")
@@ -168,11 +171,12 @@ Requirements:
 - Maximum 280 characters
 - Illuminate gap, suggest mechanism, provide next step
 - Be constructive and helpful
-- No self-promotion unless directly relevant"""
+- No self-promotion unless directly relevant
+- Intensity level: {intensity} on scale 0-5"""
         
         return prompt
     
-    def _build_quote_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any]) -> str:
+    def _build_quote_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for quote tweet generation"""
         original_tweet = context.get("original_tweet", "")
         
@@ -184,11 +188,12 @@ Requirements:
 - Maximum 200 characters (leaving room for quoted tweet)
 - Add valuable perspective or mechanism
 - Build on the original idea constructively
-- Include actionable insight"""
+- Include actionable insight
+- Intensity level: {intensity} on scale 0-5"""
         
         return prompt
     
-    async def _validate_and_refine(self, content: str, content_type: str, topic: str, session) -> Dict[str, Any]:
+    async def _validate_and_refine(self, content: str, content_type: str, topic: str, session, intensity: int) -> Dict[str, Any]:
         """Validate content and refine if needed"""
         # Ethics check
         ethics_result = self.ethics_guard.validate_text(content)
@@ -222,11 +227,16 @@ Requirements:
             is_duplicate, _ = self._check_for_duplicates(content, session)
             if is_duplicate:
                 return {"error": "Unable to generate unique content after mutation"}
-        
+
+        if intensity >= 3 and self.config.RAGEBAIT_GUARD:
+            if not (self.ethics_guard.has_receipt(content) and self.ethics_guard.has_constructive_step(content)):
+                return {"error": "High-intensity content requires a citation and constructive next step"}
+
         return {
             "content": content,
             "content_type": content_type,
             "topic": topic,
+            "intensity": intensity,
             "character_count": len(content),
             "ethics_score": ethics_result.uncertainty_score,
             "hash": hashlib.sha256(content.encode()).hexdigest()[:16]
