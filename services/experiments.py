@@ -8,6 +8,7 @@ import json
 from sqlalchemy.orm import Session
 
 from db.models import ArmsLog, Tweet
+from db.session import get_db_session
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)

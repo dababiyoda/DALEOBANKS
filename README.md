@@ -62,3 +62,6 @@ DaLeoBanks represents a new paradigm in AI agents: a self-aware, self-optimizing
 ```bash
 git clone <repository-url>
 cd daleobanks
+pip install -r requirements.txt
+pytest -q
+```

@@ -37,11 +37,11 @@ class Critic:
                 "description": "Pilot implementation plan"
             },
             "kpis": {
-                "keywords": [r'\bkpi\b', r'\bmetric\b', r'\bmeasure\b', r'\bindicator\b', r'\bsuccess\b', r'\btrack\b'],
+                "keywords": [r'\bkpis?\b', r'\bmetric\b', r'\bmeasure\b', r'\bindicator\b', r'\bsuccess\b', r'\btrack\b'],
                 "description": "Success metrics and KPIs"
             },
             "risks": {
-                "keywords": [r'\brisk\b', r'\bdanger\b', r'\bconcern\b', r'\blimitation\b', r'\bfail\b', r'\bchallenge\b'],
+                "keywords": [r'\brisks?\b', r'\bdanger\b', r'\bconcern\b', r'\blimitation\b', r'\bfail\b', r'\bchallenge\b'],
                 "description": "Risk assessment"
             },
             "cta": {

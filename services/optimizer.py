@@ -9,6 +9,7 @@ import random
 from sqlalchemy.orm import Session
 
 from db.models import ArmsLog
+from db.session import get_db_session
 from services.experiments import ExperimentsService
 from services.logging_utils import get_logger
 from config import get_config
@@ -147,7 +148,10 @@ class Optimizer:
     def _convert_to_beta_params(self, mean_reward: float, count: int) -> Tuple[int, int]:
         """Convert J-score performance to Beta distribution parameters"""
         # Normalize J-score to 0-1 range
-        normalized_reward = self._normalize_j_score(mean_reward)
+        if not self.j_score_history:
+            normalized_reward = max(min(mean_reward, 1.0), 0.0)
+        else:
+            normalized_reward = self._normalize_j_score(mean_reward)
         
         # Convert to successes/failures
         # Higher J-score = more successes
