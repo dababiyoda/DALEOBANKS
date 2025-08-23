@@ -62,13 +62,18 @@ class Config:
     MIN_INTENSITY_LEVEL: int
     MAX_INTENSITY_LEVEL: int
     RAGEBAIT_GUARD: bool
-    
-    # Goal weights
+
+    # Goal parameters
+    IMPACT_WEEKLY_FLOOR: int
+    WEIGHTS_IMPACT: Dict[str, float]
+    WEIGHTS_REVENUE: Dict[str, float]
+    WEIGHTS_AUTHORITY: Dict[str, float]
+    WEIGHTS_FAME: Dict[str, float]
     GOAL_WEIGHTS: Dict[str, Dict[str, float]]
 
 def get_config() -> Config:
     """Get configuration from environment variables"""
-    
+
     # Parse quiet hours
     quiet_hours = None
     if os.getenv("QUIET_HOURS_ET"):
@@ -77,6 +82,19 @@ def get_config() -> Config:
         except:
             quiet_hours = None
     
+    def _parse_weights(var: str, default: str) -> Dict[str, float]:
+        raw = os.getenv(var, default)
+        try:
+            alpha, beta, gamma, lam = [float(x) for x in raw.split(",")]
+            return {"alpha": alpha, "beta": beta, "gamma": gamma, "lambda": lam}
+        except Exception:
+            return {"alpha": 0.0, "beta": 0.0, "gamma": 0.0, "lambda": 0.0}
+
+    weights_impact = _parse_weights("WEIGHTS_IMPACT", "0.40,0.30,0.20,0.10")
+    weights_revenue = _parse_weights("WEIGHTS_REVENUE", "0.30,0.55,0.25,0.25")
+    weights_authority = _parse_weights("WEIGHTS_AUTHORITY", "0.45,0.20,0.25,0.10")
+    weights_fame = _parse_weights("WEIGHTS_FAME", "0.65,0.15,0.25,0.20")
+
     return Config(
         # Environment
         APP_ENV=os.getenv("APP_ENV", "prod"),
@@ -93,8 +111,8 @@ def get_config() -> Config:
         ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", "choose-a-long-random-string"),
         
         # Operation Mode
-        GOAL_MODE=os.getenv("GOAL_MODE", "FAME"),
-        LIVE=os.getenv("LIVE", "true").lower() == "true",
+        GOAL_MODE=os.getenv("GOAL_MODE", "IMPACT"),
+        LIVE=os.getenv("LIVE", "false").lower() == "true",
         QUIET_HOURS_ET=quiet_hours,
         
         # Media settings
@@ -124,14 +142,22 @@ def get_config() -> Config:
         ENABLE_MEDIA=os.getenv("ENABLE_MEDIA", "true").lower() == "true",
 
         # Intensity settings
-        ADAPTIVE_INTENSITY=os.getenv("ADAPTIVE_INTENSITY", "true").lower() == "true",
+        ADAPTIVE_INTENSITY=os.getenv("ADAPTIVE_INTENSITY", "false").lower() == "true",
         MIN_INTENSITY_LEVEL=int(os.getenv("MIN_LEVEL", 1)),
         MAX_INTENSITY_LEVEL=int(os.getenv("MAX_LEVEL", 4)),
         RAGEBAIT_GUARD=os.getenv("RAGEBAIT_GUARD", "on").lower() in ("on", "true", "1"),
-        
-        # Goal weights
+
+        # Goal parameters
+        IMPACT_WEEKLY_FLOOR=int(os.getenv("IMPACT_WEEKLY_FLOOR", 10)),
+        WEIGHTS_IMPACT=weights_impact,
+        WEIGHTS_REVENUE=weights_revenue,
+        WEIGHTS_AUTHORITY=weights_authority,
+        WEIGHTS_FAME=weights_fame,
         GOAL_WEIGHTS={
-            "FAME": {"alpha": 0.65, "beta": 0.15, "gamma": 0.25, "lambda": 0.20},
-            "MONETIZE": {"alpha": 0.30, "beta": 0.55, "gamma": 0.25, "lambda": 0.25}
+            "IMPACT": weights_impact,
+            "REVENUE": weights_revenue,
+            "AUTHORITY": weights_authority,
+            "FAME": weights_fame,
+            "MONETIZE": weights_revenue,
         }
     )
