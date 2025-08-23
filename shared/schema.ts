@@ -1,5 +1,4 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp, boolean, json } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, varchar, integer, real, timestamp, boolean, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,14 +20,14 @@ export const tweets = pgTable("tweets", {
 });
 
 export const actions = pgTable("actions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").defaultRandom().notNull().primaryKey(),
   kind: varchar("kind").notNull(),
   meta_json: json("meta_json"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
 export const kpis = pgTable("kpis", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").defaultRandom().notNull().primaryKey(),
   name: varchar("name").notNull(),
   value: real("value").notNull(),
   period_start: timestamp("period_start").notNull(),
@@ -36,7 +35,7 @@ export const kpis = pgTable("kpis", {
 });
 
 export const notes = pgTable("notes", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").defaultRandom().notNull().primaryKey(),
   text: text("text").notNull(),
   created_at: timestamp("created_at").defaultNow(),
 });
@@ -47,7 +46,7 @@ export const followers_snapshot = pgTable("followers_snapshot", {
 });
 
 export const redirects = pgTable("redirects", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").defaultRandom().notNull().primaryKey(),
   label: text("label").notNull(),
   target_url: text("target_url").notNull(),
   utm: text("utm"),
@@ -56,7 +55,7 @@ export const redirects = pgTable("redirects", {
 });
 
 export const arms_log = pgTable("arms_log", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").defaultRandom().notNull().primaryKey(),
   tweet_id: varchar("tweet_id"),
   post_type: varchar("post_type").notNull(),
   topic: text("topic"),

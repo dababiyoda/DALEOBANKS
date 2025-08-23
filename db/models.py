@@ -4,8 +4,8 @@ SQLAlchemy models for DaLeoBanks database
 
 from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.sql import func
 from datetime import datetime
+import uuid
 
 Base = declarative_base()
 
@@ -32,7 +32,7 @@ class Action(Base):
     """Action logs for all system activities"""
     __tablename__ = 'actions'
     
-    id = Column(String, primary_key=True, default=func.gen_random_uuid())
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     kind = Column(String, nullable=False)
     meta_json = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -41,7 +41,7 @@ class KPI(Base):
     """KPI tracking over time"""
     __tablename__ = 'kpis'
     
-    id = Column(String, primary_key=True, default=func.gen_random_uuid())
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
     value = Column(Float, nullable=False)
     period_start = Column(DateTime, nullable=False)
@@ -51,7 +51,7 @@ class Note(Base):
     """Improvement notes and reflections"""
     __tablename__ = 'notes'
     
-    id = Column(String, primary_key=True, default=func.gen_random_uuid())
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     text = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -66,7 +66,7 @@ class Redirect(Base):
     """Tracked redirect links for revenue measurement"""
     __tablename__ = 'redirects'
     
-    id = Column(String, primary_key=True, default=func.gen_random_uuid())
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     label = Column(Text, nullable=False)
     target_url = Column(Text, nullable=False)
     utm = Column(Text)
@@ -77,7 +77,7 @@ class ArmsLog(Base):
     """Multi-armed bandit experiment logs"""
     __tablename__ = 'arms_log'
     
-    id = Column(String, primary_key=True, default=func.gen_random_uuid())
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tweet_id = Column(String)
     post_type = Column(String, nullable=False)
     topic = Column(Text)
