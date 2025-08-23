@@ -202,11 +202,11 @@ async def toggle_live_mode(request: ToggleRequest):
 
 @app.post("/api/mode")
 async def set_goal_mode(request: ModeRequest):
-    """Set goal mode (FAME/MONETIZE)"""
+    """Set goal mode"""
     try:
-        if request.mode not in ["FAME", "MONETIZE"]:
+        if request.mode not in config.GOAL_WEIGHTS:
             raise HTTPException(status_code=400, detail="Invalid mode")
-        
+
         config.GOAL_MODE = request.mode
         optimizer.update_goal_weights(request.mode)
         

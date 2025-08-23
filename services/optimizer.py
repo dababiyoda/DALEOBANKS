@@ -38,6 +38,8 @@ class Optimizer:
         if goal_mode in self.config.GOAL_WEIGHTS:
             self.goal_weights = self.config.GOAL_WEIGHTS[goal_mode]
             logger.info(f"Updated goal weights for {goal_mode}: {self.goal_weights}")
+        else:
+            raise ValueError(f"Unknown goal mode: {goal_mode}")
     
     def get_action_weights(self) -> Dict[str, float]:
         """Get action weights based on current optimization state"""

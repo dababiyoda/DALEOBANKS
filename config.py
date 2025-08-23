@@ -76,6 +76,18 @@ def get_config() -> Config:
             quiet_hours = [int(x) for x in os.getenv("QUIET_HOURS_ET", "").split(",")]
         except:
             quiet_hours = None
+
+    # Goal mode weights and validation
+    goal_weights = {
+        "FAME": {"alpha": 0.65, "beta": 0.15, "gamma": 0.25, "lambda": 0.20},
+        "MONETIZE": {"alpha": 0.30, "beta": 0.55, "gamma": 0.25, "lambda": 0.25},
+        "IMPACT": {"alpha": 0.40, "beta": 0.25, "gamma": 0.60, "lambda": 0.15},
+        "AUTHORITY": {"alpha": 0.35, "beta": 0.20, "gamma": 0.45, "lambda": 0.30},
+    }
+
+    goal_mode = os.getenv("GOAL_MODE", "FAME").upper()
+    if goal_mode not in goal_weights:
+        raise ValueError(f"Unknown GOAL_MODE: {goal_mode}")
     
     return Config(
         # Environment
@@ -93,8 +105,8 @@ def get_config() -> Config:
         ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", "choose-a-long-random-string"),
         
         # Operation Mode
-        GOAL_MODE=os.getenv("GOAL_MODE", "FAME"),
-        LIVE=os.getenv("LIVE", "true").lower() == "true",
+        GOAL_MODE=goal_mode,
+        LIVE=os.getenv("LIVE", "false").lower() == "true",
         QUIET_HOURS_ET=quiet_hours,
         
         # Media settings
@@ -130,8 +142,5 @@ def get_config() -> Config:
         RAGEBAIT_GUARD=os.getenv("RAGEBAIT_GUARD", "on").lower() in ("on", "true", "1"),
         
         # Goal weights
-        GOAL_WEIGHTS={
-            "FAME": {"alpha": 0.65, "beta": 0.15, "gamma": 0.25, "lambda": 0.20},
-            "MONETIZE": {"alpha": 0.30, "beta": 0.55, "gamma": 0.25, "lambda": 0.25}
-        }
+        GOAL_WEIGHTS=goal_weights
     )

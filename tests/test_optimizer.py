@@ -128,6 +128,20 @@ class TestOptimizer:
         
         assert monetize_weights["beta"] > monetize_weights["alpha"]  # Revenue > Fame
         assert monetize_weights["beta"] == 0.55
+
+        # Test IMPACT mode
+        self.optimizer.update_goal_weights("IMPACT")
+        impact_weights = self.optimizer.goal_weights
+        assert impact_weights["gamma"] > impact_weights["alpha"]
+
+        # Test AUTHORITY mode
+        self.optimizer.update_goal_weights("AUTHORITY")
+        authority_weights = self.optimizer.goal_weights
+        assert authority_weights["lambda"] >= authority_weights["beta"]
+
+        # Invalid mode should raise
+        with pytest.raises(ValueError):
+            self.optimizer.update_goal_weights("UNKNOWN")
     
     def test_optimization_simulation(self):
         """Test optimization simulation for convergence"""
