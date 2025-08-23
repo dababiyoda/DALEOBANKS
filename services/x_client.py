@@ -135,7 +135,7 @@ class XClient:
             if media_ids:
                 kwargs["media_ids"] = media_ids
             
-            response = self.client.create_tweet(**kwargs)
+            response = await asyncio.to_thread(self.client.create_tweet, **kwargs)
             tweet_id = response.data["id"]
             
             self._record_success(endpoint)
@@ -163,7 +163,7 @@ class XClient:
             return False
         
         try:
-            self.client.like(tweet_id)
+            await asyncio.to_thread(self.client.like, tweet_id)
             self._record_success(endpoint)
             logger.info(f"Liked tweet: {tweet_id}")
             return True
@@ -184,7 +184,7 @@ class XClient:
             return False
         
         try:
-            self.client.unlike(tweet_id)
+            await asyncio.to_thread(self.client.unlike, tweet_id)
             self._record_success(endpoint)
             return True
         except Exception as e:
@@ -204,7 +204,7 @@ class XClient:
             return False
         
         try:
-            self.client.retweet(tweet_id)
+            await asyncio.to_thread(self.client.retweet, tweet_id)
             self._record_success(endpoint)
             logger.info(f"Retweeted: {tweet_id}")
             return True
@@ -225,7 +225,7 @@ class XClient:
             return False
         
         try:
-            self.client.follow_user(user_id)
+            await asyncio.to_thread(self.client.follow_user, user_id)
             self._record_success(endpoint)
             logger.info(f"Followed user: {user_id}")
             return True
@@ -242,22 +242,29 @@ class XClient:
             return []
         
         try:
-            tweets = tweepy.Paginator(
-                self.client.search_recent_tweets,
-                query=query,
-                max_results=max_results,
-                tweet_fields=["public_metrics", "created_at", "author_id"]
-            ).flatten(limit=max_results)
-            
+            def _search():
+                return list(
+                    tweepy.Paginator(
+                        self.client.search_recent_tweets,
+                        query=query,
+                        max_results=max_results,
+                        tweet_fields=["public_metrics", "created_at", "author_id"],
+                    ).flatten(limit=max_results)
+                )
+
+            tweets = await asyncio.to_thread(_search)
+
             results = []
             for tweet in tweets:
-                results.append({
-                    "id": tweet.id,
-                    "text": tweet.text,
-                    "author_id": tweet.author_id,
-                    "created_at": tweet.created_at,
-                    "public_metrics": tweet.public_metrics
-                })
+                results.append(
+                    {
+                        "id": tweet.id,
+                        "text": tweet.text,
+                        "author_id": tweet.author_id,
+                        "created_at": tweet.created_at,
+                        "public_metrics": tweet.public_metrics,
+                    }
+                )
             
             self._record_success(endpoint)
             return results
@@ -279,7 +286,7 @@ class XClient:
             if since_id:
                 kwargs["since_id"] = since_id
             
-            mentions = self.client.get_mentions(**kwargs)
+            mentions = await asyncio.to_thread(self.client.get_mentions, **kwargs)
             
             results = []
             if mentions.data:
@@ -308,9 +315,10 @@ class XClient:
             return {}
         
         try:
-            tweets = self.client.get_tweets(
+            tweets = await asyncio.to_thread(
+                self.client.get_tweets,
                 ids=tweet_ids,
-                tweet_fields=["public_metrics"]
+                tweet_fields=["public_metrics"],
             )
             
             metrics = {}
