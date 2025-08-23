@@ -111,8 +111,15 @@ async def websocket_endpoint(websocket: WebSocket):
             # Use send_ping for WebSocket keep-alive
             try:
                 await websocket.send_text("ping")
-            except:
-                pass
+            except Exception:
+                # On send failure, remove connection and stop pinging
+                if websocket in websocket_connections:
+                    websocket_connections.remove(websocket)
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+                break
     except WebSocketDisconnect:
         websocket_connections.remove(websocket)
         logger.info("WebSocket connection closed")
