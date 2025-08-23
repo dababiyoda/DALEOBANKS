@@ -110,10 +110,13 @@ class DatabaseLogHandler(logging.Handler):
 
 def setup_database_logging():
     """Set up database logging for warnings and errors"""
-    db_handler = DatabaseLogHandler()
-    
-    # Add to root logger
     root_logger = logging.getLogger()
+
+    # Prevent attaching multiple handlers during reloads
+    if any(isinstance(h, DatabaseLogHandler) for h in root_logger.handlers):
+        return
+
+    db_handler = DatabaseLogHandler()
     root_logger.addHandler(db_handler)
 
 class StructuredLogger:
