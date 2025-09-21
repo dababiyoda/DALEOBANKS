@@ -4,7 +4,7 @@ Thompson sampling optimizer for multi-armed bandit optimization
 
 import numpy as np
 from typing import Dict, List, Any, Tuple, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import random
 import services.experiments as experiments_module
 from services.experiments import ExperimentsService
@@ -195,7 +195,7 @@ class Optimizer:
         """Update J-score history for normalization"""
         try:
             # Get recent J-scores
-            cutoff = datetime.utcnow() - timedelta(days=7)
+            cutoff = datetime.now(UTC) - timedelta(days=7)
             
             from db.models import Tweet
 

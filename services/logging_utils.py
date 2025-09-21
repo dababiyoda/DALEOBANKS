@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 
 from db.session import get_db_session
 
@@ -22,7 +22,7 @@ class JSONFormatter(logging.Formatter):
     
     def format(self, record):
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -69,7 +69,7 @@ def log_to_database(
             kind=kind,
             meta_json={
                 "message": message,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 **(metadata or {})
             }
         )

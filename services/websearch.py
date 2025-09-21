@@ -19,7 +19,8 @@ content and to verify their credibility.
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import List, Optional
+import os
 
 
 class WebSearchService:
@@ -42,6 +43,15 @@ class WebSearchService:
         "bloomberg.com",
     ]
 
+    def __init__(self, whitelist: Optional[List[str]] = None) -> None:
+        env_whitelist = os.getenv("EVIDENCE_WHITELIST", "")
+        if whitelist is None and env_whitelist:
+            whitelist = [domain.strip().lower() for domain in env_whitelist.split(",") if domain.strip()]
+        self.whitelist = whitelist or self.TRUSTED_DOMAINS
+
+    def domain_whitelist(self) -> List[str]:
+        return list(self.whitelist)
+
     def extract_urls(self, text: str) -> List[str]:
         """Return all URL substrings found in the input text."""
         if not text:
@@ -54,7 +64,7 @@ class WebSearchService:
             domain = url.split("//", 1)[-1].split("/", 1)[0]
         except Exception:
             return False
-        for trusted in self.TRUSTED_DOMAINS:
+        for trusted in self.whitelist:
             if domain.endswith(trusted):
                 return True
         return False
@@ -70,6 +80,13 @@ class WebSearchService:
             if self.is_trusted(url):
                 return True
         return False
+
+    def validate_links(self, text: str) -> bool:
+        """Return True when at least one URL exists and all are trusted."""
+        urls = self.extract_urls(text)
+        if not urls:
+            return False
+        return all(self.is_trusted(url) for url in urls)
 
 
 __all__ = ["WebSearchService"]

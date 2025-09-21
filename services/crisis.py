@@ -19,9 +19,12 @@ external API access is restricted or costly.
 
 from __future__ import annotations
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from services.sentiment import SentimentService
+from services.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class CrisisService:
@@ -45,6 +48,8 @@ class CrisisService:
         ]
         # Sentiment threshold below which content is considered highly negative
         self.sentiment_threshold: float = -0.5
+        self._active: bool = False
+        self._reason: Optional[str] = None
 
     def is_crisis(self, text: str) -> bool:
         """Return True if the given text appears to describe a crisis.
@@ -71,6 +76,38 @@ class CrisisService:
         # Fallback to sentiment analysis
         sentiment = self.sentiment_service.analyze_sentiment(text)
         return sentiment.get("score", 0.0) < self.sentiment_threshold
+
+    def activate(self, *, reason: str) -> None:
+        """Enter crisis mode and log the transition."""
+
+        if not self._active:
+            logger.warning("crisis_state=PAUSED reason=%s", reason)
+            logger.info("calm_statement=Holding fire until signals stabilize")
+        self._active = True
+        self._reason = reason
+
+    def resolve(self, *, reason: str = "monitor_clear") -> None:
+        """Exit crisis mode and log a calming statement."""
+
+        if self._active:
+            logger.info("crisis_state=NORMAL reason=%s", reason)
+        self._active = False
+        self._reason = None
+
+    def is_paused(self) -> bool:
+        return self._active
+
+    def guard(self, *, action: str) -> bool:
+        """Return False when crisis mode blocks the outbound action."""
+
+        if self._active:
+            logger.info("crisis_guard_blocked action=%s", action)
+            return False
+        return True
+
+    @property
+    def reason(self) -> Optional[str]:
+        return self._reason
 
 
 __all__ = ["CrisisService"]

@@ -66,6 +66,16 @@ class Critic:
             "unrealistic": [r'\b100%\s+(?:success|guarantee)\b', r'\bno\s+risk\b', r'\bperfect\s+solution\b'],
             "too_generic": [r'\bmake\s+things\s+better\b', r'\bsolve\s+everything\b', r'\bfix\s+all\b']
         }
+
+    def split_sentences(self, text: str) -> List[str]:
+        return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+    def has_periodic_cadence(self, text: str) -> bool:
+        sentences = self.split_sentences(text)
+        if len(sentences) < 3:
+            return False
+        lengths = [len(sentence.split()) for sentence in sentences[:3]]
+        return lengths[0] <= 18 and lengths[1] <= 18 and lengths[2] >= 24
     
     def check_completeness(self, text: str, content_type: str = "proposal") -> Tuple[bool, List[str]]:
         """

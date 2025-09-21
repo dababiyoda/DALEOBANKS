@@ -4,8 +4,9 @@ Content generation with persona integration and duplicate prevention
 
 import hashlib
 import json
+import re
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import asyncio
 
 
@@ -174,7 +175,7 @@ Requirements:
 Topic focus: {topic}"""
         
         return prompt
-    
+
     def _build_reply_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for reply generation"""
         persona = self.persona_store.get_current_persona()
@@ -199,8 +200,66 @@ Requirements:
 - Be constructive and helpful
 - No self-promotion unless directly relevant
 - Intensity level: {intensity} on scale 0-5"""
-        
+
         return prompt
+
+    def _split_sentences(self, text: str) -> List[str]:
+        return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+    def _truncate_sentence(self, sentence: str, max_words: int) -> str:
+        words = sentence.strip().split()
+        if not words:
+            return "Noted." if max_words > 0 else ""
+        if len(words) <= max_words:
+            trimmed = " ".join(words)
+        else:
+            trimmed = " ".join(words[:max_words]).rstrip(",") + "..."
+        trimmed = trimmed.rstrip(".")
+        return f"{trimmed}."
+
+    def _build_synthesis_sentence(self, sentence: str, anchors: List[str]) -> str:
+        base = sentence.strip().rstrip(".")
+        core_clause = (
+            "here's the synthesis: we integrate the concession, document the mechanism, and run a 30-day pilot "
+            "with weekly KPI reviews so everyone sees the tradeoffs."
+        )
+        if base:
+            combined = f"{base}, so {core_clause}"
+        else:
+            combined = core_clause.capitalize()
+        if len(combined.split()) < 24:
+            combined = (
+                combined.rstrip(".")
+                + " That keeps the loop closed while respecting every frame in the thread."
+            )
+        return combined.rstrip(".") + "."
+
+    def _enforce_steelman(self, content: str, intensity: int) -> str:
+        if intensity < 2:
+            return content
+
+        sentences = self._split_sentences(content)
+
+        if len(sentences) >= 3:
+            leading = sentences[:3]
+            if len(sentences) > 3:
+                leading[2] = " ".join([leading[2]] + sentences[3:])
+        else:
+            words = content.strip().split()
+            chunk = max(1, len(words) // 3)
+            first = " ".join(words[:chunk])
+            second = " ".join(words[chunk : 2 * chunk])
+            third = " ".join(words[2 * chunk :])
+            leading = [first, second or first, third or content]
+
+        if self.critic.has_periodic_cadence(" ".join(leading)):
+            return " ".join(leading)
+
+        short_one = self._truncate_sentence(leading[0], 18)
+        short_two = self._truncate_sentence(leading[1], 18)
+        long_third = self._build_synthesis_sentence(leading[2], [short_one.rstrip("."), short_two.rstrip(".")])
+
+        return " ".join([short_one, short_two, long_third]).strip()
     
     def _build_quote_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for quote tweet generation"""
@@ -256,16 +315,17 @@ Requirements:
             if is_duplicate:
                 return {"error": "Unable to generate unique content after mutation"}
 
-        # Enforce receipts or silence rules
+        # Enforce receipts or silence rules and cadence for replies
         if content_type == "reply":
-            # Limit to at most two sentences. We count simple period terminators.
-            # Other punctuation marks (e.g. "!" or "?") are treated as ends as well.
-            import re
-            sentences = [s for s in re.split(r"[\.!?]+", content) if s.strip()]
-            if len(sentences) > 2:
-                return {
-                    "error": "Reply exceeds two sentences. Provide receipts or stay silent"
-                }
+            content = self._enforce_steelman(content, intensity)
+            sentences = self._split_sentences(content)
+            if intensity >= 2:
+                if len(sentences) != 3 or not self.critic.has_periodic_cadence(content):
+                    return {"error": "Replies at this intensity must follow short/short/long cadence"}
+                if intensity >= 3 and not self.websearch.validate_links(content):
+                    return {"error": "High-intensity replies require a whitelist citation"}
+            elif len(sentences) > 2:
+                return {"error": "Reply exceeds two sentences. Provide receipts or stay silent"}
 
         # Proposals must include at least one credible citation (receipt)
         if content_type == "proposal":
@@ -291,7 +351,7 @@ Requirements:
     def _check_for_duplicates(self, content: str, session) -> tuple[bool, Optional[str]]:
         """Check for duplicate content in recent tweets"""
         # Get recent tweets for comparison
-        cutoff = datetime.utcnow() - timedelta(days=self.duplicate_check_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self.duplicate_check_days)
         recent_tweets = (
             session.query(Tweet)
             .filter(lambda tweet: tweet.created_at >= cutoff)

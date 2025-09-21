@@ -4,13 +4,18 @@ Action selection based on persona, drives, optimizer, and constraints
 
 import random
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
-import yaml
+from datetime import datetime, timedelta, UTC
 
 from services.persona_store import PersonaStore
 from services.optimizer import Optimizer
 from services.logging_utils import get_logger
+from services.bandit import ThompsonBandit
 from config import get_config
+
+try:  # pragma: no cover
+    import yaml  # type: ignore
+except ImportError:  # pragma: no cover
+    yaml = None
 
 logger = get_logger(__name__)
 
@@ -22,6 +27,8 @@ class Selector:
         self.optimizer = Optimizer()
         self.config = get_config()
         self.drives = self._load_drives()
+        self.bandit = ThompsonBandit(["POST_PROPOSAL", "REPLY_MENTIONS", "SEARCH_ENGAGE", "REST"])
+        self._last_arm: Optional[str] = None
         
         # Action types with their base probabilities
         self.action_types = {
@@ -44,6 +51,14 @@ class Selector:
     
     def _load_drives(self) -> Dict[str, float]:
         """Load drives from YAML file"""
+        if yaml is None:
+            logger.warning("PyYAML not available; using default drive weights")
+            return {
+                "curiosity": 0.35,
+                "novelty": 0.25,
+                "impact": 0.30,
+                "stability": 0.10
+            }
         try:
             with open("drives.yaml", "r") as f:
                 drives_config = yaml.safe_load(f)
@@ -57,69 +72,74 @@ class Selector:
                 "stability": 0.10
             }
     
-    async def get_next_action(self) -> Dict[str, Any]:
-        """
-        Select the next action based on multiple factors:
-        - Persona content mix
-        - Drive weights
-        - Optimizer recommendations
-        - Minimum intervals
-        - Quiet hours
-        """
+    async def decide_next_action(self) -> Dict[str, Any]:
+        """Use the Thompson bandit to decide what to do next."""
         try:
-            # Check quiet hours
             if self._is_quiet_hours():
+                self._last_arm = "REST"
                 return {
                     "type": "REST",
                     "reason": "quiet_hours",
                     "next_check_minutes": 60
                 }
-            
-            # Get available actions (respecting min intervals)
+
             available_actions = self._get_available_actions()
-            
             if not available_actions:
+                self._last_arm = "REST"
                 return {
                     "type": "REST",
                     "reason": "all_actions_on_cooldown",
                     "next_check_minutes": 5
                 }
-            
-            # Get persona preferences
+
             persona = self.persona_store.get_current_persona()
             content_mix = persona.get("content_mix", {})
-            
-            # Get optimizer recommendations
             optimizer_weights = self.optimizer.get_action_weights()
-            
-            # Combine all factors to compute final probabilities
+
             action_probs = self._compute_action_probabilities(
                 available_actions, content_mix, optimizer_weights
             )
-            
-            # Select action
-            selected_action = self._weighted_random_selection(action_probs)
-            
-            # Get specific parameters for the action
+
+            # Bandit selection using weighted candidates
+            candidates = list(action_probs.keys())
+            selected_action = self.bandit.select(candidates)
+
             action_params = await self._get_action_parameters(selected_action)
-            
-            # Record the action selection
-            self.last_actions[selected_action] = datetime.utcnow()
-            
+
+            self.last_actions[selected_action] = datetime.now(UTC)
+            self._last_arm = selected_action
+
             return {
                 "type": selected_action,
-                "reason": "intelligent_selection",
+                "reason": "bandit_selection",
                 **action_params
             }
-            
+
         except Exception as e:
             logger.error(f"Action selection failed: {e}")
+            self._last_arm = "REST"
             return {
                 "type": "REST",
                 "reason": "error",
                 "error": str(e),
                 "next_check_minutes": 10
             }
+
+    async def get_next_action(self) -> Dict[str, Any]:
+        """Backward compatible alias for `decide_next_action`."""
+        return await self.decide_next_action()
+
+    def record_outcome(self, metrics: Dict[str, Any], arm: Optional[str] = None) -> None:
+        """Update bandit state with observed metrics."""
+        arm_to_update = arm or self._last_arm
+        if not arm_to_update:
+            return
+
+        reward = metrics.get("j_score", 0.0)
+        try:
+            self.bandit.record_outcome(arm_to_update, reward)
+        except Exception as exc:
+            logger.error(f"Failed to record bandit outcome: {exc}")
     
     def _is_quiet_hours(self) -> bool:
         """Check if current time is in quiet hours"""
@@ -141,7 +161,7 @@ class Selector:
     def _get_available_actions(self) -> list[str]:
         """Get actions that are not on cooldown"""
         available = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         for action_type in self.action_types.keys():
             if action_type == "REST":
@@ -269,7 +289,7 @@ class Selector:
     def get_next_scheduled_actions(self) -> Dict[str, datetime]:
         """Get when each action type can next be performed"""
         next_actions = {}
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         for action_type in self.action_types.keys():
             if action_type == "REST":

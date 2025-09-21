@@ -3,7 +3,7 @@ Multi-armed bandit experiments tracking
 """
 
 from typing import Dict, List, Any, Tuple, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import json
 
 from db.models import ArmsLog, Tweet
@@ -111,7 +111,7 @@ class ExperimentsService:
     
     def get_arm_performance(self, session: Any, days: int = 30) -> Dict[str, Any]:
         """Get performance statistics for each arm"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         
         # Get arm logs with rewards
         logs = (
@@ -196,7 +196,7 @@ class ExperimentsService:
         # Exploration vs exploitation ratio
         recent_logs = (
             session.query(ArmsLog)
-            .filter(lambda log: log.created_at >= datetime.utcnow() - timedelta(days=7))
+            .filter(lambda log: log.created_at >= datetime.now(UTC) - timedelta(days=7))
             .all()
         )
         
@@ -241,7 +241,7 @@ class ExperimentsService:
         # Get recent exploration ratio
         recent_logs = (
             session.query(ArmsLog)
-            .filter(lambda log: log.created_at >= datetime.utcnow() - timedelta(hours=6))
+            .filter(lambda log: log.created_at >= datetime.now(UTC) - timedelta(hours=6))
             .order_by(lambda log: log.created_at, descending=True)
             .limit(10)
             .all()

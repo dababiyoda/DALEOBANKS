@@ -3,7 +3,7 @@ KPI computation and tracking service
 """
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 
 from db.models import KPI, Tweet, FollowersSnapshot, Redirect
@@ -70,7 +70,7 @@ class KPIService:
     
     def get_kpi_trends(self, session: Session, days: int = 7) -> Dict[str, List[Dict[str, Any]]]:
         """Get KPI trends over specified number of days"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         trends = {}
         
         for kpi_name in self.kpi_definitions.keys():
@@ -267,5 +267,5 @@ class KPIService:
             "latest_values": latest_kpis,
             "growth_rates": growth_rates,
             "trends": trends,
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.now(UTC).isoformat()
         }

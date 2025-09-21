@@ -5,7 +5,7 @@ Orchestrates 24/7 autonomous operation
 
 import asyncio
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, Any, Optional
 import traceback
 
@@ -16,6 +16,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from config import get_config
 from db.session import get_db_session, init_db
 from db.models import Action
+from services.multiplexer import SocialMultiplexer
 from services.x_client import XClient
 from services.llm_adapter import LLMAdapter
 from services.generator import Generator
@@ -28,17 +29,20 @@ from services.self_model import SelfModelService
 from services.optimizer import Optimizer
 from services.reflection import ReflectionService
 from services.logging_utils import get_logger
+from services.crisis import CrisisService
+from services.perception import PerceptionService
 
 logger = get_logger(__name__)
 
 # Global scheduler
 scheduler: Optional[AsyncIOScheduler] = None
-start_time = datetime.utcnow()
+start_time = datetime.now(UTC)
 
 # Services
 config = get_config()
 persona_store = PersonaStore()
-x_client = XClient() if config.LIVE else None
+x_client = XClient()
+multiplexer = SocialMultiplexer(config=config, x_client=x_client)
 llm_adapter = LLMAdapter()
 generator = Generator(persona_store, llm_adapter)
 selector = Selector(persona_store)
@@ -48,6 +52,8 @@ reflection_service = ReflectionService()
 planner_service = PlannerService()
 self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
+perception_service = PerceptionService()
+crisis_service = CrisisService()
 
 async def start_scheduler():
     """Start the background scheduler"""
@@ -107,6 +113,22 @@ async def _add_jobs():
         id='search_engage',
         max_instances=1
     )
+
+    # Perception ingest job
+    scheduler.add_job(
+        perception_job,
+        IntervalTrigger(minutes=15, jitter=60),
+        id='perception_ingest',
+        max_instances=1
+    )
+
+    # Crisis monitoring job
+    scheduler.add_job(
+        crisis_watch_job,
+        IntervalTrigger(minutes=5, jitter=30),
+        id='crisis_watch',
+        max_instances=1
+    )
     
     # Analytics pull job
     scheduler.add_job(
@@ -157,56 +179,60 @@ async def _add_jobs():
 async def post_proposal_job():
     """Generate and post a proposal tweet"""
     try:
-        if not config.LIVE:
-            logger.info("DRY RUN - Would generate proposal")
+        if not crisis_service.guard(action="post_proposal"):
             return
-        
+
         # Get next action from selector
-        action = await selector.get_next_action()
-        
+        action = await selector.decide_next_action()
+
         if action.get("type") != "POST_PROPOSAL":
             logger.info("Selector chose different action, skipping proposal")
             return
-        
+
         # Generate proposal
         topic = action.get("topic", "general")
         intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
         result = await generator.make_proposal(topic, intensity)
-        
+
         if "error" in result:
             logger.error(f"Proposal generation failed: {result['error']}")
             return
-        
-        # Post to X
-        if x_client:
-            tweet_id = await x_client.create_tweet(result["content"])
-            
-            if tweet_id:
-                # Store in database
-                with get_db_session() as session:
-                    from db.models import Tweet
-                    tweet = Tweet(
-                        id=tweet_id,
-                        text=result["content"],
-                        kind="proposal",
-                        topic=topic,
-                        hour_bin=action.get("hour_bin"),
-                        cta_variant=action.get("cta_variant")
-                    )
-                    session.add(tweet)
-                    session.commit()
-                
-                # Log action
-                await _log_action("proposal_posted", {
-                    "tweet_id": tweet_id,
-                    "topic": topic,
-                    "character_count": len(result["content"])
-                })
-                
-                logger.info(f"Posted proposal: {tweet_id}")
-            else:
-                logger.error("Failed to post proposal tweet")
-        
+
+        publish_result = await multiplexer.publish(
+            result["content"],
+            kind="post",
+            intensity=intensity,
+            metadata={"topic": topic},
+        )
+
+        x_result = publish_result.get("x")
+
+        if x_result and not x_result.dry_run:
+            # Store in database
+            with get_db_session() as session:
+                from db.models import Tweet
+                tweet = Tweet(
+                    id=x_result.post_id,
+                    text=result["content"],
+                    kind="proposal",
+                    topic=topic,
+                    hour_bin=action.get("hour_bin"),
+                    cta_variant=action.get("cta_variant")
+                )
+                session.add(tweet)
+                session.commit()
+
+            # Log action
+            await _log_action("proposal_posted", {
+                "tweet_id": x_result.post_id,
+                "topic": topic,
+                "character_count": len(result["content"])
+            })
+
+            logger.info(f"Posted proposal: {x_result.post_id}")
+        else:
+            logger.info("DRY RUN - Proposal would be posted", extra={"topic": topic})
+
     except Exception as e:
         logger.error(f"Proposal job failed: {e}")
         traceback.print_exc()
@@ -214,10 +240,18 @@ async def post_proposal_job():
 async def reply_mentions_job():
     """Reply to recent mentions"""
     try:
-        if not x_client:
+        if not config.LIVE or not x_client:
             logger.info("X client not available")
             return
-        
+
+        if not crisis_service.guard(action="reply_mentions"):
+            return
+
+        action = await selector.decide_next_action()
+        if action.get("type") != "REPLY_MENTIONS":
+            logger.info("Selector chose different action, skipping replies")
+            return
+
         # Get recent mentions
         mentions = await x_client.get_mentions()
         
@@ -226,7 +260,9 @@ async def reply_mentions_job():
             return
         
         # Process up to 3 mentions
-        for mention in mentions[:3]:
+        max_mentions = action.get("max_mentions", 3)
+
+        for mention in mentions[:max_mentions]:
             try:
                 # Generate reply
                 context = {
@@ -235,45 +271,44 @@ async def reply_mentions_job():
                     "topic": "reply"
                 }
                 
-                intensity = random.randint(
-                    config.MIN_INTENSITY_LEVEL,
-                    config.MAX_INTENSITY_LEVEL
-                ) if config.ADAPTIVE_INTENSITY else config.MIN_INTENSITY_LEVEL
+                intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
                 result = await generator.make_reply(context, intensity)
                 
                 if "error" in result:
                     logger.warning(f"Reply generation failed: {result['error']}")
                     continue
                 
-                # Post reply
-                if config.LIVE:
-                    reply_id = await x_client.create_tweet(
-                        result["content"],
-                        in_reply_to=mention["id"]
-                    )
-                    
-                    if reply_id:
-                        # Store in database
-                        with get_db_session() as session:
-                            from db.models import Tweet
-                            tweet = Tweet(
-                                id=reply_id,
-                                text=result["content"],
-                                kind="reply",
-                                ref_tweet_id=mention["id"]
-                            )
-                            session.add(tweet)
-                            session.commit()
-                        
-                        await _log_action("mention_replied", {
-                            "reply_id": reply_id,
-                            "original_id": mention["id"]
-                        })
-                        
-                        logger.info(f"Replied to mention: {reply_id}")
+                publish_result = await multiplexer.publish(
+                    result["content"],
+                    kind="reply",
+                    in_reply_to=mention["id"],
+                    intensity=intensity,
+                )
+
+                reply_result = publish_result.get("x")
+
+                if reply_result and not reply_result.dry_run:
+                    # Store in database
+                    with get_db_session() as session:
+                        from db.models import Tweet
+                        tweet = Tweet(
+                            id=reply_result.post_id,
+                            text=result["content"],
+                            kind="reply",
+                            ref_tweet_id=mention["id"]
+                        )
+                        session.add(tweet)
+                        session.commit()
+
+                    await _log_action("mention_replied", {
+                        "reply_id": reply_result.post_id,
+                        "original_id": mention["id"]
+                    })
+
+                    logger.info(f"Replied to mention: {reply_result.post_id}")
                 else:
                     logger.info(f"DRY RUN - Would reply: {result['content'][:100]}...")
-                
+
             except Exception as e:
                 logger.error(f"Failed to reply to mention {mention['id']}: {e}")
         
@@ -283,58 +318,87 @@ async def reply_mentions_job():
 async def search_and_engage_job():
     """Search for relevant content and engage"""
     try:
-        if not x_client:
+        if not config.LIVE or not x_client:
             logger.info("X client not available")
             return
-        
-        # Get search terms from configuration or selector
-        action = await selector.get_next_action()
+
+        if not crisis_service.guard(action="search_engage"):
+            return
+
+        action = await selector.decide_next_action()
+        if action.get("type") != "SEARCH_ENGAGE":
+            logger.info("Selector chose different action, skipping search")
+            return
+
         search_terms = action.get("search_terms", ["mechanisms", "coordination"])
         intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
-        
+
         for term in search_terms:
             try:
-                # Search for recent tweets
                 tweets = await x_client.search_recent(f"{term} -is:retweet", max_results=5)
-                
+
                 for tweet in tweets:
-                    # Simple relevance scoring
                     relevance = _calculate_relevance(tweet["text"], term)
-                    
-                    if relevance >= 4:  # High relevance threshold
-                        # Engage based on configuration
+
+                    if relevance >= 4:
                         if config.ENABLE_LIKES and random.random() < 0.8:
                             await x_client.like(tweet["id"])
                             await _log_action("tweet_liked", {"tweet_id": tweet["id"], "term": term})
-                        
+
                         if config.ENABLE_REPOSTS and random.random() < 0.3:
                             await x_client.repost(tweet["id"])
                             await _log_action("tweet_retweeted", {"tweet_id": tweet["id"], "term": term})
-                        
+
                         if config.ENABLE_QUOTES and random.random() < 0.2:
-                            # Generate quote tweet
                             context = {"original_tweet": tweet["text"], "topic": term}
                             result = await generator.make_quote(context, intensity)
-                            
+
                             if "error" not in result:
-                                quote_id = await x_client.create_tweet(
+                                publish_result = await multiplexer.publish(
                                     result["content"],
-                                    quote_tweet_id=tweet["id"]
+                                    kind="quote",
+                                    quote_to=tweet["id"],
+                                    intensity=intensity,
                                 )
-                                if quote_id:
-                                    await _log_action("quote_tweeted", {"quote_id": quote_id, "original_id": tweet["id"]})
-                
+                                quote_result = publish_result.get("x")
+                                if quote_result and not quote_result.dry_run:
+                                    await _log_action(
+                                        "quote_tweeted",
+                                        {"quote_id": quote_result.post_id, "original_id": tweet["id"]},
+                                    )
+
             except Exception as e:
                 logger.error(f"Search engagement failed for term '{term}': {e}")
-        
+
     except Exception as e:
         logger.error(f"Search and engage job failed: {e}")
+
+
+async def perception_job():
+    """Run the perception ingest loop."""
+    try:
+        with get_db_session() as session:
+            total = perception_service.ingest(session)
+        logger.info("perception_job_completed", extra={"total": total})
+        return total
+    except Exception as e:
+        logger.error(f"Perception job failed: {e}")
+        return 0
+
+
+async def crisis_watch_job():
+    """Monitor crisis status and log current mode."""
+    if crisis_service.is_paused():
+        logger.info("crisis_watch status=PAUSED reason=%s", crisis_service.reason)
+    else:
+        logger.info("crisis_watch status=NORMAL")
 
 async def analytics_pull_job():
     """Pull analytics and update metrics"""
     try:
         with get_db_session() as session:
             result = await analytics_service.pull_and_update_metrics(session, x_client)
+            selector.record_outcome(result)
             await _log_action("analytics_updated", result)
             logger.info(f"Analytics updated: {result}")
             
@@ -346,7 +410,7 @@ async def kpi_rollup_job():
     try:
         with get_db_session() as session:
             # Calculate KPIs for the last hour
-            end_time = datetime.utcnow()
+            end_time = datetime.now(UTC)
             start_time = end_time - timedelta(hours=1)
             
             kpi_service.calculate_and_store_kpis(session, start_time, end_time)
@@ -468,7 +532,7 @@ async def _log_action(kind: str, meta: Dict[str, Any]):
 
 def get_uptime() -> str:
     """Get system uptime"""
-    uptime = datetime.utcnow() - start_time
+    uptime = datetime.now(UTC) - start_time
     hours = int(uptime.total_seconds() // 3600)
     minutes = int((uptime.total_seconds() % 3600) // 60)
     return f"{hours}h {minutes}m"

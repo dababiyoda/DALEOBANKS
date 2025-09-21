@@ -30,3 +30,13 @@ def test_positive_message_not_crisis() -> None:
     service = CrisisService(sentiment_service=sentiment)
 
     assert service.is_crisis("All systems stable") is False
+
+
+def test_crisis_guard_blocks_runtime() -> None:
+    service = CrisisService(sentiment_service=MagicMock())
+    service.activate(reason="test")
+    assert service.is_paused() is True
+    assert service.guard(action="post") is False
+    service.resolve(reason="ok")
+    assert service.is_paused() is False
+    assert service.guard(action="post") is True

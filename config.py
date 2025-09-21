@@ -56,6 +56,12 @@ class Config:
     ENABLE_BOOKMARKS: bool
     ENABLE_DMS: bool
     ENABLE_MEDIA: bool
+    ENABLE_LINKEDIN: bool
+    ENABLE_MASTODON: bool
+
+    # Social platform routing
+    PLATFORM_MODE: str
+    PLATFORM_WEIGHTS: Dict[str, float]
 
     # Intensity settings
     ADAPTIVE_INTENSITY: bool
@@ -90,10 +96,25 @@ def get_config() -> Config:
         except Exception:
             return {"alpha": 0.0, "beta": 0.0, "gamma": 0.0, "lambda": 0.0}
 
+    def _parse_platform_weights(raw: str) -> Dict[str, float]:
+        weights: Dict[str, float] = {}
+        for chunk in raw.split(","):
+            if not chunk.strip():
+                continue
+            if ":" not in chunk:
+                continue
+            platform, weight = chunk.split(":", 1)
+            try:
+                weights[platform.strip().lower()] = float(weight.strip())
+            except ValueError:
+                continue
+        return weights or {"x": 1.0}
+
     weights_impact = _parse_weights("WEIGHTS_IMPACT", "0.40,0.30,0.20,0.10")
     weights_revenue = _parse_weights("WEIGHTS_REVENUE", "0.30,0.55,0.25,0.25")
     weights_authority = _parse_weights("WEIGHTS_AUTHORITY", "0.45,0.20,0.25,0.10")
     weights_fame = _parse_weights("WEIGHTS_FAME", "0.65,0.15,0.25,0.20")
+    platform_weights = _parse_platform_weights(os.getenv("PLATFORM_WEIGHTS", "x:1.0"))
 
     return Config(
         # Environment
@@ -140,6 +161,12 @@ def get_config() -> Config:
         ENABLE_BOOKMARKS=os.getenv("ENABLE_BOOKMARKS", "true").lower() == "true",
         ENABLE_DMS=os.getenv("ENABLE_DMS", "true").lower() == "true",
         ENABLE_MEDIA=os.getenv("ENABLE_MEDIA", "true").lower() == "true",
+        ENABLE_LINKEDIN=os.getenv("ENABLE_LINKEDIN", "false").lower() == "true",
+        ENABLE_MASTODON=os.getenv("ENABLE_MASTODON", "false").lower() == "true",
+
+        # Social platform routing
+        PLATFORM_MODE=os.getenv("PLATFORM_MODE", "broadcast").lower(),
+        PLATFORM_WEIGHTS=platform_weights,
 
         # Intensity settings
         ADAPTIVE_INTENSITY=os.getenv("ADAPTIVE_INTENSITY", "false").lower() == "true",

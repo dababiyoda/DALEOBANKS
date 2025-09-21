@@ -3,7 +3,7 @@ Feedback and improvement note generation
 """
 
 from typing import Dict, List, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 
 from db.models import Tweet, Action, KPI
@@ -22,7 +22,7 @@ class FeedbackService:
         """Generate a daily improvement note based on recent performance"""
         try:
             # Analyze last 24 hours
-            cutoff = datetime.utcnow() - timedelta(hours=24)
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
             
             # Get recent tweets and their performance
             recent_tweets = session.query(Tweet).filter(
@@ -163,7 +163,7 @@ class FeedbackService:
     
     def analyze_weekly_trends(self, session: Session) -> Dict[str, Any]:
         """Analyze weekly performance trends"""
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = datetime.now(UTC) - timedelta(days=7)
         
         tweets = session.query(Tweet).filter(
             Tweet.created_at >= cutoff

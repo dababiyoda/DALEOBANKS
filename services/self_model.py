@@ -5,7 +5,7 @@ Self-Model Card generation and identity management
 import hashlib
 import os
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy.orm import Session
 
 from services.persona_store import PersonaStore
@@ -116,7 +116,7 @@ class SelfModelService:
         
         card_template = f"""# Self-Model Card: {persona.get('handle', 'DaLeoBanks')}
 
-**Generated:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}  
+**Generated:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}
 **Identity Hash:** `{identity_hash}`  
 **Version:** {persona.get('version', 1)}
 
@@ -154,7 +154,7 @@ class SelfModelService:
 ## Operational Metadata
 
 - **Configuration File:** `persona.json`
-- **Last Modified:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+- **Last Modified:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}
 - **Verification Hash:** `{identity_hash}`
 
 ## Change Log
@@ -164,7 +164,7 @@ The identity hash serves as a verification mechanism to ensure consistency betwe
 the declared identity and actual operational parameters.
 
 ### Version History
-- v{persona.get('version', 1)}: {datetime.utcnow().strftime('%Y-%m-%d')} - Current version
+- v{persona.get('version', 1)}: {datetime.now(UTC).strftime('%Y-%m-%d')} - Current version
 
 ## Compliance Notes
 
