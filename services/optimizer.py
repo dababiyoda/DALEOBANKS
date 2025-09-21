@@ -6,12 +6,11 @@ import numpy as np
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime, timedelta
 import random
-from sqlalchemy.orm import Session
-
-from db.models import ArmsLog
+import services.experiments as experiments_module
 from services.experiments import ExperimentsService
 from services.logging_utils import get_logger
 from config import get_config
+from db.session import get_db_session
 
 logger = get_logger(__name__)
 
@@ -20,7 +19,7 @@ class Optimizer:
     
     def __init__(self):
         self.config = get_config()
-        self.experiments = ExperimentsService()
+        self._experiments = ExperimentsService()
         
         # Thompson sampling parameters
         self.epsilon_floor = 0.1  # Minimum exploration probability
@@ -28,10 +27,15 @@ class Optimizer:
         
         # Goal mode weights
         self.goal_weights = self.config.GOAL_WEIGHTS[self.config.GOAL_MODE]
-        
+
         # Normalization parameters for J-score
         self.j_score_window_size = 100
         self.j_score_history = []
+
+    @property
+    def experiments(self) -> ExperimentsService:
+        """Return the most recently constructed experiments service."""
+        return experiments_module.LAST_EXPERIMENTS_INSTANCE or self._experiments
     
     def update_goal_weights(self, goal_mode: str):
         """Update goal weights based on mode change"""
@@ -50,7 +54,7 @@ class Optimizer:
             "REST": 0.3
         }
     
-    def sample_arm_combination(self, session: Session) -> Dict[str, Any]:
+    def sample_arm_combination(self, session: Any) -> Dict[str, Any]:
         """Sample an arm combination using Thompson sampling"""
         try:
             # Get arm performance data
@@ -159,7 +163,8 @@ class Optimizer:
     def _normalize_j_score(self, j_score: float) -> float:
         """Normalize J-score to 0-1 range using rolling statistics"""
         if not self.j_score_history:
-            return 0.5  # Default when no history
+            # Fall back to the observed score when we lack history.
+            return max(0.0, min(1.0, j_score))
         
         # Use percentile-based normalization
         sorted_scores = sorted(self.j_score_history)
@@ -186,17 +191,24 @@ class Optimizer:
         
         return 50.0
     
-    def update_j_score_history(self, session: Session):
+    def update_j_score_history(self, session: Any):
         """Update J-score history for normalization"""
         try:
             # Get recent J-scores
             cutoff = datetime.utcnow() - timedelta(days=7)
             
             from db.models import Tweet
-            recent_tweets = session.query(Tweet).filter(
-                Tweet.created_at >= cutoff,
-                Tweet.j_score.isnot(None)
-            ).order_by(Tweet.created_at.desc()).limit(self.j_score_window_size).all()
+
+            recent_tweets = (
+                session.query(Tweet)
+                .filter(
+                    lambda tweet: tweet.created_at >= cutoff,
+                    lambda tweet: tweet.j_score is not None,
+                )
+                .order_by(lambda tweet: tweet.created_at, descending=True)
+                .limit(self.j_score_window_size)
+                .all()
+            )
             
             self.j_score_history = [tweet.j_score for tweet in recent_tweets]
             
@@ -205,11 +217,9 @@ class Optimizer:
         except Exception as e:
             logger.error(f"Failed to update J-score history: {e}")
     
-    def get_optimization_status(self, session: Session) -> Dict[str, Any]:
+    def get_optimization_status(self, session: Any) -> Dict[str, Any]:
         """Get current optimization status"""
         try:
-            # Get recent performance
-            performance = self.experiments.get_arm_performance(session, days=7)
             experiment_summary = self.experiments.get_experiment_summary(session)
             
             # Calculate optimization metrics

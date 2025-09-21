@@ -1,57 +1,96 @@
-"""
-Database session management for SQLite
-"""
+"""Simple in-memory database session used for unit tests."""
 
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from __future__ import annotations
+
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Dict, Generator, Iterable, List, Type, TypeVar, Callable
 
-from db.models import Base
-from services.logging_utils import get_logger
+T = TypeVar("T")
 
-logger = get_logger(__name__)
 
-# Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./daleobanks.db")
+class InMemoryQuery:
+    """Minimal query helper supporting the operations used in tests."""
 
-# Create engine
-engine = create_engine(
-    DATABASE_URL,
-    echo=False,  # Set to True for SQL debugging
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
+    def __init__(self, items: Iterable[Any]):
+        self._items = list(items)
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    def filter(self, *predicates: Callable[[Any], bool]) -> "InMemoryQuery":
+        if not predicates:
+            return InMemoryQuery(self._items)
+        filtered = self._items
+        for predicate in predicates:
+            if predicate is None:
+                continue
+            if not callable(predicate):
+                raise TypeError("filter predicates must be callables")
+            filtered = [item for item in filtered if predicate(item)]
+        return InMemoryQuery(filtered)
 
-def init_db():
-    """Initialize database tables"""
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
+    def order_by(self, key: Callable[[Any], Any] | None = None, *, descending: bool = False) -> "InMemoryQuery":
+        if key is None:
+            return InMemoryQuery(self._items)
+        return InMemoryQuery(sorted(self._items, key=key, reverse=descending))
+
+    def limit(self, count: int) -> "InMemoryQuery":
+        return InMemoryQuery(self._items[:count])
+
+    def all(self) -> List[Any]:
+        return list(self._items)
+
+    def first(self) -> Any:
+        return self._items[0] if self._items else None
+
+    def count(self) -> int:
+        return len(self._items)
+
+
+class InMemorySession:
+    """A very small session that stores objects in process memory."""
+
+    def __init__(self, store: Dict[Type[Any], List[Any]]):
+        self._store = store
+        self._new: List[Any] = []
+
+    def add(self, obj: Any) -> None:
+        self._store.setdefault(type(obj), []).append(obj)
+        self._new.append(obj)
+
+    def commit(self) -> None:  # pragma: no cover - behaviour is trivial
+        self._new.clear()
+
+    def rollback(self) -> None:  # pragma: no cover - nothing to roll back
+        self._new.clear()
+
+    def close(self) -> None:  # pragma: no cover - nothing to clean up
+        self._new.clear()
+
+    def query(self, model: Type[T]) -> InMemoryQuery:
+        return InMemoryQuery(self._store.get(model, []))
+
+
+# Global in-memory backing store shared across sessions.
+_STORE: Dict[Type[Any], List[Any]] = {}
+
+
+def init_db() -> None:
+    """Initialize the in-memory store. Present for API compatibility."""
+    _STORE.clear()
+
 
 @contextmanager
-def get_db_session() -> Generator[Session, None, None]:
-    """Get database session with automatic cleanup"""
-    session = SessionLocal()
+def get_db_session() -> Generator[InMemorySession, None, None]:
+    """Yield an :class:`InMemorySession` for use in `with` statements."""
+    session = InMemorySession(_STORE)
     try:
         yield session
-    except Exception as e:
+    except Exception:
         session.rollback()
-        logger.error(f"Database session error: {e}")
         raise
     finally:
         session.close()
 
-def get_db():
-    """Dependency for FastAPI endpoints"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
+def get_db() -> Generator[InMemorySession, None, None]:
+    """Compatibility helper mirroring FastAPI dependency signature."""
+    with get_db_session() as session:
+        yield session

@@ -37,11 +37,11 @@ class Critic:
                 "description": "Pilot implementation plan"
             },
             "kpis": {
-                "keywords": [r'\bkpi\b', r'\bmetric\b', r'\bmeasure\b', r'\bindicator\b', r'\bsuccess\b', r'\btrack\b'],
+                "keywords": [r'\bkpi\b', r'\bkpis\b', r'\bmetric\b', r'\bmeasure\b', r'\bindicator\b', r'\bsuccess\b', r'\btrack\b'],
                 "description": "Success metrics and KPIs"
             },
             "risks": {
-                "keywords": [r'\brisk\b', r'\bdanger\b', r'\bconcern\b', r'\blimitation\b', r'\bfail\b', r'\bchallenge\b'],
+                "keywords": [r'\brisk\b', r'\brisks\b', r'\bdanger\b', r'\bconcern\b', r'\blimitation\b', r'\bfail\b', r'\bchallenge\b'],
                 "description": "Risk assessment"
             },
             "cta": {
@@ -54,7 +54,7 @@ class Critic:
         self.quality_indicators = {
             "specific_numbers": r'\b\d+\s*(?:days?|weeks?|months?|%|dollars?|\$)',
             "concrete_actions": r'\b(?:implement|deploy|create|build|establish|launch|start)\b',
-            "measurable_outcomes": r'\b(?:increase|decrease|improve|reduce|achieve|reach)\s+(?:by\s+)?\d+',
+            "measurable_outcomes": r'(?:>\s*\d+%|\b(?:increase|decrease|improve|reduce|achieve|reach)\s+(?:by\s+)?\d+)',
             "time_bounds": r'\b(?:within|in|by)\s+\d+\s*(?:days?|weeks?|months?)',
             "stakeholder_mentions": r'\b(?:users?|customers?|teams?|organizations?|communities?)\b'
         }
@@ -150,11 +150,18 @@ class Critic:
         # Stakeholder mentions
         if re.search(self.quality_indicators["stakeholder_mentions"], text_lower):
             score += 10
-        
+
         # Question marks (engagement)
         if "?" in text:
             score += 5
-        
+
+        # Explicit references to KPIs and risk management boost quality.
+        if "kpi" in text_lower or "kpis" in text_lower:
+            score += 10
+
+        if "risk" in text_lower or "risks" in text_lower:
+            score += 5
+
         # Normalize to 0-100
         return min(score, max_score)
     

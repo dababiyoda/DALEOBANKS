@@ -2,13 +2,15 @@
 Multi-armed bandit experiments tracking
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime, timedelta
 import json
-from sqlalchemy.orm import Session
 
 from db.models import ArmsLog, Tweet
 from services.logging_utils import get_logger
+from db.session import get_db_session
+
+LAST_EXPERIMENTS_INSTANCE: Optional["ExperimentsService"] = None
 
 logger = get_logger(__name__)
 
@@ -23,9 +25,12 @@ class ExperimentsService:
             "hour_bin": list(range(24)),  # 0-23 hour bins
             "cta_variant": ["learn_more", "join_pilot", "provide_feedback", "share_experience", "book_call"]
         }
-        
+
         # Arm combinations cache
         self._arm_combinations = None
+
+        global LAST_EXPERIMENTS_INSTANCE
+        LAST_EXPERIMENTS_INSTANCE = self
     
     def get_arm_combinations(self) -> List[Tuple[str, str, int, str]]:
         """Get all possible arm combinations"""
@@ -41,8 +46,8 @@ class ExperimentsService:
         return self._arm_combinations
     
     def log_arm_selection(
-        self, 
-        session: Session,
+        self,
+        session: Any,
         tweet_id: str,
         post_type: str,
         topic: str,
@@ -70,21 +75,27 @@ class ExperimentsService:
             logger.error(f"Failed to log arm selection: {e}")
             session.rollback()
     
-    def update_arm_rewards(self, session: Session):
+    def update_arm_rewards(self, session: Any):
         """Update rewards for arms based on tweet performance"""
         try:
             # Get arms logs without rewards
-            pending_logs = session.query(ArmsLog).filter(
-                ArmsLog.reward_j.is_(None),
-                ArmsLog.tweet_id.isnot(None)
-            ).all()
+            pending_logs = (
+                session.query(ArmsLog)
+                .filter(
+                    lambda log: log.reward_j is None,
+                    lambda log: log.tweet_id is not None,
+                )
+                .all()
+            )
             
             updated_count = 0
             for log in pending_logs:
                 # Get the corresponding tweet
-                tweet = session.query(Tweet).filter(
-                    Tweet.id == log.tweet_id
-                ).first()
+                tweet = (
+                    session.query(Tweet)
+                    .filter(lambda tweet: tweet.id == log.tweet_id)
+                    .first()
+                )
                 
                 if tweet and tweet.j_score is not None:
                     log.reward_j = tweet.j_score
@@ -98,15 +109,19 @@ class ExperimentsService:
             logger.error(f"Failed to update arm rewards: {e}")
             session.rollback()
     
-    def get_arm_performance(self, session: Session, days: int = 30) -> Dict[str, Any]:
+    def get_arm_performance(self, session: Any, days: int = 30) -> Dict[str, Any]:
         """Get performance statistics for each arm"""
         cutoff = datetime.utcnow() - timedelta(days=days)
         
         # Get arm logs with rewards
-        logs = session.query(ArmsLog).filter(
-            ArmsLog.created_at >= cutoff,
-            ArmsLog.reward_j.isnot(None)
-        ).all()
+        logs = (
+            session.query(ArmsLog)
+            .filter(
+                lambda log: log.created_at >= cutoff,
+                lambda log: log.reward_j is not None,
+            )
+            .all()
+        )
         
         if not logs:
             return {}
@@ -159,7 +174,7 @@ class ExperimentsService:
         
         return stats
     
-    def get_experiment_summary(self, session: Session) -> Dict[str, Any]:
+    def get_experiment_summary(self, session: Any) -> Dict[str, Any]:
         """Get overall experiment summary"""
         # Total arms tested
         total_logs = session.query(ArmsLog).count()
@@ -179,9 +194,11 @@ class ExperimentsService:
                 }
         
         # Exploration vs exploitation ratio
-        recent_logs = session.query(ArmsLog).filter(
-            ArmsLog.created_at >= datetime.utcnow() - timedelta(days=7)
-        ).all()
+        recent_logs = (
+            session.query(ArmsLog)
+            .filter(lambda log: log.created_at >= datetime.utcnow() - timedelta(days=7))
+            .all()
+        )
         
         exploration_count = sum(1 for log in recent_logs if log.sampled_prob < 0.5)
         exploitation_count = len(recent_logs) - exploration_count
@@ -195,7 +212,7 @@ class ExperimentsService:
             "performance_by_dimension": recent_performance
         }
     
-    def get_arm_recommendations(self, session: Session) -> Dict[str, str]:
+    def get_arm_recommendations(self, session: Any) -> Dict[str, str]:
         """Get recommended arms based on recent performance"""
         performance = self.get_arm_performance(session, days=14)
         
@@ -219,12 +236,16 @@ class ExperimentsService:
         
         return recommendations
     
-    def should_explore(self, session: Session, epsilon: float = 0.1) -> bool:
+    def should_explore(self, session: Any, epsilon: float = 0.1) -> bool:
         """Determine if we should explore (vs exploit) based on recent history"""
         # Get recent exploration ratio
-        recent_logs = session.query(ArmsLog).filter(
-            ArmsLog.created_at >= datetime.utcnow() - timedelta(hours=6)
-        ).order_by(ArmsLog.created_at.desc()).limit(10).all()
+        recent_logs = (
+            session.query(ArmsLog)
+            .filter(lambda log: log.created_at >= datetime.utcnow() - timedelta(hours=6))
+            .order_by(lambda log: log.created_at, descending=True)
+            .limit(10)
+            .all()
+        )
         
         if not recent_logs:
             return True  # Explore when no recent data

@@ -7,7 +7,8 @@ import logging
 import sys
 from typing import Dict, Any, Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
+
+from db.session import get_db_session
 
 # Configure root logger
 logging.basicConfig(
@@ -55,9 +56,9 @@ def get_logger(name: str) -> logging.Logger:
     return logger
 
 def log_to_database(
-    session: Session, 
-    kind: str, 
-    message: str, 
+    session: Any,
+    kind: str,
+    message: str,
     metadata: Optional[Dict[str, Any]] = None
 ):
     """Log an action to the database"""

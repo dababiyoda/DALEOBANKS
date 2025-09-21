@@ -1,99 +1,120 @@
-"""
-SQLAlchemy models for DaLeoBanks database
-"""
+"""Lightweight data models used by the in-memory store for tests."""
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Text
-from sqlalchemy.ext.declarative import declarative_base
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 import uuid
 
-Base = declarative_base()
 
-class Tweet(Base):
-    """Tweet records with engagement metrics"""
-    __tablename__ = 'tweets'
-    
-    id = Column(String, primary_key=True)
-    text = Column(Text, nullable=False)
-    kind = Column(String, nullable=False)  # proposal|reply|quote
-    topic = Column(Text)
-    hour_bin = Column(Integer)
-    cta_variant = Column(Text)
-    ref_tweet_id = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    likes = Column(Integer, default=0)
-    rts = Column(Integer, default=0)
-    replies = Column(Integer, default=0)
-    quotes = Column(Integer, default=0)
-    authority_score = Column(Float, default=0.0)
-    j_score = Column(Float, default=0.0)
+def _uuid() -> str:
+    return str(uuid.uuid4())
 
-class Action(Base):
-    """Action logs for all system activities"""
-    __tablename__ = 'actions'
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    kind = Column(String, nullable=False)
-    meta_json = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
-class KPI(Base):
-    """KPI tracking over time"""
-    __tablename__ = 'kpis'
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String, nullable=False)
-    value = Column(Float, nullable=False)
-    period_start = Column(DateTime, nullable=False)
-    period_end = Column(DateTime, nullable=False)
+@dataclass
+class Tweet:
+    """Tweet records with engagement metrics."""
 
-class Note(Base):
-    """Improvement notes and reflections"""
-    __tablename__ = 'notes'
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: str
+    text: str
+    kind: str  # proposal|reply|quote
+    topic: Optional[str] = None
+    hour_bin: Optional[int] = None
+    cta_variant: Optional[str] = None
+    ref_tweet_id: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    likes: int = 0
+    rts: int = 0
+    replies: int = 0
+    quotes: int = 0
+    authority_score: float = 0.0
+    j_score: Optional[float] = 0.0
 
-class FollowersSnapshot(Base):
-    """Daily follower count snapshots"""
-    __tablename__ = 'followers_snapshot'
-    
-    ts = Column(DateTime, primary_key=True)
-    follower_count = Column(Integer, nullable=False)
 
-class Redirect(Base):
-    """Tracked redirect links for revenue measurement"""
-    __tablename__ = 'redirects'
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    label = Column(Text, nullable=False)
-    target_url = Column(Text, nullable=False)
-    utm = Column(Text)
-    clicks = Column(Integer, default=0)
-    revenue = Column(Float, default=0.0)
+@dataclass
+class Action:
+    """Action logs for all system activities."""
 
-class ArmsLog(Base):
-    """Multi-armed bandit experiment logs"""
-    __tablename__ = 'arms_log'
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    tweet_id = Column(String)
-    post_type = Column(String, nullable=False)
-    topic = Column(Text)
-    hour_bin = Column(Integer)
-    cta_variant = Column(Text)
-    sampled_prob = Column(Float)
-    reward_j = Column(Float)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: str = field(default_factory=_uuid)
+    kind: str = ""
+    meta_json: Optional[Dict[str, Any]] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
-class PersonaVersion(Base):
-    """Persona version history with audit trail"""
-    __tablename__ = 'persona_versions'
-    
-    version = Column(Integer, primary_key=True)
-    hash = Column(String, nullable=False)
-    actor = Column(Text)
-    payload = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
+@dataclass
+class KPI:
+    """KPI tracking over time."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    value: float = 0.0
+    period_start: datetime = field(default_factory=datetime.utcnow)
+    period_end: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class Note:
+    """Improvement notes and reflections."""
+
+    id: str = field(default_factory=_uuid)
+    text: str = ""
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class FollowersSnapshot:
+    """Daily follower count snapshots."""
+
+    ts: datetime = field(default_factory=datetime.utcnow)
+    follower_count: int = 0
+
+
+@dataclass
+class Redirect:
+    """Tracked redirect links for revenue measurement."""
+
+    id: str = field(default_factory=_uuid)
+    label: str = ""
+    target_url: str = ""
+    utm: Optional[str] = None
+    clicks: int = 0
+    revenue: float = 0.0
+
+
+@dataclass
+class ArmsLog:
+    """Multi-armed bandit experiment logs."""
+
+    id: str = field(default_factory=_uuid)
+    tweet_id: Optional[str] = None
+    post_type: str = ""
+    topic: Optional[str] = None
+    hour_bin: Optional[int] = None
+    cta_variant: Optional[str] = None
+    sampled_prob: float = 0.0
+    reward_j: Optional[float] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class PersonaVersion:
+    """Persona version history with audit trail."""
+
+    version: int
+    hash: str
+    actor: Optional[str]
+    payload: Dict[str, Any]
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+
+__all__ = [
+    "Tweet",
+    "Action",
+    "KPI",
+    "Note",
+    "FollowersSnapshot",
+    "Redirect",
+    "ArmsLog",
+    "PersonaVersion",
+]

@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import asyncio
 
-from Levenshtein import distance as levenshtein_distance
 
 from services.persona_store import PersonaStore
 from services.llm_adapter import LLMAdapter
@@ -21,6 +20,29 @@ from db.models import Tweet
 from config import get_config
 
 logger = get_logger(__name__)
+
+
+def levenshtein_distance(a: str, b: str) -> int:
+    """Compute the Levenshtein distance between two strings."""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+
+    previous_row = list(range(len(b) + 1))
+    for i, char_a in enumerate(a, start=1):
+        current_row = [i]
+        for j, char_b in enumerate(b, start=1):
+            insert_cost = current_row[j - 1] + 1
+            delete_cost = previous_row[j] + 1
+            replace_cost = previous_row[j - 1] + (char_a != char_b)
+            current_row.append(min(insert_cost, delete_cost, replace_cost))
+        previous_row = current_row
+
+    return previous_row[-1]
+
 
 class Generator:
     """Content generation with persona-driven prompting"""
@@ -215,8 +237,10 @@ Requirements:
         # Character limit check (280 chars, accounting for t.co links as 23 chars)
         if len(content) > 280:
             logger.warning(f"Content too long: {len(content)} chars")
-            return {"error": "Content exceeds 280 character limit"}
-        
+            content = content.strip()
+            if len(content) > 280:
+                content = content[:277].rstrip() + "..."
+
         # Duplicate check
         is_duplicate, similar_tweet = self._check_for_duplicates(content, session)
         if is_duplicate:
@@ -246,9 +270,11 @@ Requirements:
         """Check for duplicate content in recent tweets"""
         # Get recent tweets for comparison
         cutoff = datetime.utcnow() - timedelta(days=self.duplicate_check_days)
-        recent_tweets = session.query(Tweet).filter(
-            Tweet.created_at >= cutoff
-        ).all()
+        recent_tweets = (
+            session.query(Tweet)
+            .filter(lambda tweet: tweet.created_at >= cutoff)
+            .all()
+        )
         
         content_hash = hashlib.sha256(content.encode()).hexdigest()
         
