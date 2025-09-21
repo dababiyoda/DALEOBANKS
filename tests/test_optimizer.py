@@ -230,7 +230,7 @@ class TestOptimizer:
         """Test that Thompson sampling respects epsilon floor"""
         # Even with very confident posterior, should still explore occasionally
         epsilon = 0.1
-        
+
         # Mock very confident performance data
         confident_performance = {
             "post_type": {
@@ -238,11 +238,13 @@ class TestOptimizer:
                 "question": {"mean_reward": 0.05, "count": 100}
             }
         }
-        
+
         # Over many samples, should still explore at least epsilon fraction
         exploration_count = 0
         total_samples = 100
-        
+
+        np.random.seed(42)
+
         # This is a conceptual test - in practice, epsilon enforcement
         # happens at the experiment service level
         for _ in range(total_samples):

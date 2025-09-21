@@ -24,3 +24,6 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "asyncio: mark test as using asyncio support",
+]
