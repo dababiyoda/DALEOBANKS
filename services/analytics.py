@@ -5,7 +5,6 @@ Analytics service for Fame, Authority, Revenue calculation and follower tracking
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import statistics
-from sqlalchemy.orm import Session
 
 from db.models import Tweet, FollowersSnapshot, Redirect, Action
 from services.logging_utils import get_logger
@@ -23,14 +22,16 @@ class AnalyticsService:
             "quotes": 1.5
         }
     
-    def pull_and_update_metrics(self, session: Session, x_client) -> Dict[str, Any]:
+    def pull_and_update_metrics(self, session: Any, x_client) -> Dict[str, Any]:
         """Pull latest metrics from X API and update database"""
         try:
             # Get recent tweets that need metric updates
             cutoff = datetime.utcnow() - timedelta(hours=6)
-            tweets_to_update = session.query(Tweet).filter(
-                Tweet.created_at >= cutoff
-            ).all()
+            tweets_to_update = (
+                session.query(Tweet)
+                .filter(lambda tweet: tweet.created_at >= cutoff)
+                .all()
+            )
             
             if not tweets_to_update or not x_client:
                 return {"updated_count": 0}
@@ -70,14 +71,16 @@ class AnalyticsService:
             session.rollback()
             return {"error": str(e)}
     
-    def calculate_fame_score(self, session: Session, days: int = 1) -> Dict[str, float]:
+    def calculate_fame_score(self, session: Any, days: int = 1) -> Dict[str, float]:
         """Calculate Fame Score using engagement proxy and follower growth"""
         cutoff = datetime.utcnow() - timedelta(days=days)
         
         # Get tweets in period
-        tweets = session.query(Tweet).filter(
-            Tweet.created_at >= cutoff
-        ).all()
+        tweets = (
+            session.query(Tweet)
+            .filter(lambda tweet: tweet.created_at >= cutoff)
+            .all()
+        )
         
         if not tweets:
             return {"fame_score": 0.0, "engagement_proxy": 0.0, "follower_delta": 0.0}
@@ -112,7 +115,7 @@ class AnalyticsService:
             "follower_z": round(follower_z, 2)
         }
     
-    def calculate_revenue_per_day(self, session: Session) -> float:
+    def calculate_revenue_per_day(self, session: Any) -> float:
         """Calculate revenue per day from tracked redirects"""
         # Get all redirects and their click data
         redirects = session.query(Redirect).all()
@@ -126,40 +129,48 @@ class AnalyticsService:
         
         return round(total_revenue, 2)
     
-    def calculate_authority_signals(self, session: Session, days: int = 1) -> float:
+    def calculate_authority_signals(self, session: Any, days: int = 1) -> float:
         """Calculate authority signals from verified/high-follower interactions"""
         cutoff = datetime.utcnow() - timedelta(days=days)
         
-        tweets = session.query(Tweet).filter(
-            Tweet.created_at >= cutoff
-        ).all()
+        tweets = (
+            session.query(Tweet)
+            .filter(lambda tweet: tweet.created_at >= cutoff)
+            .all()
+        )
         
         total_authority = sum(tweet.authority_score or 0 for tweet in tweets)
         
         # Normalize to reasonable range
         return round(min(total_authority / 10, 100), 2)
     
-    def calculate_penalty_score(self, session: Session, days: int = 1) -> float:
+    def calculate_penalty_score(self, session: Any, days: int = 1) -> float:
         """Calculate penalty score from rate limits, violations, etc."""
         cutoff = datetime.utcnow() - timedelta(days=days)
         
         # Count rate limit strikes
-        rate_limit_actions = session.query(Action).filter(
-            Action.created_at >= cutoff,
-            Action.kind.like("%rate_limit%")
-        ).count()
-        
-        # Count other penalties
-        penalty_actions = session.query(Action).filter(
-            Action.created_at >= cutoff,
-            Action.kind.in_(["mute_detected", "block_detected", "ethics_violation"])
-        ).count()
-        
+        recent_actions = (
+            session.query(Action)
+            .filter(lambda action: action.created_at >= cutoff)
+            .all()
+        )
+
+        rate_limit_actions = sum(
+            1 for action in recent_actions
+            if action.kind and "rate_limit" in action.kind
+        )
+
+        penalty_action_kinds = {"mute_detected", "block_detected", "ethics_violation"}
+        penalty_actions = sum(
+            1 for action in recent_actions
+            if action.kind in penalty_action_kinds
+        )
+
         penalty_score = rate_limit_actions * 2 + penalty_actions * 5
         
         return float(penalty_score)
     
-    def get_analytics_summary(self, session: Session) -> Dict[str, Any]:
+    def get_analytics_summary(self, session: Any) -> Dict[str, Any]:
         """Get comprehensive analytics summary"""
         # Today's metrics
         today_fame = self.calculate_fame_score(session, days=1)
@@ -183,16 +194,20 @@ class AnalyticsService:
         )
         
         # Get follower count
-        latest_follower_snapshot = session.query(FollowersSnapshot).order_by(
-            FollowersSnapshot.ts.desc()
-        ).first()
+        latest_follower_snapshot = (
+            session.query(FollowersSnapshot)
+            .order_by(lambda snapshot: snapshot.ts, descending=True)
+            .first()
+        )
         
         follower_count = latest_follower_snapshot.follower_count if latest_follower_snapshot else 0
         
         # Recent activity
-        recent_tweets = session.query(Tweet).filter(
-            Tweet.created_at >= datetime.utcnow() - timedelta(hours=24)
-        ).count()
+        recent_tweets = (
+            session.query(Tweet)
+            .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(hours=24))
+            .count()
+        )
         
         return {
             "fame_score": today_fame["fame_score"],
@@ -209,7 +224,7 @@ class AnalyticsService:
             "last_updated": datetime.utcnow().isoformat()
         }
     
-    def create_follower_snapshot(self, session: Session, follower_count: int):
+    def create_follower_snapshot(self, session: Any, follower_count: int):
         """Create a follower count snapshot"""
         snapshot = FollowersSnapshot(
             ts=datetime.utcnow(),
@@ -219,13 +234,16 @@ class AnalyticsService:
         session.commit()
         logger.info(f"Created follower snapshot: {follower_count}")
     
-    def get_follower_history(self, session: Session, days: int = 30) -> List[Dict[str, Any]]:
+    def get_follower_history(self, session: Any, days: int = 30) -> List[Dict[str, Any]]:
         """Get follower count history"""
         cutoff = datetime.utcnow() - timedelta(days=days)
         
-        snapshots = session.query(FollowersSnapshot).filter(
-            FollowersSnapshot.ts >= cutoff
-        ).order_by(FollowersSnapshot.ts.asc()).all()
+        snapshots = (
+            session.query(FollowersSnapshot)
+            .filter(lambda snapshot: snapshot.ts >= cutoff)
+            .order_by(lambda snapshot: snapshot.ts)
+            .all()
+        )
         
         return [
             {
@@ -276,19 +294,25 @@ class AnalyticsService:
         
         return j_score
     
-    def _get_follower_delta(self, session: Session, days: int) -> float:
+    def _get_follower_delta(self, session: Any, days: int) -> float:
         """Get follower count change over specified days"""
         now = datetime.utcnow()
         start_time = now - timedelta(days=days)
         
         # Get snapshots at start and end of period
-        start_snapshot = session.query(FollowersSnapshot).filter(
-            FollowersSnapshot.ts <= start_time
-        ).order_by(FollowersSnapshot.ts.desc()).first()
-        
-        end_snapshot = session.query(FollowersSnapshot).filter(
-            FollowersSnapshot.ts <= now
-        ).order_by(FollowersSnapshot.ts.desc()).first()
+        start_snapshot = (
+            session.query(FollowersSnapshot)
+            .filter(lambda snapshot: snapshot.ts <= start_time)
+            .order_by(lambda snapshot: snapshot.ts, descending=True)
+            .first()
+        )
+
+        end_snapshot = (
+            session.query(FollowersSnapshot)
+            .filter(lambda snapshot: snapshot.ts <= now)
+            .order_by(lambda snapshot: snapshot.ts, descending=True)
+            .first()
+        )
         
         if not start_snapshot or not end_snapshot:
             return 0.0
@@ -301,11 +325,13 @@ class AnalyticsService:
             return 0.0
         return (value - mean) / std
     
-    def _calculate_engagement_rate(self, session: Session) -> float:
+    def _calculate_engagement_rate(self, session: Any) -> float:
         """Calculate overall engagement rate"""
-        recent_tweets = session.query(Tweet).filter(
-            Tweet.created_at >= datetime.utcnow() - timedelta(days=7)
-        ).all()
+        recent_tweets = (
+            session.query(Tweet)
+            .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(days=7))
+            .all()
+        )
         
         if not recent_tweets:
             return 0.0
@@ -316,9 +342,11 @@ class AnalyticsService:
             total_engagement += engagement
         
         # Get approximate follower count
-        latest_snapshot = session.query(FollowersSnapshot).order_by(
-            FollowersSnapshot.ts.desc()
-        ).first()
+        latest_snapshot = (
+            session.query(FollowersSnapshot)
+            .order_by(lambda snapshot: snapshot.ts, descending=True)
+            .first()
+        )
         
         follower_count = latest_snapshot.follower_count if latest_snapshot else 1000
         

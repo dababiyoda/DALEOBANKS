@@ -5,11 +5,9 @@ Runtime persona management with validation, versioning, and hot-reload
 import json
 import hashlib
 import os
-from typing import Dict, Any, List, Optional
-from datetime import datetime
-from pathlib import Path
-from pydantic import BaseModel, ValidationError, validator
-from sqlalchemy.orm import Session
+from copy import deepcopy
+from dataclasses import dataclass, field, asdict
+from typing import Callable, Dict, Any, List, Optional
 
 from services.logging_utils import get_logger
 from db.session import get_db_session
@@ -17,8 +15,10 @@ from db.models import PersonaVersion
 
 logger = get_logger(__name__)
 
-class PersonaSchema(BaseModel):
-    """Pydantic schema for persona validation"""
+@dataclass
+class PersonaSchema:
+    """Lightweight schema with manual validation for persona data."""
+
     version: int
     handle: str
     mission: str
@@ -30,28 +30,48 @@ class PersonaSchema(BaseModel):
     templates: Dict[str, Any]
     prompt_overrides: Optional[Dict[str, str]] = None
     intensity_settings: Optional[Dict[str, Any]] = None
-    
-    @validator('content_mix')
-    def validate_content_mix(cls, v):
-        """Ensure content mix sums to approximately 1.0"""
-        total = sum(v.values())
+
+    _validators: Dict[str, Callable[["PersonaSchema"], None]] = field(init=False, repr=False, default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self._validators = {
+            "content_mix": self._validate_content_mix,
+            "beliefs": self._validate_beliefs,
+            "handle": self._validate_handle,
+        }
+
+        for validator in self._validators.values():
+            validator()
+
+    def _validate_content_mix(self) -> None:
+        total = sum(self.content_mix.values())
         if not (0.95 <= total <= 1.05):
             raise ValueError(f"Content mix must sum to ~1.0, got {total}")
-        return v
-    
-    @validator('beliefs')
-    def validate_beliefs(cls, v):
-        """Ensure beliefs are non-empty strings"""
-        if not v or any(not belief.strip() for belief in v):
+
+    def _validate_beliefs(self) -> None:
+        if not self.beliefs or any(not belief or not belief.strip() for belief in self.beliefs):
             raise ValueError("Beliefs cannot be empty")
-        return v
-    
-    @validator('handle')
-    def validate_handle(cls, v):
-        """Validate Twitter handle format"""
-        if not v or len(v) > 15 or not v.isalnum():
+
+    def _validate_handle(self) -> None:
+        if not self.handle or len(self.handle) > 15 or not self.handle.isalnum():
             raise ValueError("Handle must be alphanumeric and ≤15 characters")
-        return v
+
+    def dict(self) -> Dict[str, Any]:
+        """Return a deep copy of the schema data as a dictionary."""
+        data = {
+            "version": self.version,
+            "handle": self.handle,
+            "mission": self.mission,
+            "beliefs": list(self.beliefs),
+            "doctrine": list(self.doctrine),
+            "tone_rules": dict(self.tone_rules),
+            "content_mix": dict(self.content_mix),
+            "guardrails": list(self.guardrails),
+            "templates": deepcopy(self.templates),
+            "prompt_overrides": deepcopy(self.prompt_overrides),
+            "intensity_settings": deepcopy(self.intensity_settings),
+        }
+        return data
 
 class PersonaStore:
     """Manages persona with validation, versioning, and hot-reload"""
@@ -63,6 +83,7 @@ class PersonaStore:
         self.current_version: int = 1
         self.file_watch_enabled = True
         self._last_modified = 0
+        self._last_hash = ""
         
         # Load initial persona
         self.load_persona()
@@ -82,6 +103,7 @@ class PersonaStore:
             self.current_persona = validated_persona
             self.current_version = validated_persona.get('version', 1)
             self._last_modified = os.path.getmtime(self.persona_file)
+            self._last_hash = self._calculate_hash(validated_persona)
             
             logger.info(f"Loaded persona v{self.current_version}: {validated_persona['handle']}")
             return validated_persona
@@ -99,7 +121,7 @@ class PersonaStore:
         try:
             persona_schema = PersonaSchema(**persona_data)
             return persona_schema.dict()
-        except ValidationError as e:
+        except ValueError as e:
             logger.error(f"Persona validation failed: {e}")
             raise ValueError(f"Invalid persona format: {e}")
     
@@ -121,7 +143,7 @@ class PersonaStore:
             validated_persona = self.validate_persona(new_persona_data)
             
             # Increment version
-            new_version = validated_persona.get('version', self.current_version) + 1
+            new_version = self.current_version + 1
             validated_persona['version'] = new_version
             
             # Calculate hash
@@ -149,6 +171,7 @@ class PersonaStore:
             self.current_persona = validated_persona
             self.current_version = new_version
             self._last_modified = os.path.getmtime(self.persona_file)
+            self._last_hash = self._calculate_hash(validated_persona)
             
             logger.info(f"Updated persona to v{new_version} by {actor}")
             return new_version
@@ -162,9 +185,11 @@ class PersonaStore:
         try:
             with get_db_session() as session:
                 # Get the specified version
-                persona_version = session.query(PersonaVersion).filter(
-                    PersonaVersion.version == version
-                ).first()
+                persona_version = (
+                    session.query(PersonaVersion)
+                    .filter(lambda record: record.version == version)
+                    .first()
+                )
                 
                 if not persona_version:
                     raise ValueError(f"Version {version} not found")
@@ -266,9 +291,11 @@ class PersonaStore:
         """Get all persona versions from database"""
         try:
             with get_db_session() as session:
-                versions = session.query(PersonaVersion).order_by(
-                    PersonaVersion.version.desc()
-                ).all()
+                versions = (
+                    session.query(PersonaVersion)
+                    .order_by(lambda record: record.version, descending=True)
+                    .all()
+                )
                 
                 return [
                     {
@@ -289,8 +316,16 @@ class PersonaStore:
         """Get diff between two persona versions"""
         try:
             with get_db_session() as session:
-                v1 = session.query(PersonaVersion).filter(PersonaVersion.version == version1).first()
-                v2 = session.query(PersonaVersion).filter(PersonaVersion.version == version2).first()
+                v1 = (
+                    session.query(PersonaVersion)
+                    .filter(lambda record: record.version == version1)
+                    .first()
+                )
+                v2 = (
+                    session.query(PersonaVersion)
+                    .filter(lambda record: record.version == version2)
+                    .first()
+                )
                 
                 if not v1 or not v2:
                     raise ValueError("One or both versions not found")
@@ -313,10 +348,16 @@ class PersonaStore:
         try:
             if not os.path.exists(self.persona_file):
                 return False
-            
+
             current_modified = os.path.getmtime(self.persona_file)
-            return current_modified > self._last_modified
-            
+            if current_modified > self._last_modified:
+                return True
+
+            with open(self.persona_file, 'r') as f:
+                current_data = json.load(f)
+            current_hash = self._calculate_hash(current_data)
+            return current_hash != self._last_hash
+
         except Exception as e:
             logger.error(f"File change check failed: {e}")
             return False
@@ -377,9 +418,11 @@ class PersonaStore:
             return self.get_current_persona()
         
         with get_db_session() as session:
-            persona_version = session.query(PersonaVersion).filter(
-                PersonaVersion.version == version
-            ).first()
+            persona_version = (
+                session.query(PersonaVersion)
+                .filter(lambda record: record.version == version)
+                .first()
+            )
             
             if not persona_version:
                 raise ValueError(f"Version {version} not found")

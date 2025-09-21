@@ -4,7 +4,6 @@ Memory management for episodic, semantic, procedural, and social memory
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 
 from db.models import Note, Action, Tweet
 from db.session import get_db_session
@@ -19,13 +18,16 @@ class MemoryService:
         self.max_improvement_notes = 100
         self.prompt_notes_limit = 30
     
-    def get_episodic_memory(self, session: Session, hours: int = 24) -> List[Dict[str, Any]]:
+    def get_episodic_memory(self, session: Any, hours: int = 24) -> List[Dict[str, Any]]:
         """Get recent episodic memories (actions and events)"""
         cutoff = datetime.utcnow() - timedelta(hours=hours)
         
-        actions = session.query(Action).filter(
-            Action.created_at >= cutoff
-        ).order_by(Action.created_at.desc()).all()
+        actions = (
+            session.query(Action)
+            .filter(lambda action: action.created_at >= cutoff)
+            .order_by(lambda action: action.created_at, descending=True)
+            .all()
+        )
         
         memories = []
         for action in actions:
@@ -38,12 +40,16 @@ class MemoryService:
         
         return memories
     
-    def get_semantic_memory(self, session: Session) -> Dict[str, Any]:
+    def get_semantic_memory(self, session: Any) -> Dict[str, Any]:
         """Get semantic knowledge (facts, beliefs, patterns)"""
         # Get recent high-performing tweets for pattern analysis
-        recent_tweets = session.query(Tweet).filter(
-            Tweet.created_at >= datetime.utcnow() - timedelta(days=7)
-        ).order_by(Tweet.j_score.desc()).limit(10).all()
+        recent_tweets = (
+            session.query(Tweet)
+            .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(days=7))
+            .order_by(lambda tweet: tweet.j_score if tweet.j_score is not None else 0, descending=True)
+            .limit(10)
+            .all()
+        )
         
         patterns = {
             "high_performing_topics": [],
@@ -74,7 +80,7 @@ class MemoryService:
             ]
         }
     
-    def get_social_memory(self, session: Session) -> Dict[str, Any]:
+    def get_social_memory(self, session: Any) -> Dict[str, Any]:
         """Get social context and relationships"""
         # This would track follower interactions, influential accounts, etc.
         # For now, return basic structure
@@ -84,7 +90,7 @@ class MemoryService:
             "topic_communities": []
         }
     
-    def add_improvement_note(self, session: Session, text: str) -> str:
+    def add_improvement_note(self, session: Any, text: str) -> str:
         """Add an improvement note and manage the collection size"""
         # Add new note
         note = Note(text=text)
@@ -94,9 +100,12 @@ class MemoryService:
         total_notes = session.query(Note).count()
         if total_notes >= self.max_improvement_notes:
             # Keep only the most recent notes
-            old_notes = session.query(Note).order_by(
-                Note.created_at.asc()
-            ).limit(total_notes - self.max_improvement_notes + 1).all()
+            old_notes = (
+                session.query(Note)
+                .order_by(lambda note: note.created_at)
+                .limit(total_notes - self.max_improvement_notes + 1)
+                .all()
+            )
             
             for old_note in old_notes:
                 session.delete(old_note)
@@ -105,15 +114,18 @@ class MemoryService:
         logger.info(f"Added improvement note: {text[:100]}...")
         return note.id
     
-    def get_recent_improvement_notes(self, session: Session) -> List[str]:
+    def get_recent_improvement_notes(self, session: Any) -> List[str]:
         """Get recent improvement notes for prompting"""
-        notes = session.query(Note).order_by(
-            Note.created_at.desc()
-        ).limit(self.prompt_notes_limit).all()
+        notes = (
+            session.query(Note)
+            .order_by(lambda note: note.created_at, descending=True)
+            .limit(self.prompt_notes_limit)
+            .all()
+        )
         
         return [note.text for note in notes]
     
-    def get_context_for_generation(self, session: Session) -> Dict[str, Any]:
+    def get_context_for_generation(self, session: Any) -> Dict[str, Any]:
         """Get relevant context for content generation"""
         return {
             "recent_actions": self.get_episodic_memory(session, hours=12),

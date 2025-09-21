@@ -1,6 +1,6 @@
 """Reflection service for generating improvement notes based on recent actions and metrics"""
 
-from sqlalchemy.orm import Session
+from typing import Any
 
 from services.memory import MemoryService
 from services.analytics import AnalyticsService
@@ -16,7 +16,7 @@ class ReflectionService:
         self.memory = MemoryService()
         self.analytics = AnalyticsService()
 
-    def generate_reflection(self, session: Session) -> str:
+    def generate_reflection(self, session: Any) -> str:
         """Analyze recent actions and outcomes, recording a lesson learned."""
         try:
             recent_actions = self.memory.get_episodic_memory(session, hours=24)
