@@ -213,16 +213,16 @@ class TestContentTemplates:
     async def test_end_to_end_generation(self):
         """Test complete proposal generation pipeline"""
         # Mock LLM response
-        mock_response = """
-        Problem: Current DAO voting has 8% participation.
-        Mechanism: Implement conviction voting with delegation.
-        Pilot: 45-day trial with Aragon DAO, testing 5 proposals.
-        KPIs: 1) Participation >25%, 2) Quality score >3.5/5, 3) Gas efficiency >90%
-        Risks: Technical complexity, voter confusion, delegation attacks
-        Uncertainty: Adoption patterns may vary across different DAO types.
-        Rollback: Return to token voting if participation doesn't improve by day 30.
-        CTA: Join the pilot at aragon.org/conviction-voting
-        """
+        mock_response = (
+            "Problem:DAO turnout 8%. "
+            "Mechanism:CV pilot w/audits. "
+            "Pilot:45d,5 props. "
+            "KPIs:turnout>25%,quality>3.5,gas<90%. "
+            "Risks:complexity/confusion. "
+            "Uncertainty:small guilds may lag. "
+            "Rollback:revert if KPIs miss day30. "
+            "CTA:join https://reuters.com/technology/conviction-voting"
+        )
         
         self.mock_llm_adapter.chat.return_value = mock_response
         

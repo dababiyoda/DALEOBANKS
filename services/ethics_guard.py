@@ -106,10 +106,10 @@ class EthicsGuard:
         addendum = []
         
         if not has_uncertainty:
-            addendum.append("Uncertainty: Implementation complexity and user adoption rates may vary.")
-        
+            addendum.append("Uncertainty: Metrics may wobble; review weekly before scaling.")
+
         if not has_rollback:
-            addendum.append("Rollback: Revert to current system if KPIs not met within pilot period.")
+            addendum.append("Rollback: Revert to the prior system if KPIs miss for two weeks.")
         
         if addendum:
             # Add addendum to the text

@@ -32,8 +32,14 @@ class AnalyticsService:
             "quotes": 1.5
         }
     
-    def pull_and_update_metrics(self, session: Any, x_client) -> Dict[str, Any]:
-        """Pull latest metrics from X API and update database"""
+    async def pull_and_update_metrics(self, session: Any, x_client) -> Dict[str, Any]:
+        """Pull latest metrics from X API and update database.
+
+        The method is ``async`` because the underlying X client uses
+        asynchronous calls for fetching tweet metrics. This keeps the
+        scheduler coroutine-friendly and prevents blocking the event
+        loop while waiting on network operations.
+        """
         try:
             # Get recent tweets that need metric updates
             cutoff = datetime.utcnow() - timedelta(hours=6)
@@ -50,7 +56,7 @@ class AnalyticsService:
             tweet_ids = [tweet.id for tweet in tweets_to_update]
             
             # Fetch metrics from X API
-            metrics = x_client.metrics_for(tweet_ids)
+            metrics = await x_client.metrics_for(tweet_ids)
             
             updated_count = 0
             for tweet in tweets_to_update:
