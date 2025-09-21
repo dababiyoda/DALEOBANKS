@@ -55,6 +55,10 @@ class Generator:
         self.memory = MemoryService()
         self.config = get_config()
 
+        # Evidence gate for verifying citations
+        from services.websearch import WebSearchService
+        self.websearch = WebSearchService()
+
         # Duplicate detection settings
         self.duplicate_check_days = 30
         self.similarity_threshold = 0.8
@@ -251,6 +255,24 @@ Requirements:
             is_duplicate, _ = self._check_for_duplicates(content, session)
             if is_duplicate:
                 return {"error": "Unable to generate unique content after mutation"}
+
+        # Enforce receipts or silence rules
+        if content_type == "reply":
+            # Limit to at most two sentences. We count simple period terminators.
+            # Other punctuation marks (e.g. "!" or "?") are treated as ends as well.
+            import re
+            sentences = [s for s in re.split(r"[\.!?]+", content) if s.strip()]
+            if len(sentences) > 2:
+                return {
+                    "error": "Reply exceeds two sentences. Provide receipts or stay silent"
+                }
+
+        # Proposals must include at least one credible citation (receipt)
+        if content_type == "proposal":
+            if not self.websearch.has_valid_citation(content):
+                return {
+                    "error": "Proposal must include at least one citation to a trusted source"
+                }
 
         if intensity >= 3 and self.config.RAGEBAIT_GUARD:
             if not (self.ethics_guard.has_receipt(content) and self.ethics_guard.has_constructive_step(content)):

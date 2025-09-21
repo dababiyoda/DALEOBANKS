@@ -12,9 +12,19 @@ from services.logging_utils import get_logger
 logger = get_logger(__name__)
 
 class AnalyticsService:
-    """Comprehensive analytics for the AI agent"""
-    
+    """Comprehensive analytics for the AI agent.
+
+    The analytics service aggregates social metrics, revenue proxies
+    and authority signals into a set of higher‑level KPIs. It also
+    computes an objective score (J score) using configurable weightings
+    defined in the application configuration. An optional impact
+    metric combines growth and authority into a single measure.
+    """
+
     def __init__(self):
+        from config import get_config
+        # Load configuration once for weight lookups
+        self.config = get_config()
         self.engagement_weights = {
             "likes": 1.0,
             "rts": 2.0,
@@ -169,6 +179,55 @@ class AnalyticsService:
         penalty_score = rate_limit_actions * 2 + penalty_actions * 5
         
         return float(penalty_score)
+
+    def calculate_impact_score(self, session: Any, days: int = 1) -> Dict[str, float]:
+        """Calculate an overall impact score.
+
+        The impact metric is a composite of fame, revenue and authority. It
+        reflects both engagement and economic outcomes. Each sub‑metric is
+        normalized to keep the score within a reasonable range. The
+        weights used to combine the metrics can be adjusted via the
+        configuration.
+
+        Args:
+            session: A database session for querying persistent data.
+            days: The number of days over which to calculate the metric.
+
+        Returns:
+            A dictionary with the impact score and its components.
+        """
+        fame = self.calculate_fame_score(session, days)
+        revenue = self.calculate_revenue_per_day(session)
+        authority = self.calculate_authority_signals(session, days)
+
+        # Normalize revenue to align roughly with fame scale. This divisor
+        # can be tuned based on typical revenue ranges (e.g. dollars per
+        # day). We choose 10 so that $100/day yields a comparable score.
+        revenue_norm = revenue / 10.0
+
+        # Normalize authority score to 0–1 range by dividing by 10 (max 100)
+        authority_norm = authority / 10.0
+
+        # Apply weights from configuration for the IMPACT goal. Fallback to
+        # equal weights if unspecified.
+        weights = self.config.GOAL_WEIGHTS.get("IMPACT", {
+            "alpha": 0.4,
+            "beta": 0.3,
+            "gamma": 0.2,
+            "lambda": 0.1,
+        })
+        alpha = weights.get("alpha", 0.4)
+        beta = weights.get("beta", 0.3)
+        gamma = weights.get("gamma", 0.2)
+
+        impact_score = alpha * fame["fame_score"] + beta * revenue_norm + gamma * authority_norm
+
+        return {
+            "impact_score": round(impact_score, 2),
+            "fame": fame["fame_score"],
+            "revenue_norm": revenue_norm,
+            "authority_norm": authority_norm,
+        }
     
     def get_analytics_summary(self, session: Any) -> Dict[str, Any]:
         """Get comprehensive analytics summary"""
@@ -177,41 +236,65 @@ class AnalyticsService:
         today_revenue = self.calculate_revenue_per_day(session)
         today_authority = self.calculate_authority_signals(session, days=1)
         today_penalty = self.calculate_penalty_score(session, days=1)
-        
+        today_impact = self.calculate_impact_score(session, days=1)
+
         # Yesterday's metrics for comparison
-        yesterday_fame = self.calculate_fame_score(session, days=2)  # Will be adjusted
-        yesterday_revenue = 0.0  # Simplified for now
-        
-        # Calculate objective function J
-        # J = α·FameScore + β·RevenuePerDay + γ·AuthoritySignals − λ·Penalty
-        alpha, beta, gamma, lambda_penalty = 0.65, 0.15, 0.25, 0.20  # FAME mode
-        
+        yesterday_fame = self.calculate_fame_score(session, days=2)
+        yesterday_impact = self.calculate_impact_score(session, days=2)
+        yesterday_revenue = 0.0  # Simplified for now; could be computed similarly
+
+        # Determine weight set based on current goal mode
+        goal_mode = self.config.GOAL_MODE.upper() if isinstance(self.config.GOAL_MODE, str) else "IMPACT"
+        weights = self.config.GOAL_WEIGHTS.get(goal_mode, {
+            "alpha": 0.4,
+            "beta": 0.3,
+            "gamma": 0.2,
+            "lambda": 0.1,
+        })
+        alpha = weights.get("alpha", 0.4)
+        beta = weights.get("beta", 0.3)
+        gamma = weights.get("gamma", 0.2)
+        lambda_penalty = weights.get("lambda", 0.1)
+
+        # Select primary metric based on goal mode
+        if goal_mode == "IMPACT":
+            primary = today_impact["impact_score"]
+        elif goal_mode == "REVENUE" or goal_mode == "MONETIZE":
+            primary = today_revenue
+        elif goal_mode == "AUTHORITY":
+            primary = today_authority
+        else:  # FAME and all others
+            primary = today_fame["fame_score"]
+
+        # Compose objective score. We include fame_score and authority_signals as
+        # secondary metrics for most modes except where the primary overlaps.
         objective_score = (
-            alpha * today_fame["fame_score"] +
+            alpha * primary +
             beta * today_revenue +
             gamma * today_authority -
             lambda_penalty * today_penalty
         )
-        
+
         # Get follower count
         latest_follower_snapshot = (
             session.query(FollowersSnapshot)
             .order_by(lambda snapshot: snapshot.ts, descending=True)
             .first()
         )
-        
         follower_count = latest_follower_snapshot.follower_count if latest_follower_snapshot else 0
-        
+
         # Recent activity
         recent_tweets = (
             session.query(Tweet)
             .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(hours=24))
             .count()
         )
-        
+
         return {
             "fame_score": today_fame["fame_score"],
             "fame_score_change": today_fame["fame_score"] - yesterday_fame.get("fame_score", 0),
+            "impact_score": today_impact["impact_score"],
+            "impact_change": today_impact["impact_score"] - yesterday_impact.get("impact_score", 0),
             "revenue_today": today_revenue,
             "revenue_change": today_revenue - yesterday_revenue,
             "authority_signals": today_authority,
@@ -221,7 +304,7 @@ class AnalyticsService:
             "follower_change": today_fame["follower_delta"],
             "tweets_today": recent_tweets,
             "engagement_rate": self._calculate_engagement_rate(session),
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.utcnow().isoformat(),
         }
     
     def create_follower_snapshot(self, session: Any, follower_count: int):
