@@ -9,7 +9,7 @@ import json
 import os
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, List, Optional, Any
 
 import uvicorn
@@ -27,6 +27,7 @@ from services.admin_rate import AdminRateLimiter
 from services.analytics import AnalyticsService
 from services.kpi import KPIService
 from services.logging_utils import get_logger
+from services.multiplexer import SocialMultiplexer
 from services.x_client import XClient
 from services.llm_adapter import LLMAdapter
 from services.generator import Generator
@@ -62,7 +63,8 @@ persona_store = PersonaStore()
 admin_limiter = AdminRateLimiter()
 analytics_service = AnalyticsService()
 kpi_service = KPIService()
-x_client = XClient() if config.LIVE else None
+x_client = XClient()
+multiplexer = SocialMultiplexer(config=config, x_client=x_client)
 llm_adapter = LLMAdapter()
 generator = Generator(persona_store, llm_adapter)
 selector = Selector(persona_store)
@@ -90,6 +92,10 @@ class RedirectRequest(BaseModel):
 
 class PersonaUpdateRequest(BaseModel):
     payload: Dict[str, Any]
+
+class CrisisRequest(BaseModel):
+    active: bool
+    reason: Optional[str] = None
 
 # Dependency for admin auth
 async def verify_admin_token(x_admin_token: Optional[str] = Header(None)):
@@ -165,7 +171,9 @@ async def get_dashboard():
                 "ethics_guard": "active",
                 "memory_usage": "67.2 MB",
                 "uptime": runner.get_uptime() if hasattr(runner, 'get_uptime') else "Unknown",
-                "live_mode": config.LIVE
+                "live_mode": config.LIVE,
+                "crisis_state": "PAUSED" if runner.crisis_service.is_paused() else "NORMAL",
+                "crisis_reason": runner.crisis_service.reason,
             }
             
             # Get persona preview
@@ -188,6 +196,19 @@ async def get_dashboard():
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/crisis")
+async def set_crisis(request: CrisisRequest):
+    """Toggle crisis mode manually from the dashboard."""
+    if request.active:
+        runner.crisis_service.activate(reason=request.reason or "manual_toggle")
+    else:
+        runner.crisis_service.resolve(reason=request.reason or "manual_clear")
+
+    return {
+        "crisis_state": "PAUSED" if runner.crisis_service.is_paused() else "NORMAL",
+        "crisis_reason": runner.crisis_service.reason,
+    }
 
 @app.post("/api/toggle")
 async def toggle_live_mode(request: ToggleRequest):
@@ -320,7 +341,7 @@ async def handle_redirect(redirect_id: str):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
-    return {"ok": True, "timestamp": datetime.utcnow().isoformat()}
+    return {"ok": True, "timestamp": datetime.now(UTC).isoformat()}
 
 # Persona management endpoints
 @app.get("/api/persona")

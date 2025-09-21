@@ -3,7 +3,7 @@ Analytics service for Fame, Authority, Revenue calculation and follower tracking
 """
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import statistics
 
 from db.models import Tweet, FollowersSnapshot, Redirect, Action
@@ -42,7 +42,7 @@ class AnalyticsService:
         """
         try:
             # Get recent tweets that need metric updates
-            cutoff = datetime.utcnow() - timedelta(hours=6)
+            cutoff = datetime.now(UTC) - timedelta(hours=6)
             tweets_to_update = (
                 session.query(Tweet)
                 .filter(lambda tweet: tweet.created_at >= cutoff)
@@ -79,8 +79,26 @@ class AnalyticsService:
             
             session.commit()
             logger.info(f"Updated metrics for {updated_count} tweets")
-            
-            return {"updated_count": updated_count}
+
+            weekly_impact = self.calculate_impact_score(session, days=7)["impact_score"]
+            revenue_today = self.calculate_revenue_per_day(session)
+            authority_week = self.calculate_authority_signals(session, days=7)
+            fame_week = self.calculate_fame_score(session, days=7)["fame_score"]
+            j_score = self.calculate_goal_aligned_j_score(
+                impact=weekly_impact,
+                revenue=revenue_today,
+                authority=authority_week,
+                fame=fame_week,
+            )
+
+            return {
+                "updated_count": updated_count,
+                "j_score": j_score,
+                "impact": weekly_impact,
+                "revenue": revenue_today,
+                "authority": authority_week,
+                "fame": fame_week,
+            }
             
         except Exception as e:
             logger.error(f"Metrics update failed: {e}")
@@ -89,7 +107,7 @@ class AnalyticsService:
     
     def calculate_fame_score(self, session: Any, days: int = 1) -> Dict[str, float]:
         """Calculate Fame Score using engagement proxy and follower growth"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         
         # Get tweets in period
         tweets = (
@@ -147,7 +165,7 @@ class AnalyticsService:
     
     def calculate_authority_signals(self, session: Any, days: int = 1) -> float:
         """Calculate authority signals from verified/high-follower interactions"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         
         tweets = (
             session.query(Tweet)
@@ -162,7 +180,7 @@ class AnalyticsService:
     
     def calculate_penalty_score(self, session: Any, days: int = 1) -> float:
         """Calculate penalty score from rate limits, violations, etc."""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         
         # Count rate limit strikes
         recent_actions = (
@@ -234,6 +252,39 @@ class AnalyticsService:
             "revenue_norm": revenue_norm,
             "authority_norm": authority_norm,
         }
+
+    def calculate_goal_aligned_j_score(
+        self,
+        *,
+        impact: float,
+        revenue: float,
+        authority: float,
+        fame: float,
+    ) -> float:
+        """Calculate a global J-score using configured weights and gating."""
+
+        weights = {
+            "impact": self.config.WEIGHTS_IMPACT.get("alpha", 0.4),
+            "revenue": self.config.WEIGHTS_REVENUE.get("alpha", 0.3),
+            "authority": self.config.WEIGHTS_AUTHORITY.get("alpha", 0.2),
+            "fame": self.config.WEIGHTS_FAME.get("alpha", 0.1),
+        }
+
+        if impact < self.config.IMPACT_WEEKLY_FLOOR:
+            weights["revenue"] *= 0.5
+
+        total_weight = sum(weights.values()) or 1.0
+        normalized_weights = {k: v / total_weight for k, v in weights.items()}
+
+        normalized_metrics = {
+            "impact": max(0.0, min(impact / max(self.config.IMPACT_WEEKLY_FLOOR, 1), 1.0)),
+            "revenue": max(0.0, min(revenue / 100.0, 1.0)),
+            "authority": max(0.0, min(authority / 100.0, 1.0)),
+            "fame": max(0.0, min(fame / 100.0, 1.0)),
+        }
+
+        score = sum(normalized_weights[key] * normalized_metrics[key] for key in normalized_weights)
+        return round(score, 3)
     
     def get_analytics_summary(self, session: Any) -> Dict[str, Any]:
         """Get comprehensive analytics summary"""
@@ -292,7 +343,7 @@ class AnalyticsService:
         # Recent activity
         recent_tweets = (
             session.query(Tweet)
-            .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(hours=24))
+            .filter(lambda tweet: tweet.created_at >= datetime.now(UTC) - timedelta(hours=24))
             .count()
         )
 
@@ -310,13 +361,13 @@ class AnalyticsService:
             "follower_change": today_fame["follower_delta"],
             "tweets_today": recent_tweets,
             "engagement_rate": self._calculate_engagement_rate(session),
-            "last_updated": datetime.utcnow().isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }
     
     def create_follower_snapshot(self, session: Any, follower_count: int):
         """Create a follower count snapshot"""
         snapshot = FollowersSnapshot(
-            ts=datetime.utcnow(),
+            ts=datetime.now(UTC),
             follower_count=follower_count
         )
         session.add(snapshot)
@@ -325,7 +376,7 @@ class AnalyticsService:
     
     def get_follower_history(self, session: Any, days: int = 30) -> List[Dict[str, Any]]:
         """Get follower count history"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         
         snapshots = (
             session.query(FollowersSnapshot)
@@ -385,7 +436,7 @@ class AnalyticsService:
     
     def _get_follower_delta(self, session: Any, days: int) -> float:
         """Get follower count change over specified days"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         start_time = now - timedelta(days=days)
         
         # Get snapshots at start and end of period
@@ -418,7 +469,7 @@ class AnalyticsService:
         """Calculate overall engagement rate"""
         recent_tweets = (
             session.query(Tweet)
-            .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(days=7))
+            .filter(lambda tweet: tweet.created_at >= datetime.now(UTC) - timedelta(days=7))
             .all()
         )
         

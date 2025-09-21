@@ -4,7 +4,7 @@ Weekly planning and OKR management
 
 import asyncio
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 
 from services.llm_adapter import LLMAdapter
@@ -56,7 +56,7 @@ class PlannerService:
             self.memory.add_improvement_note(session, plan_summary)
             
             plan = {
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "performance_analysis": performance_analysis,
                 "strategic_plan": strategic_plan,
                 "tactical_tasks": tactical_tasks,
@@ -121,7 +121,7 @@ class PlannerService:
         from db.models import Tweet
         
         # Get recent tweets
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = datetime.now(UTC) - timedelta(days=7)
         recent_tweets = session.query(Tweet).filter(
             Tweet.created_at >= cutoff
         ).all()

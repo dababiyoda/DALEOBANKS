@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { useTheme } from "@/components/ui/theme-provider";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Moon, Sun, User } from "lucide-react";
+import { Moon, Sun, User, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Header() {
@@ -29,6 +29,26 @@ export default function Header() {
   });
 
   const isLive = dashboardData?.system_status?.live_mode || false;
+
+  const crisisState = dashboardData?.system_status?.crisis_state ?? "NORMAL";
+  const crisisReason = dashboardData?.system_status?.crisis_reason ?? "";
+  const crisisActive = crisisState === "PAUSED";
+
+  const crisisMutation = useMutation({
+    mutationFn: (active: boolean) =>
+      api.post("/api/crisis", {
+        active,
+        reason: active ? "manual_activate" : "manual_clear",
+      }),
+    onSuccess: (data: { crisis_state: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      const paused = data?.crisis_state === "PAUSED";
+      toast({
+        title: paused ? "Crisis Mode" : "Crisis Cleared",
+        description: paused ? "Outbound actions paused." : "Resuming standard operations.",
+      });
+    },
+  });
 
   const handleLiveToggle = (checked: boolean) => {
     toggleLiveMutation.mutate(checked);
@@ -68,7 +88,27 @@ export default function Header() {
                 {isLive ? "ACTIVE" : "PAUSED"}
               </Badge>
             </div>
-            
+
+            {/* Crisis Indicator */}
+            <div className="flex items-center space-x-3">
+              <Badge
+                variant={crisisActive ? "destructive" : "secondary"}
+                className="flex items-center space-x-2"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>{crisisState}</span>
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => crisisMutation.mutate(!crisisActive)}
+                disabled={crisisMutation.isPending}
+                title={crisisReason ?? undefined}
+              >
+                {crisisActive ? "Resume" : "Pause"}
+              </Button>
+            </div>
+
             {/* Theme Toggle */}
             <Button
               variant="outline"

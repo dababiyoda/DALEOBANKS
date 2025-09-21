@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Dict, List, Optional
 import uuid
 
 
 def _uuid() -> str:
     return str(uuid.uuid4())
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass
@@ -23,7 +27,7 @@ class Tweet:
     hour_bin: Optional[int] = None
     cta_variant: Optional[str] = None
     ref_tweet_id: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
     likes: int = 0
     rts: int = 0
     replies: int = 0
@@ -39,7 +43,7 @@ class Action:
     id: str = field(default_factory=_uuid)
     kind: str = ""
     meta_json: Optional[Dict[str, Any]] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
 
 
 @dataclass
@@ -49,8 +53,8 @@ class KPI:
     id: str = field(default_factory=_uuid)
     name: str = ""
     value: float = 0.0
-    period_start: datetime = field(default_factory=datetime.utcnow)
-    period_end: datetime = field(default_factory=datetime.utcnow)
+    period_start: datetime = field(default_factory=_utcnow)
+    period_end: datetime = field(default_factory=_utcnow)
 
 
 @dataclass
@@ -59,14 +63,14 @@ class Note:
 
     id: str = field(default_factory=_uuid)
     text: str = ""
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
 
 
 @dataclass
 class FollowersSnapshot:
     """Daily follower count snapshots."""
 
-    ts: datetime = field(default_factory=datetime.utcnow)
+    ts: datetime = field(default_factory=_utcnow)
     follower_count: int = 0
 
 
@@ -94,7 +98,19 @@ class ArmsLog:
     cta_variant: Optional[str] = None
     sampled_prob: float = 0.0
     reward_j: Optional[float] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class SensedEvent:
+    """Events captured during the perception scan."""
+
+    id: str = field(default_factory=_uuid)
+    source: str = ""
+    kind: str = ""
+    payload: Dict[str, Any] = field(default_factory=dict)
+    counts: Dict[str, int] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=_utcnow)
 
 
 @dataclass
@@ -105,7 +121,7 @@ class PersonaVersion:
     hash: str
     actor: Optional[str]
     payload: Dict[str, Any]
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
 
 
 __all__ = [
@@ -116,5 +132,6 @@ __all__ = [
     "FollowersSnapshot",
     "Redirect",
     "ArmsLog",
+    "SensedEvent",
     "PersonaVersion",
 ]

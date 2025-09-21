@@ -3,7 +3,7 @@ Memory management for episodic, semantic, procedural, and social memory
 """
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from db.models import Note, Action, Tweet
 from db.session import get_db_session
@@ -20,7 +20,7 @@ class MemoryService:
     
     def get_episodic_memory(self, session: Any, hours: int = 24) -> List[Dict[str, Any]]:
         """Get recent episodic memories (actions and events)"""
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         
         actions = (
             session.query(Action)
@@ -45,7 +45,7 @@ class MemoryService:
         # Get recent high-performing tweets for pattern analysis
         recent_tweets = (
             session.query(Tweet)
-            .filter(lambda tweet: tweet.created_at >= datetime.utcnow() - timedelta(days=7))
+            .filter(lambda tweet: tweet.created_at >= datetime.now(UTC) - timedelta(days=7))
             .order_by(lambda tweet: tweet.j_score if tweet.j_score is not None else 0, descending=True)
             .limit(10)
             .all()

@@ -5,7 +5,7 @@ Admin authentication and rate limiting for write operations
 import time
 from typing import Dict, List, Optional
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from config import get_config
 from services.logging_utils import get_logger
@@ -40,7 +40,7 @@ class AdminRateLimiter:
     
     def allow_request(self, client_id: str = "default") -> bool:
         """Check if request is allowed under rate limits"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         # Check if client is temporarily blocked
         if client_id in self.blocked_until:
@@ -85,14 +85,14 @@ class AdminRateLimiter:
     
     def _block_client(self, client_id: str, minutes: int = 5):
         """Temporarily block a client"""
-        block_until = datetime.utcnow() + timedelta(minutes=minutes)
+        block_until = datetime.now(UTC) + timedelta(minutes=minutes)
         self.blocked_until[client_id] = block_until
         
         logger.warning(f"Blocked client {client_id} until {block_until}")
     
     def get_rate_limit_status(self, client_id: str = "default") -> Dict[str, any]:
         """Get current rate limit status"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         cutoff = now - timedelta(seconds=self.window_seconds)
         
         # Clean up old timestamps
@@ -135,7 +135,7 @@ class AdminRateLimiter:
     
     def get_global_stats(self) -> Dict[str, any]:
         """Get global rate limiting statistics"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         # Active clients
         active_clients = len([
@@ -179,15 +179,15 @@ class AdminRateLimiter:
     
     def extend_block(self, client_id: str, additional_minutes: int = 10):
         """Extend block time for problematic clients"""
-        current_block = self.blocked_until.get(client_id, datetime.utcnow())
-        new_block_time = max(current_block, datetime.utcnow()) + timedelta(minutes=additional_minutes)
+        current_block = self.blocked_until.get(client_id, datetime.now(UTC))
+        new_block_time = max(current_block, datetime.now(UTC)) + timedelta(minutes=additional_minutes)
         
         self.blocked_until[client_id] = new_block_time
         logger.warning(f"Extended block for client {client_id} until {new_block_time}")
     
     def cleanup_old_data(self):
         """Clean up old tracking data"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         cleanup_cutoff = now - timedelta(hours=1)
         
         # Clean up global timestamps
