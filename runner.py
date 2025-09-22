@@ -398,6 +398,16 @@ async def perception_job():
                 timeline_token=_perception_state.get("x_timeline_token"),
             )
             _perception_state = perception_service.last_state
+        payload = perception_service.last_payload
+        counts = perception_service.last_counts
+        mentions = payload.get("x", {}).get("mentions", []) if isinstance(payload, dict) else []
+        mention_velocity = counts.get("x_mentions") if isinstance(counts, dict) else None
+        if mentions or mention_velocity:
+            await crisis_service.evaluate_mentions(
+                mentions,
+                multiplexer=multiplexer,
+                velocity=mention_velocity,
+            )
         logger.info(
             "perception_job_completed",
             extra={"total": total, "state": _perception_state},
@@ -418,12 +428,22 @@ async def crisis_watch_job():
 async def analytics_pull_job():
     """Pull analytics and update metrics"""
     try:
+        result: Dict[str, Any] | None = None
         with get_db_session() as session:
             result = await analytics_service.pull_and_update_metrics(session, x_client)
             selector.record_outcome(result)
             await _log_action("analytics_updated", result)
             logger.info(f"Analytics updated: {result}")
-            
+
+        if result is not None:
+            await crisis_service.update_metrics(
+                source="analytics",
+                multiplexer=multiplexer,
+                authority=result.get("authority"),
+                velocity=result.get("updated_count"),
+                metadata={"j_score": result.get("j_score")},
+            )
+
     except Exception as e:
         logger.error(f"Analytics pull job failed: {e}")
 
