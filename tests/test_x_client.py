@@ -50,16 +50,16 @@ async def test_send_dm_respects_live_toggle(monkeypatch: pytest.MonkeyPatch) -> 
         *,
         endpoint,
         enabled,
-        live_required,
         default_result,
         func,
+        require_live=True,
         **kwargs,
     ):
         captured.update(
             {
                 "endpoint": endpoint,
                 "enabled": enabled,
-                "live_required": live_required,
+                "require_live": require_live,
             }
         )
         return default_result
@@ -72,7 +72,7 @@ async def test_send_dm_respects_live_toggle(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured["endpoint"] == "send_dm"
     assert captured["enabled"] is True
     # Default config has LIVE disabled, so the call should be a dry run.
-    assert captured["live_required"] is False
+    assert captured["require_live"] is True
 
 
 @pytest.mark.asyncio
@@ -97,14 +97,14 @@ async def test_send_dm_executes_when_live(monkeypatch: pytest.MonkeyPatch) -> No
         *,
         endpoint,
         enabled,
-        live_required,
         default_result,
         func,
+        require_live=True,
         **kwargs,
     ):
         assert endpoint == "send_dm"
         assert enabled is True
-        assert live_required is True
+        assert require_live is True
         return func()
 
     monkeypatch.setattr(client, "_execute_write", _bind_async(fake_execute, client))
@@ -142,14 +142,14 @@ async def test_upload_media_supports_video(monkeypatch: pytest.MonkeyPatch, tmp_
         *,
         endpoint,
         enabled,
-        live_required,
         default_result,
         func,
+        require_live=True,
         **kwargs,
     ):
         assert endpoint == "upload_media"
         assert enabled is True
-        assert live_required is True
+        assert require_live is True
         return func()
 
     monkeypatch.setattr(client, "_execute_write", _bind_async(fake_execute, client))

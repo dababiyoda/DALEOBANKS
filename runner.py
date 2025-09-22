@@ -13,7 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from config import get_config
+from config import get_config, subscribe_to_updates
 from db.session import get_db_session, init_db
 from db.models import Action
 from services.multiplexer import SocialMultiplexer
@@ -54,6 +54,14 @@ self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
 perception_service = PerceptionService()
 crisis_service = CrisisService()
+
+
+def _on_config_update(cfg, changes: Dict[str, Any]) -> None:
+    if "LIVE" in changes:
+        logger.info("Runner observed LIVE toggle -> %s", "on" if cfg.LIVE else "off")
+
+
+_unsubscribe = subscribe_to_updates(_on_config_update)
 
 async def start_scheduler():
     """Start the background scheduler"""

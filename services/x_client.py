@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import tweepy
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from config import get_config
+from config import get_config, subscribe_to_updates
 from services.logging_utils import get_logger
 import random
 
@@ -53,6 +53,7 @@ class XClient:
         # Maximum number of times to retry a write on rate‑limit failures
         self.max_write_attempts: int = 5
         self._initialize_client()
+        self._unsubscribe = subscribe_to_updates(self._on_config_update)
         
     def _initialize_client(self):
         """Initialize Tweepy client with credentials"""
@@ -114,11 +115,11 @@ class XClient:
         *,
         endpoint: str,
         enabled: bool,
-        live_required: bool,
         default_result: Any,
         func,
         idempotency_key: str | None = None,
         timeout: float = 15.0,
+        require_live: bool = True,
         **kwargs,
     ) -> Any:
         """
@@ -145,10 +146,16 @@ class XClient:
         Returns:
             The result of func on success, default_result on dry run or failure.
         """
-        # Dry run if feature disabled or not in LIVE mode
-        if not enabled or not live_required:
+        # Dry run if feature disabled
+        if not enabled:
             logger.info(
                 f"DRY RUN - Would perform {endpoint} with args {kwargs}"
+            )
+            return default_result
+
+        if require_live and not self.config.LIVE:
+            logger.info(
+                f"LIVE mode disabled - skipping {endpoint}"
             )
             return default_result
 
@@ -170,6 +177,11 @@ class XClient:
         attempt = 0
         while attempt < self.max_write_attempts:
             try:
+                if require_live and not self.config.LIVE:
+                    logger.info(
+                        f"LIVE mode disabled mid-flight - aborting {endpoint}"
+                    )
+                    return default_result
                 # Execute the API call on a background thread with a timeout
                 result = await asyncio.wait_for(
                     asyncio.to_thread(func, **kwargs),
@@ -243,7 +255,6 @@ class XClient:
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=True,
-            live_required=self.config.LIVE,
             default_result="dry_run_tweet_id",
             func=_call,
             idempotency_key=idempotency_key,
@@ -255,20 +266,12 @@ class XClient:
         """Like a tweet"""
         endpoint = "like"
         
-        if not self.config.ENABLE_LIKES or not self.config.LIVE:
-            logger.info(f"DRY RUN - Would like tweet: {tweet_id}")
-            return True
-        
-        if not self.client or not self._check_circuit_breaker(endpoint):
-            return False
-        # Use the generic write helper with backoff
         def _call():
             return self.client.like(tweet_id)
 
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=self.config.ENABLE_LIKES,
-            live_required=self.config.LIVE,
             default_result=True,
             func=_call,
         )
@@ -305,7 +308,6 @@ class XClient:
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=self.config.ENABLE_DMS,
-            live_required=self.config.LIVE,
             default_result=True,
             func=_call,
         )
@@ -353,7 +355,6 @@ class XClient:
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=self.config.ENABLE_MEDIA,
-            live_required=self.config.LIVE,
             default_result="dry_run_media_id",
             func=_call,
         )
@@ -371,7 +372,6 @@ class XClient:
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=True,
-            live_required=self.config.LIVE,
             default_result=True,
             func=_call,
         )
@@ -387,7 +387,6 @@ class XClient:
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=self.config.ENABLE_REPOSTS,
-            live_required=self.config.LIVE,
             default_result=True,
             func=_call,
         )
@@ -403,11 +402,24 @@ class XClient:
         result = await self._execute_write(
             endpoint=endpoint,
             enabled=self.config.ENABLE_FOLLOWS,
-            live_required=self.config.LIVE,
             default_result=True,
             func=_call,
         )
         return bool(result)
+
+    def _on_config_update(self, cfg, changes: Dict[str, Any]) -> None:
+        if "LIVE" in changes and not cfg.LIVE:
+            # Clear idempotency cache to avoid stale entries on resume
+            self.idempotency_cache.clear()
+            logger.info("XClient observed LIVE toggle -> paused writes")
+
+    def __del__(self):  # pragma: no cover - defensive cleanup
+        unsubscribe = getattr(self, "_unsubscribe", None)
+        if callable(unsubscribe):
+            try:
+                unsubscribe()
+            except Exception:
+                pass
     
     async def search_recent(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
         """Search recent tweets"""
