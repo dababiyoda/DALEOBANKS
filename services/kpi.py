@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 
 from db.models import KPI, Tweet, FollowersSnapshot, Redirect
+from config import get_config
+from services.analytics import AnalyticsService
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -15,6 +17,8 @@ class KPIService:
     """Manages KPI calculation and storage"""
     
     def __init__(self):
+        self.config = get_config()
+        self.analytics_service = AnalyticsService()
         self.kpi_definitions = {
             "fame_score": self._calculate_fame_score,
             "revenue_daily": self._calculate_daily_revenue,
@@ -152,9 +156,8 @@ class KPIService:
     
     def _calculate_penalty_score(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Calculate penalty score from rate limits, mutes, etc."""
-        # This would track negative signals
-        # For now, return a low baseline penalty
-        return 5.0  # Baseline penalty
+        period_days = max((period_end - period_start).days, 1)
+        return float(self.analytics_service.calculate_penalty_score(session, days=period_days))
     
     def _calculate_engagement_rate(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Calculate engagement rate as percentage"""
@@ -213,19 +216,31 @@ class KPIService:
         authority = self._calculate_authority_signals(session, period_start, period_end)
         penalty = self._calculate_penalty_score(session, period_start, period_end)
         
-        # Apply weights (default FAME mode)
-        alpha, beta, gamma, lambda_penalty = 0.65, 0.15, 0.25, 0.20
-        
+        goal_mode = (
+            self.config.GOAL_MODE.upper()
+            if isinstance(self.config.GOAL_MODE, str)
+            else "IMPACT"
+        )
+        weights = self.config.GOAL_WEIGHTS.get(
+            goal_mode,
+            {"alpha": 0.65, "beta": 0.15, "gamma": 0.25, "lambda": 0.20},
+        )
+        alpha = weights.get("alpha", 0.65)
+        beta = weights.get("beta", 0.15)
+        gamma = weights.get("gamma", 0.25)
+        lambda_penalty = weights.get("lambda", 0.20)
+
         # Normalize revenue to 0-100 scale
         revenue_normalized = min(revenue * 10, 100)  # $10 = 100 points
-        
+        penalty_adjusted = min(max(penalty, 0.0), 100.0)
+
         objective_score = (
             alpha * fame +
             beta * revenue_normalized +
             gamma * authority -
-            lambda_penalty * penalty
+            lambda_penalty * penalty_adjusted
         )
-        
+
         return round(max(objective_score, 0), 2)
     
     def _get_follower_growth(self, session: Session, period_start: datetime, period_end: datetime) -> float:

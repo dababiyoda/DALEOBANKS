@@ -59,10 +59,11 @@ class AnalyticsService:
             metrics = await x_client.metrics_for(tweet_ids)
             
             updated_count = 0
+            penalty_recent = self.calculate_penalty_score(session, days=1)
             for tweet in tweets_to_update:
                 if tweet.id in metrics:
                     tweet_metrics = metrics[tweet.id]
-                    
+
                     # Update metrics
                     tweet.likes = tweet_metrics.get("like_count", 0)
                     tweet.rts = tweet_metrics.get("retweet_count", 0)
@@ -73,7 +74,7 @@ class AnalyticsService:
                     tweet.authority_score = self._calculate_authority_score(tweet_metrics)
                     
                     # Calculate J-score
-                    tweet.j_score = self._calculate_j_score(tweet)
+                    tweet.j_score = self._calculate_j_score(tweet, penalty=penalty_recent)
                     
                     updated_count += 1
             
@@ -84,11 +85,13 @@ class AnalyticsService:
             revenue_today = self.calculate_revenue_per_day(session)
             authority_week = self.calculate_authority_signals(session, days=7)
             fame_week = self.calculate_fame_score(session, days=7)["fame_score"]
+            penalty_week = self.calculate_penalty_score(session, days=7)
             j_score = self.calculate_goal_aligned_j_score(
                 impact=weekly_impact,
                 revenue=revenue_today,
                 authority=authority_week,
                 fame=fame_week,
+                penalty=penalty_week,
             )
 
             return {
@@ -98,6 +101,7 @@ class AnalyticsService:
                 "revenue": revenue_today,
                 "authority": authority_week,
                 "fame": fame_week,
+                "penalty": penalty_week,
             }
             
         except Exception as e:
@@ -260,8 +264,9 @@ class AnalyticsService:
         revenue: float,
         authority: float,
         fame: float,
+        penalty: float = 0.0,
     ) -> float:
-        """Calculate a global J-score using configured weights and gating."""
+        """Calculate a global J-score using configured weights and penalties."""
 
         weights = {
             "impact": self.config.WEIGHTS_IMPACT.get("alpha", 0.4),
@@ -269,6 +274,16 @@ class AnalyticsService:
             "authority": self.config.WEIGHTS_AUTHORITY.get("alpha", 0.2),
             "fame": self.config.WEIGHTS_FAME.get("alpha", 0.1),
         }
+
+        goal_mode = (
+            self.config.GOAL_MODE.upper()
+            if isinstance(self.config.GOAL_MODE, str)
+            else "IMPACT"
+        )
+        penalty_weight = self.config.GOAL_WEIGHTS.get(
+            goal_mode,
+            {"lambda": 0.1},
+        ).get("lambda", 0.1)
 
         if impact < self.config.IMPACT_WEEKLY_FLOOR:
             weights["revenue"] *= 0.5
@@ -282,9 +297,13 @@ class AnalyticsService:
             "authority": max(0.0, min(authority / 100.0, 1.0)),
             "fame": max(0.0, min(fame / 100.0, 1.0)),
         }
+        penalty_normalized = max(0.0, min(penalty / 10.0, 1.0))
 
-        score = sum(normalized_weights[key] * normalized_metrics[key] for key in normalized_weights)
-        return round(score, 3)
+        score = sum(
+            normalized_weights[key] * normalized_metrics[key]
+            for key in normalized_weights
+        ) - penalty_weight * penalty_normalized
+        return round(max(score, 0.0), 3)
     
     def get_analytics_summary(self, session: Any) -> Dict[str, Any]:
         """Get comprehensive analytics summary"""
@@ -415,8 +434,8 @@ class AnalyticsService:
         
         return authority_score
     
-    def _calculate_j_score(self, tweet: Tweet) -> float:
-        """Calculate the objective function J score for a tweet"""
+    def _calculate_j_score(self, tweet: Tweet, *, penalty: float = 0.0) -> float:
+        """Calculate the objective function J score for a tweet."""
         # Simplified J calculation for individual tweets
         engagement = (
             self.engagement_weights["likes"] * (tweet.likes or 0) +
@@ -424,15 +443,28 @@ class AnalyticsService:
             self.engagement_weights["replies"] * (tweet.replies or 0) +
             self.engagement_weights["quotes"] * (tweet.quotes or 0)
         )
-        
+
         # Normalize to 0-1 scale
         engagement_score = min(engagement / 100, 1.0)
         authority_score = min((tweet.authority_score or 0) / 10, 1.0)
-        
+
         # Simple J calculation
         j_score = 0.7 * engagement_score + 0.3 * authority_score
-        
-        return j_score
+
+        goal_mode = (
+            self.config.GOAL_MODE.upper()
+            if isinstance(self.config.GOAL_MODE, str)
+            else "IMPACT"
+        )
+        penalty_weight = self.config.GOAL_WEIGHTS.get(
+            goal_mode,
+            {"lambda": 0.1},
+        ).get("lambda", 0.1)
+        penalty_normalized = max(0.0, min(penalty / 10.0, 1.0))
+
+        adjusted_score = max(j_score - penalty_weight * penalty_normalized, 0.0)
+
+        return round(adjusted_score, 3)
     
     def _get_follower_delta(self, session: Any, days: int) -> float:
         """Get follower count change over specified days"""
