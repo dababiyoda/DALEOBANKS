@@ -70,13 +70,17 @@ class TestOptimizer:
                 "economics": {"mean_reward": 0.5, "count": 7}
             },
             "hour_bin": {
-                "14": {"mean_reward": 0.9, "count": 6},
-                "18": {"mean_reward": 0.4, "count": 4}
+                14: {"mean_reward": 0.9, "count": 6},
+                18: {"mean_reward": 0.4, "count": 4}
             },
             "cta_variant": {
                 "learn_more": {"mean_reward": 0.8, "count": 9},
                 "join_pilot": {"mean_reward": 0.6, "count": 6}
-            }
+            },
+            "intensity": {
+                2: {"mean_reward": 0.65, "count": 12},
+                3: {"mean_reward": 0.75, "count": 5},
+            },
         }
         
         # Mock experiments service
@@ -90,6 +94,7 @@ class TestOptimizer:
                 assert "topic" in selected
                 assert "hour_bin" in selected
                 assert "cta_variant" in selected
+                assert "intensity" in selected
                 assert "selection_method" in selected
                 assert "sampled_prob" in selected
     
@@ -269,13 +274,14 @@ class TestExperimentsService:
         # Should have all combinations of arms
         assert len(combinations) > 0
         
-        # Each combination should have 4 elements (post_type, topic, hour_bin, cta_variant)
+        # Each combination should have 5 elements (post_type, topic, hour_bin, cta_variant, intensity)
         for combo in combinations[:10]:  # Test first 10
-            assert len(combo) == 4
+            assert len(combo) == 5
             assert combo[0] in self.experiments.arms["post_type"]
             assert combo[1] in self.experiments.arms["topic"]
             assert combo[2] in self.experiments.arms["hour_bin"]
             assert combo[3] in self.experiments.arms["cta_variant"]
+            assert combo[4] in self.experiments.arms["intensity"]
     
     @patch('services.experiments.get_db_session')
     def test_arm_logging(self, mock_db_session):
@@ -291,6 +297,7 @@ class TestExperimentsService:
             topic="technology",
             hour_bin=14,
             cta_variant="learn_more",
+            intensity=3,
             sampled_prob=0.7
         )
         
@@ -303,6 +310,7 @@ class TestExperimentsService:
         assert call_args.tweet_id == "12345"
         assert call_args.post_type == "proposal"
         assert call_args.sampled_prob == 0.7
+        assert call_args.intensity == 3
     
     @patch('services.experiments.get_db_session')
     def test_reward_updates(self, mock_db_session):
