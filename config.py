@@ -3,7 +3,7 @@ Configuration management for DaLeoBanks AI Agent
 """
 
 import os
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Callable, Any
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
@@ -77,38 +77,46 @@ class Config:
     WEIGHTS_FAME: Dict[str, float]
     GOAL_WEIGHTS: Dict[str, Dict[str, float]]
 
-def get_config() -> Config:
-    """Get configuration from environment variables"""
 
-    # Parse quiet hours
+ConfigListener = Callable[["Config", Dict[str, Any]], None]
+
+_CONFIG_INSTANCE: Optional[Config] = None
+_CONFIG_LISTENERS: List[ConfigListener] = []
+
+
+def _parse_weights(var: str, default: str) -> Dict[str, float]:
+    raw = os.getenv(var, default)
+    try:
+        alpha, beta, gamma, lam = [float(x) for x in raw.split(",")]
+        return {"alpha": alpha, "beta": beta, "gamma": gamma, "lambda": lam}
+    except Exception:
+        return {"alpha": 0.0, "beta": 0.0, "gamma": 0.0, "lambda": 0.0}
+
+
+def _parse_platform_weights(raw: str) -> Dict[str, float]:
+    weights: Dict[str, float] = {}
+    for chunk in raw.split(","):
+        if not chunk.strip():
+            continue
+        if ":" not in chunk:
+            continue
+        platform, weight = chunk.split(":", 1)
+        try:
+            weights[platform.strip().lower()] = float(weight.strip())
+        except ValueError:
+            continue
+    return weights or {"x": 1.0}
+
+
+def _build_config() -> Config:
+    """Create a new ``Config`` instance from environment variables."""
+
     quiet_hours = None
     if os.getenv("QUIET_HOURS_ET"):
         try:
             quiet_hours = [int(x) for x in os.getenv("QUIET_HOURS_ET", "").split(",")]
-        except:
-            quiet_hours = None
-    
-    def _parse_weights(var: str, default: str) -> Dict[str, float]:
-        raw = os.getenv(var, default)
-        try:
-            alpha, beta, gamma, lam = [float(x) for x in raw.split(",")]
-            return {"alpha": alpha, "beta": beta, "gamma": gamma, "lambda": lam}
         except Exception:
-            return {"alpha": 0.0, "beta": 0.0, "gamma": 0.0, "lambda": 0.0}
-
-    def _parse_platform_weights(raw: str) -> Dict[str, float]:
-        weights: Dict[str, float] = {}
-        for chunk in raw.split(","):
-            if not chunk.strip():
-                continue
-            if ":" not in chunk:
-                continue
-            platform, weight = chunk.split(":", 1)
-            try:
-                weights[platform.strip().lower()] = float(weight.strip())
-            except ValueError:
-                continue
-        return weights or {"x": 1.0}
+            quiet_hours = None
 
     weights_impact = _parse_weights("WEIGHTS_IMPACT", "0.40,0.30,0.20,0.10")
     weights_revenue = _parse_weights("WEIGHTS_REVENUE", "0.30,0.55,0.25,0.25")
@@ -121,7 +129,7 @@ def get_config() -> Config:
         APP_ENV=os.getenv("APP_ENV", "prod"),
         PORT=int(os.getenv("PORT", 8000)),
         TIMEZONE=os.getenv("TIMEZONE", "America/New_York"),
-        
+
         # API Keys
         OPENAI_API_KEY=os.getenv("OPENAI_API_KEY", ""),
         X_BEARER_TOKEN=os.getenv("X_BEARER_TOKEN"),
@@ -130,15 +138,15 @@ def get_config() -> Config:
         X_ACCESS_TOKEN=os.getenv("X_ACCESS_TOKEN"),
         X_ACCESS_SECRET=os.getenv("X_ACCESS_SECRET"),
         ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", "choose-a-long-random-string"),
-        
+
         # Operation Mode
         GOAL_MODE=os.getenv("GOAL_MODE", "IMPACT"),
         LIVE=os.getenv("LIVE", "false").lower() == "true",
         QUIET_HOURS_ET=quiet_hours,
-        
+
         # Media settings
         MEDIA_CATEGORY=os.getenv("MEDIA_CATEGORY", "tweet_image"),
-        
+
         # Schedules
         POST_TWEET_EVERY=(45, 90),
         REPLY_MENTIONS_EVERY=(12, 25),
@@ -148,11 +156,11 @@ def get_config() -> Config:
         FOLLOWER_SNAPSHOT_DAILY_HOUR=3,
         NIGHTLY_REFLECTION_HOUR=4,
         WEEKLY_PLANNING_DAY_HOUR="Sun@5",
-        
-        # Rate limiting
+
+        # Rate limiting and backoff
         MAX_BACKOFF_SECONDS=120,
         CIRCUIT_BREAKER_FAILURES=5,
-        
+
         # Action toggles
         ENABLE_LIKES=os.getenv("ENABLE_LIKES", "true").lower() == "true",
         ENABLE_REPOSTS=os.getenv("ENABLE_REPOSTS", "true").lower() == "true",
@@ -188,3 +196,71 @@ def get_config() -> Config:
             "MONETIZE": weights_revenue,
         }
     )
+
+
+def _notify_listeners(changes: Dict[str, Any]) -> None:
+    """Notify registered listeners of configuration changes."""
+
+    if not changes:
+        return
+
+    cfg = get_config()
+    for listener in list(_CONFIG_LISTENERS):
+        try:
+            listener(cfg, changes)
+        except Exception:
+            # Listeners should not break config updates; ignore failures.
+            continue
+
+
+def get_config() -> Config:
+    """Return the shared configuration object."""
+
+    global _CONFIG_INSTANCE
+    if _CONFIG_INSTANCE is None:
+        _CONFIG_INSTANCE = _build_config()
+    return _CONFIG_INSTANCE
+
+
+def update_config(**updates: Any) -> Config:
+    """Mutate the shared config in place and notify listeners."""
+
+    cfg = get_config()
+    applied: Dict[str, Any] = {}
+
+    for key, value in updates.items():
+        if not hasattr(cfg, key):
+            raise AttributeError(f"Config has no attribute '{key}'")
+        current = getattr(cfg, key)
+        if current == value:
+            continue
+        setattr(cfg, key, value)
+        applied[key] = value
+
+    if applied:
+        _notify_listeners(applied)
+    return cfg
+
+
+def subscribe_to_updates(listener: ConfigListener) -> Callable[[], None]:
+    """Register a callback invoked when the configuration changes."""
+
+    if listener not in _CONFIG_LISTENERS:
+        _CONFIG_LISTENERS.append(listener)
+
+    def _unsubscribe() -> None:
+        try:
+            _CONFIG_LISTENERS.remove(listener)
+        except ValueError:
+            pass
+
+    return _unsubscribe
+
+
+def reset_config() -> Config:
+    """Reload configuration from the environment and notify listeners."""
+
+    global _CONFIG_INSTANCE
+    _CONFIG_INSTANCE = _build_config()
+    _notify_listeners({"__reset__": True})
+    return _CONFIG_INSTANCE

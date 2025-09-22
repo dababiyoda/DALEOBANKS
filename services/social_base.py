@@ -36,6 +36,11 @@ class BaseSocialClient:
         self.enabled = enabled
         self.live = live
 
+    def set_live(self, live: bool) -> None:
+        """Update the live flag for the adapter."""
+
+        self.live = live
+
     async def publish(
         self,
         *,

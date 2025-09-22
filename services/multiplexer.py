@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Iterable, Optional
 
-from config import get_config
+from config import get_config, subscribe_to_updates
 from services.linkedin_client import LinkedInClient
 from services.mastodon_client import MastodonClient
 from services.social_base import BaseSocialClient, SocialPostResult
@@ -20,9 +20,17 @@ class _XAdapter(BaseSocialClient):
 
     platform = "x"
 
-    def __init__(self, client: Optional[XClient], *, enabled: bool, live: bool) -> None:
+    def __init__(
+        self,
+        client: Optional[XClient],
+        *,
+        enabled: bool,
+        live: bool,
+        config=None,
+    ) -> None:
         super().__init__(enabled=enabled, live=live)
         self._client = client
+        self._config = config or get_config()
 
     async def publish(
         self,
@@ -39,6 +47,10 @@ class _XAdapter(BaseSocialClient):
             return await self._dry_run(kind=kind, metadata=metadata)
 
         metadata = metadata or {}
+        if not self._config.LIVE:
+            logger.info("LIVE mode disabled; skipping X publish")
+            return await self._dry_run(kind=kind, metadata=metadata)
+
         tweet_id = await self._client.create_tweet(
             content,
             quote_tweet_id=quote_to,
@@ -66,6 +78,7 @@ class SocialMultiplexer:
         self.config = config or get_config()
         self.mode = (self.config.PLATFORM_MODE or "broadcast").lower()
         self.weights = dict(self.config.PLATFORM_WEIGHTS)
+        self._unsubscribe = subscribe_to_updates(self._on_config_update)
 
         # Build adapters
         self.clients: Dict[str, BaseSocialClient] = {}
@@ -75,7 +88,12 @@ class SocialMultiplexer:
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning("Failed to instantiate XClient: %s", exc)
                 x_client = None
-        self.clients["x"] = _XAdapter(x_client, enabled=True, live=self.config.LIVE)
+        self.clients["x"] = _XAdapter(
+            x_client,
+            enabled=True,
+            live=self.config.LIVE,
+            config=self.config,
+        )
 
         linkedin_client = linkedin_client or LinkedInClient(
             enabled=self.config.ENABLE_LINKEDIN,
@@ -148,6 +166,23 @@ class SocialMultiplexer:
 
         # Unknown mode -> default broadcast
         return available
+
+    def _on_config_update(self, cfg, changes: Dict[str, Any]) -> None:
+        if "LIVE" in changes:
+            for client in self.clients.values():
+                client.set_live(cfg.LIVE)
+        if "PLATFORM_MODE" in changes:
+            self.mode = (cfg.PLATFORM_MODE or "broadcast").lower()
+        if "PLATFORM_WEIGHTS" in changes:
+            self.weights = dict(cfg.PLATFORM_WEIGHTS)
+
+    def __del__(self):  # pragma: no cover - defensive cleanup
+        unsubscribe = getattr(self, "_unsubscribe", None)
+        if callable(unsubscribe):
+            try:
+                unsubscribe()
+            except Exception:
+                pass
 
 
 __all__ = ["SocialMultiplexer"]

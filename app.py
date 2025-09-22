@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ValidationError
 
-from config import get_config
+from config import get_config, update_config
 from db.session import init_db, get_db_session
 from db.models import *
 from services.persona_store import PersonaStore
@@ -214,7 +214,7 @@ async def set_crisis(request: CrisisRequest):
 async def toggle_live_mode(request: ToggleRequest):
     """Toggle LIVE mode on/off"""
     try:
-        config.LIVE = request.live
+        update_config(LIVE=request.live)
         
         # Broadcast update to clients
         await broadcast_update({
@@ -235,7 +235,7 @@ async def set_goal_mode(request: ModeRequest):
         if request.mode not in ["FAME", "MONETIZE"]:
             raise HTTPException(status_code=400, detail="Invalid mode")
         
-        config.GOAL_MODE = request.mode
+        update_config(GOAL_MODE=request.mode)
         optimizer.update_goal_weights(request.mode)
         
         await broadcast_update({
