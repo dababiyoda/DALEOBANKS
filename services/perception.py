@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
@@ -46,6 +47,8 @@ class PerceptionService:
                 if isinstance(value, int) and value > 0:
                     self._limits[key] = value
         self._last_state: Dict[str, Any] = {}
+        self._last_payload: Dict[str, Any] = {}
+        self._last_counts: Dict[str, int] = {}
 
     def _load_influencers(self) -> List[Dict[str, object]]:
         if yaml is None or not self.influencers_path.exists():
@@ -188,6 +191,9 @@ class PerceptionService:
         session.add(event)
         session.commit()
 
+        self._last_payload = deepcopy(payload)
+        self._last_counts = dict(counts)
+
         updated_state = dict(self._last_state)
         for key, value in new_state.items():
             if value is None:
@@ -310,6 +316,14 @@ class PerceptionService:
     @property
     def last_state(self) -> Dict[str, Any]:
         return dict(self._last_state)
+
+    @property
+    def last_payload(self) -> Dict[str, Any]:
+        return deepcopy(self._last_payload)
+
+    @property
+    def last_counts(self) -> Dict[str, int]:
+        return dict(self._last_counts)
 
 
 __all__ = ["PerceptionService"]
