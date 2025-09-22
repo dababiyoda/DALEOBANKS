@@ -96,6 +96,96 @@ async def test_reply_limited_to_two_sentences(generator_instance: Generator, emp
     assert "two sentences" in result["error"].lower()
 
 
+@pytest.mark.asyncio
+async def test_high_intensity_reply_requires_whitelisted_domain(
+    generator_instance: Generator, empty_session: MagicMock
+) -> None:
+    spicy_reply = (
+        "Appreciate you flagging the gap in the rollout."
+        " Let's pilot the open data mechanism with weekly demos."
+        " Next step: share the metrics board, run weekly reviews, and cite https://example.com/benchmark"
+        " so leadership can align on accountability, transparency, and a shared timeline together."
+    )
+
+    result = await generator_instance._validate_and_refine(
+        spicy_reply,
+        "reply",
+        "general",
+        empty_session,
+        intensity=3,
+    )
+
+    assert "error" in result
+    assert "credible" in result["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_high_intensity_reply_with_whitelisted_domain_passes(
+    generator_instance: Generator, empty_session: MagicMock
+) -> None:
+    trusted_reply = (
+        "Appreciate you flagging the gap in the rollout."
+        " Let's pilot the open data mechanism with weekly demos."
+        " Next step: share the metrics board, run weekly reviews, and cite https://www.reuters.com/technology"
+        " so leadership can align on accountability, transparency, and a shared timeline together."
+    )
+
+    result = await generator_instance._validate_and_refine(
+        trusted_reply,
+        "reply",
+        "general",
+        empty_session,
+        intensity=3,
+    )
+
+    assert "error" not in result
+    assert result["content_type"] == "reply"
+
+
+@pytest.mark.asyncio
+async def test_high_intensity_quote_requires_whitelisted_domain(
+    generator_instance: Generator, empty_session: MagicMock
+) -> None:
+    spicy_quote = (
+        "Coordination gaps compound quickly."
+        " Try the open data pilot so partners see momentum."
+        " Next step: benchmark against https://example.com/benchmark and publish results weekly to keep everyone aligned."
+    )
+
+    result = await generator_instance._validate_and_refine(
+        spicy_quote,
+        "quote",
+        "governance",
+        empty_session,
+        intensity=3,
+    )
+
+    assert "error" in result
+    assert "credible" in result["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_high_intensity_quote_with_whitelisted_domain_passes(
+    generator_instance: Generator, empty_session: MagicMock
+) -> None:
+    trusted_quote = (
+        "Coordination gaps compound quickly."
+        " Try the open data pilot so partners see momentum."
+        " Next step: benchmark against https://www.reuters.com/technology and publish results weekly to keep everyone aligned."
+    )
+
+    result = await generator_instance._validate_and_refine(
+        trusted_quote,
+        "quote",
+        "governance",
+        empty_session,
+        intensity=3,
+    )
+
+    assert "error" not in result
+    assert result["content_type"] == "quote"
+
+
 def test_websearch_trusted_domain_detection() -> None:
     service = WebSearchService()
 

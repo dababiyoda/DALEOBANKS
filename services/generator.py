@@ -323,7 +323,7 @@ Requirements:
                 if len(sentences) != 3 or not self.critic.has_periodic_cadence(content):
                     return {"error": "Replies at this intensity must follow short/short/long cadence"}
                 if intensity >= 3 and not self.websearch.validate_links(content):
-                    return {"error": "High-intensity replies require a whitelist citation"}
+                    return {"error": "High-intensity replies must cite a credible source from the whitelist"}
             elif len(sentences) > 2:
                 return {"error": "Reply exceeds two sentences. Provide receipts or stay silent"}
 
@@ -334,9 +334,25 @@ Requirements:
                     "error": "Proposal must include at least one citation to a trusted source"
                 }
 
-        if intensity >= 3 and self.config.RAGEBAIT_GUARD:
-            if not (self.ethics_guard.has_receipt(content) and self.ethics_guard.has_constructive_step(content)):
-                return {"error": "High-intensity content requires a citation and constructive next step"}
+        if intensity >= 3:
+            has_trusted_citation = self.websearch.has_valid_citation(content)
+            has_constructive_step = True
+            if self.config.RAGEBAIT_GUARD:
+                has_constructive_step = self.ethics_guard.has_constructive_step(content)
+
+            if not has_trusted_citation or not has_constructive_step:
+                requirements = []
+                if not has_trusted_citation:
+                    requirements.append("cite a credible source from the whitelist")
+                if not has_constructive_step:
+                    requirements.append("include a constructive next step")
+
+                if len(requirements) == 1:
+                    requirement_text = requirements[0]
+                else:
+                    requirement_text = ", ".join(requirements[:-1]) + f", and {requirements[-1]}"
+
+                return {"error": f"High-intensity content must {requirement_text}."}
 
         return {
             "content": content,
