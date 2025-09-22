@@ -55,6 +55,9 @@ optimizer = Optimizer()
 perception_service = PerceptionService()
 crisis_service = CrisisService()
 
+# Track pagination cursors for perception ingest to avoid refetching.
+_perception_state: Dict[str, Any] = {}
+
 
 def _on_config_update(cfg, changes: Dict[str, Any]) -> None:
     if "LIVE" in changes:
@@ -384,10 +387,21 @@ async def search_and_engage_job():
 
 async def perception_job():
     """Run the perception ingest loop."""
+    global _perception_state
+
     try:
         with get_db_session() as session:
-            total = perception_service.ingest(session)
-        logger.info("perception_job_completed", extra={"total": total})
+            total = await perception_service.ingest(
+                session,
+                x_client=x_client if x_client and x_client.is_healthy() else None,
+                since_id=_perception_state.get("x_mentions_since_id"),
+                timeline_token=_perception_state.get("x_timeline_token"),
+            )
+            _perception_state = perception_service.last_state
+        logger.info(
+            "perception_job_completed",
+            extra={"total": total, "state": _perception_state},
+        )
         return total
     except Exception as e:
         logger.error(f"Perception job failed: {e}")

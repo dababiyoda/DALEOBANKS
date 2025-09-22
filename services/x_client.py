@@ -461,20 +461,23 @@ class XClient:
             self._record_failure(endpoint)
             return []
     
-    async def get_mentions(self, since_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_mentions(self, since_id: Optional[str] = None, max_results: int = 20) -> List[Dict[str, Any]]:
         """Get mentions of the authenticated user"""
         endpoint = "mentions"
-        
+
         if not self.client or not self._check_circuit_breaker(endpoint):
             return []
-        
+
         try:
-            kwargs = {"tweet_fields": ["public_metrics", "created_at", "author_id"]}
+            kwargs = {
+                "tweet_fields": ["public_metrics", "created_at", "author_id"],
+                "max_results": max(5, min(100, max_results)),
+            }
             if since_id:
                 kwargs["since_id"] = since_id
-            
+
             mentions = await asyncio.to_thread(self.client.get_mentions, **kwargs)
-            
+
             results = []
             if mentions.data:
                 for tweet in mentions.data:
@@ -488,11 +491,135 @@ class XClient:
             
             self._record_success(endpoint)
             return results
-            
+
         except Exception as e:
             logger.error(f"Failed to get mentions: {e}")
             self._record_failure(endpoint)
             return []
+
+    async def get_home_timeline(
+        self,
+        *,
+        pagination_token: Optional[str] = None,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Fetch the authenticated user's home timeline."""
+
+        endpoint = "home_timeline"
+
+        if not self.client or not self._check_circuit_breaker(endpoint):
+            return {"items": []}
+
+        try:
+            def _call():
+                kwargs = {
+                    "tweet_fields": ["public_metrics", "created_at", "author_id"],
+                    "max_results": max(5, min(100, limit)),
+                }
+                if pagination_token:
+                    kwargs["pagination_token"] = pagination_token
+                return self.client.get_home_timeline(**kwargs)
+
+            response = await asyncio.to_thread(_call)
+
+            items: List[Dict[str, Any]] = []
+            next_token: Optional[str] = None
+            rate_limit = None
+
+            if hasattr(response, "data") and response.data:
+                for tweet in response.data:
+                    items.append(
+                        {
+                            "id": getattr(tweet, "id", None),
+                            "text": getattr(tweet, "text", ""),
+                            "author_id": getattr(tweet, "author_id", None),
+                            "created_at": getattr(tweet, "created_at", None),
+                            "public_metrics": getattr(tweet, "public_metrics", {}),
+                        }
+                    )
+            elif isinstance(response, list):
+                for tweet in response[:limit]:
+                    if isinstance(tweet, dict):
+                        items.append(tweet)
+
+            meta = getattr(response, "meta", None)
+            if isinstance(meta, dict):
+                next_token = meta.get("next_token")
+                rate_limit = meta.get("result_count")
+            elif hasattr(response, "next_token"):
+                next_token = getattr(response, "next_token")
+
+            self._record_success(endpoint)
+            result: Dict[str, Any] = {"items": items}
+            if next_token:
+                result["next_token"] = next_token
+            if rate_limit is not None:
+                result["rate_limit"] = {"remaining": rate_limit}
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to get home timeline: {e}")
+            self._record_failure(endpoint)
+            return {"items": []}
+
+    async def get_trending_topics(
+        self,
+        *,
+        woeid: int = 1,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve trending topics for a given WOEID."""
+
+        endpoint = "trends"
+
+        if not self.client or not self._check_circuit_breaker(endpoint):
+            return []
+
+        try:
+            def _call():
+                if hasattr(self.client, "get_place_trends"):
+                    return self.client.get_place_trends(id=woeid)
+                if hasattr(self.client, "get_trending_topics"):
+                    return self.client.get_trending_topics(woeid=woeid)
+                return None
+
+            response = await asyncio.to_thread(_call)
+
+            topics: List[Dict[str, Any]] = []
+            if isinstance(response, list) and response:
+                # v1.1 style response: list with first element containing "trends"
+                first = response[0]
+                if isinstance(first, dict):
+                    trends = first.get("trends", [])
+                    if isinstance(trends, list):
+                        topics = [self._normalize_trend(item) for item in trends[:limit]]
+            elif isinstance(response, dict):
+                raw = response.get("trends") or response.get("data") or []
+                if isinstance(raw, list):
+                    topics = [self._normalize_trend(item) for item in raw[:limit]]
+
+            self._record_success(endpoint)
+            return [topic for topic in topics if topic]
+
+        except Exception as e:
+            logger.error(f"Failed to get trending topics: {e}")
+            self._record_failure(endpoint)
+            return []
+
+    def _normalize_trend(self, item: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(item, dict):
+            name = item.get("name") or item.get("topic")
+            if not name:
+                return None
+            return {
+                "name": name,
+                "tweet_volume": item.get("tweet_volume"),
+                "url": item.get("url"),
+                "promoted_content": item.get("promoted_content"),
+            }
+        if isinstance(item, str):
+            return {"name": item}
+        return None
     
     async def metrics_for(self, tweet_ids: List[str]) -> Dict[str, Dict[str, int]]:
         """Get metrics for specific tweets"""
