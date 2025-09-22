@@ -26,6 +26,7 @@ class Tweet:
     topic: Optional[str] = None
     hour_bin: Optional[int] = None
     cta_variant: Optional[str] = None
+    intensity: Optional[int] = None
     ref_tweet_id: Optional[str] = None
     created_at: datetime = field(default_factory=_utcnow)
     likes: int = 0
@@ -96,6 +97,7 @@ class ArmsLog:
     topic: Optional[str] = None
     hour_bin: Optional[int] = None
     cta_variant: Optional[str] = None
+    intensity: Optional[int] = None
     sampled_prob: float = 0.0
     reward_j: Optional[float] = None
     created_at: datetime = field(default_factory=_utcnow)

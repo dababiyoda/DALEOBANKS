@@ -9,6 +9,7 @@ import json
 from db.models import ArmsLog, Tweet
 from services.logging_utils import get_logger
 from db.session import get_db_session
+from config import get_config
 
 LAST_EXPERIMENTS_INSTANCE: Optional["ExperimentsService"] = None
 
@@ -18,12 +19,21 @@ class ExperimentsService:
     """Manages multi-armed bandit experiments"""
     
     def __init__(self):
+        self.config = get_config()
+
         # Define experiment arms
+        intensity_levels = (
+            list(range(self.config.MIN_INTENSITY_LEVEL, self.config.MAX_INTENSITY_LEVEL + 1))
+            if self.config.MIN_INTENSITY_LEVEL <= self.config.MAX_INTENSITY_LEVEL
+            else [self.config.MIN_INTENSITY_LEVEL]
+        )
+
         self.arms = {
             "post_type": ["proposal", "thread", "question", "insight"],
             "topic": ["technology", "economics", "coordination", "energy", "policy", "automation"],
             "hour_bin": list(range(24)),  # 0-23 hour bins
-            "cta_variant": ["learn_more", "join_pilot", "provide_feedback", "share_experience", "book_call"]
+            "cta_variant": ["learn_more", "join_pilot", "provide_feedback", "share_experience", "book_call"],
+            "intensity": intensity_levels,
         }
 
         # Arm combinations cache
@@ -40,7 +50,8 @@ class ExperimentsService:
                 for topic in self.arms["topic"]:
                     for hour_bin in self.arms["hour_bin"]:
                         for cta_variant in self.arms["cta_variant"]:
-                            combinations.append((post_type, topic, hour_bin, cta_variant))
+                            for intensity in self.arms["intensity"]:
+                                combinations.append((post_type, topic, hour_bin, cta_variant, intensity))
             self._arm_combinations = combinations
         
         return self._arm_combinations
@@ -53,6 +64,7 @@ class ExperimentsService:
         topic: str,
         hour_bin: int,
         cta_variant: str,
+        intensity: Optional[int],
         sampled_prob: float
     ):
         """Log an arm selection"""
@@ -63,6 +75,7 @@ class ExperimentsService:
                 topic=topic,
                 hour_bin=hour_bin,
                 cta_variant=cta_variant,
+                intensity=intensity,
                 sampled_prob=sampled_prob,
                 reward_j=None  # Will be updated later when metrics come in
             )
@@ -131,32 +144,34 @@ class ExperimentsService:
             "post_type": {},
             "topic": {},
             "hour_bin": {},
-            "cta_variant": {}
+            "cta_variant": {},
+            "intensity": {},
         }
-        
+
         for log in logs:
             reward = log.reward_j
-            
+
             # Post type performance
-            if log.post_type not in performance["post_type"]:
-                performance["post_type"][log.post_type] = []
-            performance["post_type"][log.post_type].append(reward)
-            
+            if log.post_type:
+                performance["post_type"].setdefault(log.post_type, []).append(reward)
+
             # Topic performance
-            if log.topic not in performance["topic"]:
-                performance["topic"][log.topic] = []
-            performance["topic"][log.topic].append(reward)
-            
+            if log.topic:
+                performance["topic"].setdefault(log.topic, []).append(reward)
+
             # Hour bin performance
-            hour_key = str(log.hour_bin)
-            if hour_key not in performance["hour_bin"]:
-                performance["hour_bin"][hour_key] = []
-            performance["hour_bin"][hour_key].append(reward)
-            
+            if log.hour_bin is not None:
+                hour_key = int(log.hour_bin)
+                performance["hour_bin"].setdefault(hour_key, []).append(reward)
+
             # CTA variant performance
-            if log.cta_variant not in performance["cta_variant"]:
-                performance["cta_variant"][log.cta_variant] = []
-            performance["cta_variant"][log.cta_variant].append(reward)
+            if log.cta_variant:
+                performance["cta_variant"].setdefault(log.cta_variant, []).append(reward)
+
+            # Intensity performance
+            if log.intensity is not None:
+                intensity_key = int(log.intensity)
+                performance["intensity"].setdefault(intensity_key, []).append(reward)
         
         # Calculate statistics
         stats = {}

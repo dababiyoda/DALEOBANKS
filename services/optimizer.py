@@ -71,6 +71,7 @@ class Optimizer:
                     "topic": random.choice(arms["topic"]),
                     "hour_bin": random.choice(arms["hour_bin"]),
                     "cta_variant": random.choice(arms["cta_variant"]),
+                    "intensity": random.choice(arms["intensity"]),
                     "selection_method": "exploration",
                     "sampled_prob": random.random()
                 }
@@ -92,6 +93,7 @@ class Optimizer:
                 "topic": random.choice(arms["topic"]),
                 "hour_bin": random.choice(arms["hour_bin"]),
                 "cta_variant": random.choice(arms["cta_variant"]),
+                "intensity": random.choice(arms["intensity"]),
                 "selection_method": "fallback",
                 "sampled_prob": 0.5
             }
@@ -101,7 +103,7 @@ class Optimizer:
         selected = {}
         total_prob = 1.0
         
-        for dimension in ["post_type", "topic", "hour_bin", "cta_variant"]:
+        for dimension in ["post_type", "topic", "hour_bin", "cta_variant", "intensity"]:
             if dimension in performance and performance[dimension]:
                 arm_probs = {}
                 
@@ -133,16 +135,22 @@ class Optimizer:
                 # Select arm with highest sampled probability
                 if arm_probs:
                     best_arm = max(arm_probs.items(), key=lambda x: x[1])
-                    selected[dimension] = best_arm[0]
+                    selected[dimension] = self._coerce_arm_value(dimension, best_arm[0])
                     total_prob *= best_arm[1]
                 else:
                     # Fallback to random
-                    selected[dimension] = random.choice(list(performance[dimension].keys()))
+                    selected[dimension] = self._coerce_arm_value(
+                        dimension,
+                        random.choice(list(performance[dimension].keys()))
+                    )
                     total_prob *= 0.5
             else:
                 # No data for this dimension, choose randomly
                 arms = self.experiments.arms
-                selected[dimension] = random.choice(arms[dimension])
+                selected[dimension] = self._coerce_arm_value(
+                    dimension,
+                    random.choice(arms[dimension])
+                )
                 total_prob *= 0.5
         
         selected["sampled_prob"] = total_prob
@@ -152,13 +160,22 @@ class Optimizer:
         """Convert J-score performance to Beta distribution parameters"""
         # Normalize J-score to 0-1 range
         normalized_reward = self._normalize_j_score(mean_reward)
-        
+
         # Convert to successes/failures
         # Higher J-score = more successes
         successes = int(normalized_reward * count)
         failures = count - successes
-        
+
         return max(successes, 0), max(failures, 0)
+
+    def _coerce_arm_value(self, dimension: str, value: Any) -> Any:
+        """Ensure numeric arm dimensions are returned as integers."""
+        if dimension in {"hour_bin", "intensity"}:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return value
+        return value
     
     def _normalize_j_score(self, j_score: float) -> float:
         """Normalize J-score to 0-1 range using rolling statistics"""
@@ -248,10 +265,10 @@ class Optimizer:
         """Simulate optimization performance for testing"""
         # Simulate arm rewards
         true_rewards = {
-            ("proposal", "technology", 14, "learn_more"): 0.8,
-            ("proposal", "coordination", 16, "join_pilot"): 0.75,
-            ("thread", "economics", 10, "provide_feedback"): 0.6,
-            ("question", "energy", 18, "share_experience"): 0.7
+            ("proposal", "technology", 14, "learn_more", 3): 0.8,
+            ("proposal", "coordination", 16, "join_pilot", 2): 0.75,
+            ("thread", "economics", 10, "provide_feedback", 2): 0.6,
+            ("question", "energy", 18, "share_experience", 1): 0.7,
         }
         
         # Run simulation
@@ -266,7 +283,8 @@ class Optimizer:
                 random.choice(arms["post_type"]),
                 random.choice(arms["topic"]),
                 random.choice(arms["hour_bin"]),
-                random.choice(arms["cta_variant"])
+                random.choice(arms["cta_variant"]),
+                random.choice(arms["intensity"]),
             )
             
             # Get reward (with noise)

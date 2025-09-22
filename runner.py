@@ -222,16 +222,30 @@ async def post_proposal_job():
             # Store in database
             with get_db_session() as session:
                 from db.models import Tweet
+
                 tweet = Tweet(
                     id=x_result.post_id,
                     text=result["content"],
                     kind="proposal",
                     topic=topic,
                     hour_bin=action.get("hour_bin"),
-                    cta_variant=action.get("cta_variant")
+                    cta_variant=action.get("cta_variant"),
+                    intensity=action.get("intensity"),
                 )
                 session.add(tweet)
                 session.commit()
+
+                arm_metadata = action.get("arm_metadata") or {}
+                optimizer.experiments.log_arm_selection(
+                    session,
+                    tweet_id=x_result.post_id,
+                    post_type=arm_metadata.get("post_type", "proposal"),
+                    topic=topic,
+                    hour_bin=action.get("hour_bin", datetime.now().hour),
+                    cta_variant=action.get("cta_variant", "learn_more"),
+                    intensity=action.get("intensity"),
+                    sampled_prob=arm_metadata.get("sampled_prob", 0.5),
+                )
 
             # Log action
             await _log_action("proposal_posted", {
@@ -306,7 +320,8 @@ async def reply_mentions_job():
                             id=reply_result.post_id,
                             text=result["content"],
                             kind="reply",
-                            ref_tweet_id=mention["id"]
+                            ref_tweet_id=mention["id"],
+                            intensity=intensity,
                         )
                         session.add(tweet)
                         session.commit()
@@ -431,6 +446,7 @@ async def analytics_pull_job():
         result: Dict[str, Any] | None = None
         with get_db_session() as session:
             result = await analytics_service.pull_and_update_metrics(session, x_client)
+            optimizer.experiments.update_arm_rewards(session)
             selector.record_outcome(result)
             await _log_action("analytics_updated", result)
             logger.info(f"Analytics updated: {result}")

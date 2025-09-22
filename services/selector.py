@@ -11,6 +11,7 @@ from services.optimizer import Optimizer
 from services.logging_utils import get_logger
 from services.bandit import ThompsonBandit
 from config import get_config
+from db.session import get_db_session
 
 try:  # pragma: no cover
     import yaml  # type: ignore
@@ -236,25 +237,28 @@ class Selector:
         params = {}
         
         if action_type == "POST_PROPOSAL":
-            # Select topic based on recent patterns or random
-            topics = ["technology", "economics", "policy", "coordination", "energy", "automation"]
-            params["topic"] = random.choice(topics)
-            
-            # Select CTA variant
-            cta_variants = ["learn_more", "join_pilot", "provide_feedback", "share_experience"]
-            params["cta_variant"] = random.choice(cta_variants)
-            
-            # Hour bin for analysis
-            params["hour_bin"] = datetime.now().hour
+            with get_db_session() as session:
+                sampled_arms = self.optimizer.sample_arm_combination(session)
 
-            # Intensity arm
-            if self.config.ADAPTIVE_INTENSITY:
-                params["intensity"] = random.randint(
-                    self.config.MIN_INTENSITY_LEVEL,
-                    self.config.MAX_INTENSITY_LEVEL
-                )
-            else:
-                params["intensity"] = self.config.MIN_INTENSITY_LEVEL
+            # Capture sampled metadata for downstream logging
+            params["arm_metadata"] = sampled_arms
+
+            # Topic, CTA, hour bin come from optimizer sample with fallbacks
+            topics = ["technology", "economics", "policy", "coordination", "energy", "automation"]
+            params["topic"] = sampled_arms.get("topic") or random.choice(topics)
+
+            cta_variants = ["learn_more", "join_pilot", "provide_feedback", "share_experience"]
+            params["cta_variant"] = sampled_arms.get("cta_variant") or random.choice(cta_variants)
+
+            params["hour_bin"] = sampled_arms.get("hour_bin")
+            if params["hour_bin"] is None:
+                params["hour_bin"] = datetime.now().hour
+
+            sampled_intensity = sampled_arms.get("intensity")
+            if sampled_intensity is None:
+                sampled_intensity = self.config.MIN_INTENSITY_LEVEL
+            sampled_intensity = max(self.config.MIN_INTENSITY_LEVEL, min(self.config.MAX_INTENSITY_LEVEL, sampled_intensity))
+            params["intensity"] = sampled_intensity
 
         elif action_type == "REPLY_MENTIONS":
             params["max_mentions"] = 5
