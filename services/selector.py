@@ -1,6 +1,4 @@
-"""
-Action selection based on persona, drives, optimizer, and constraints
-"""
+"""Action selection based on persona, drives, optimizer, and constraints."""
 
 import random
 from typing import Dict, Any, Optional
@@ -10,8 +8,11 @@ from services.persona_store import PersonaStore
 from services.optimizer import Optimizer
 from services.logging_utils import get_logger
 from services.bandit import ThompsonBandit
+from services.analytics import AnalyticsService
+from services.crisis import CrisisService
 from config import get_config
 from db.session import get_db_session
+from db.models import Tweet
 
 try:  # pragma: no cover
     import yaml  # type: ignore
@@ -22,15 +23,29 @@ logger = get_logger(__name__)
 
 class Selector:
     """Intelligent action selection service"""
-    
-    def __init__(self, persona_store: PersonaStore):
+
+    SUCCESS_J_THRESHOLD = 0.6
+    REGRESSION_J_THRESHOLD = 0.25
+
+    def __init__(
+        self,
+        persona_store: PersonaStore,
+        *,
+        analytics_service: Optional[AnalyticsService] = None,
+        crisis_service: Optional[CrisisService] = None,
+    ):
         self.persona_store = persona_store
         self.optimizer = Optimizer()
         self.config = get_config()
         self.drives = self._load_drives()
         self.bandit = ThompsonBandit(["POST_PROPOSAL", "REPLY_MENTIONS", "SEARCH_ENGAGE", "REST"])
         self._last_arm: Optional[str] = None
-        
+        self.analytics = analytics_service or AnalyticsService()
+        self.crisis = crisis_service or CrisisService()
+        self._last_intensity_by_action: Dict[str, int] = {}
+        self._last_successful_intensity: Dict[str, int] = {}
+        self._latest_signal_snapshot: Dict[str, Any] = {}
+
         # Action types with their base probabilities
         self.action_types = {
             "POST_PROPOSAL": 0.4,
@@ -105,7 +120,9 @@ class Selector:
             candidates = list(action_probs.keys())
             selected_action = self.bandit.select(candidates)
 
-            action_params = await self._get_action_parameters(selected_action)
+            signal_snapshot = self._gather_signal_snapshot()
+            self._latest_signal_snapshot = signal_snapshot
+            action_params = await self._get_action_parameters(selected_action, signal_snapshot)
 
             self.last_actions[selected_action] = datetime.now(UTC)
             self._last_arm = selected_action
@@ -141,7 +158,34 @@ class Selector:
             self.bandit.record_outcome(arm_to_update, reward)
         except Exception as exc:
             logger.error(f"Failed to record bandit outcome: {exc}")
-    
+
+        intensity_used = metrics.get("intensity")
+        if intensity_used is None:
+            intensity_used = self._last_intensity_by_action.get(arm_to_update)
+
+        if intensity_used is None:
+            return
+
+        try:
+            intensity_value = int(intensity_used)
+        except (TypeError, ValueError):
+            return
+
+        self._last_intensity_by_action[arm_to_update] = intensity_value
+
+        j_score = metrics.get("j_score")
+        if j_score is None:
+            return
+
+        if j_score >= self.SUCCESS_J_THRESHOLD:
+            self._last_successful_intensity[arm_to_update] = intensity_value
+        elif j_score <= self.REGRESSION_J_THRESHOLD:
+            stored = self._last_successful_intensity.get(arm_to_update)
+            if stored is not None and stored > intensity_value:
+                self._last_successful_intensity[arm_to_update] = max(
+                    self.config.MIN_INTENSITY_LEVEL, intensity_value
+                )
+
     def _is_quiet_hours(self) -> bool:
         """Check if current time is in quiet hours"""
         if not self.config.QUIET_HOURS_ET:
@@ -232,10 +276,14 @@ class Selector:
         
         return random.choices(actions, weights=weights)[0]
     
-    async def _get_action_parameters(self, action_type: str) -> Dict[str, Any]:
+    async def _get_action_parameters(
+        self,
+        action_type: str,
+        signal_snapshot: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Get specific parameters for the selected action"""
         params = {}
-        
+
         if action_type == "POST_PROPOSAL":
             with get_db_session() as session:
                 sampled_arms = self.optimizer.sample_arm_combination(session)
@@ -257,19 +305,23 @@ class Selector:
             sampled_intensity = sampled_arms.get("intensity")
             if sampled_intensity is None:
                 sampled_intensity = self.config.MIN_INTENSITY_LEVEL
-            sampled_intensity = max(self.config.MIN_INTENSITY_LEVEL, min(self.config.MAX_INTENSITY_LEVEL, sampled_intensity))
-            params["intensity"] = sampled_intensity
+            sampled_intensity = max(
+                self.config.MIN_INTENSITY_LEVEL,
+                min(self.config.MAX_INTENSITY_LEVEL, int(sampled_intensity)),
+            )
+            params["intensity"] = self._select_intensity(
+                "POST_PROPOSAL",
+                baseline=sampled_intensity,
+                signal_snapshot=signal_snapshot,
+            )
 
         elif action_type == "REPLY_MENTIONS":
             params["max_mentions"] = 5
             params["priority"] = "high_authority_first"
-            if self.config.ADAPTIVE_INTENSITY:
-                params["intensity"] = random.randint(
-                    self.config.MIN_INTENSITY_LEVEL,
-                    self.config.MAX_INTENSITY_LEVEL
-                )
-            else:
-                params["intensity"] = self.config.MIN_INTENSITY_LEVEL
+            params["intensity"] = self._select_intensity(
+                "REPLY_MENTIONS",
+                signal_snapshot=signal_snapshot,
+            )
 
         elif action_type == "SEARCH_ENGAGE":
             # Select search terms based on persona interests
@@ -277,17 +329,14 @@ class Selector:
             interests = ["mechanisms", "pilots", "coordination", "energy", "policy"]
             params["search_terms"] = random.sample(interests, k=2)
             params["max_results"] = 10
-            if self.config.ADAPTIVE_INTENSITY:
-                params["intensity"] = random.randint(
-                    self.config.MIN_INTENSITY_LEVEL,
-                    self.config.MAX_INTENSITY_LEVEL
-                )
-            else:
-                params["intensity"] = self.config.MIN_INTENSITY_LEVEL
-            
+            params["intensity"] = self._select_intensity(
+                "SEARCH_ENGAGE",
+                signal_snapshot=signal_snapshot,
+            )
+
         elif action_type == "REST":
             params["duration_minutes"] = random.randint(5, 15)
-        
+
         return params
     
     def get_next_scheduled_actions(self) -> Dict[str, datetime]:
@@ -316,3 +365,139 @@ class Selector:
             "available_actions": self._get_available_actions(),
             "in_quiet_hours": self._is_quiet_hours()
         }
+
+    def _gather_signal_snapshot(self) -> Dict[str, Any]:
+        """Collect recent analytics and crisis metrics for intensity policy."""
+
+        snapshot: Dict[str, Any] = {
+            "avg_j_score": 0.0,
+            "penalty": 0.0,
+            "authority": 0.0,
+            "crisis_signal": 0.0,
+            "crisis_active": False,
+            "samples": 0,
+        }
+
+        try:
+            with get_db_session() as session:
+                recent_tweets = (
+                    session.query(Tweet)
+                    .order_by(lambda tweet: tweet.created_at, descending=True)
+                    .limit(5)
+                    .all()
+                )
+                j_scores = [
+                    float(tweet.j_score)
+                    for tweet in recent_tweets
+                    if tweet.j_score is not None
+                ]
+                if j_scores:
+                    snapshot["avg_j_score"] = sum(j_scores) / len(j_scores)
+                    snapshot["samples"] = len(j_scores)
+
+                snapshot["penalty"] = float(
+                    self.analytics.calculate_penalty_score(session, days=1)
+                )
+                snapshot["authority"] = float(
+                    self.analytics.calculate_authority_signals(session, days=1)
+                )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error("Failed to gather analytics signals: %s", exc)
+
+        try:
+            snapshot["crisis_signal"] = float(self.crisis.last_signal)
+        except Exception:  # pragma: no cover - crisis service guarantees float but guard just in case
+            snapshot["crisis_signal"] = 0.0
+
+        try:
+            snapshot["crisis_active"] = bool(self.crisis.is_paused())
+        except Exception:  # pragma: no cover
+            snapshot["crisis_active"] = False
+
+        snapshot["crisis_threshold"] = getattr(self.crisis, "signal_threshold", 0.0)
+        snapshot["crisis_resume"] = getattr(self.crisis, "resume_threshold", 0.0)
+
+        return snapshot
+
+    def _select_intensity(
+        self,
+        action_type: str,
+        *,
+        baseline: Optional[int] = None,
+        signal_snapshot: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """Apply policy rules to select an intensity level."""
+
+        min_level = self.config.MIN_INTENSITY_LEVEL
+        max_level = self.config.MAX_INTENSITY_LEVEL
+
+        if baseline is None:
+            baseline = self._last_successful_intensity.get(
+                action_type,
+                self._last_intensity_by_action.get(action_type, min_level),
+            )
+
+        try:
+            baseline_value = int(baseline)
+        except (TypeError, ValueError):
+            baseline_value = min_level
+
+        baseline_value = max(min_level, min(max_level, baseline_value))
+
+        if not self.config.ADAPTIVE_INTENSITY:
+            self._last_intensity_by_action[action_type] = baseline_value
+            return baseline_value
+
+        snapshot = signal_snapshot or self._gather_signal_snapshot()
+        self._latest_signal_snapshot = snapshot
+
+        penalty = snapshot.get("penalty", 0.0) or 0.0
+        avg_j_score = snapshot.get("avg_j_score", 0.0) or 0.0
+        authority = snapshot.get("authority", 0.0) or 0.0
+        crisis_signal = snapshot.get("crisis_signal", 0.0) or 0.0
+        crisis_active = bool(snapshot.get("crisis_active", False))
+        crisis_threshold = snapshot.get("crisis_threshold", 0.0) or 0.0
+
+        adjustments = 0
+
+        if penalty >= 8:
+            adjustments -= 2
+        elif penalty >= 4:
+            adjustments -= 1
+
+        if avg_j_score >= 0.65:
+            adjustments += 1
+        elif avg_j_score <= 0.35 and not crisis_active:
+            adjustments -= 1
+
+        if authority >= 60:
+            adjustments += 1
+
+        if crisis_active:
+            adjustments -= 2
+        elif crisis_signal >= crisis_threshold and crisis_threshold > 0:
+            adjustments -= 1
+
+        if crisis_active:
+            adjustments = min(adjustments, -2)
+        elif crisis_signal >= crisis_threshold and crisis_threshold > 0:
+            adjustments = min(adjustments, -1)
+
+        target = baseline_value + adjustments
+
+        previous = self._last_intensity_by_action.get(action_type, baseline_value)
+        try:
+            previous_value = int(previous)
+        except (TypeError, ValueError):
+            previous_value = baseline_value
+
+        max_step = 2 if crisis_active else 1
+
+        if target > previous_value + max_step:
+            target = previous_value + max_step
+        elif target < previous_value - max_step:
+            target = previous_value - max_step
+
+        target = max(min_level, min(max_level, target))
+        self._last_intensity_by_action[action_type] = target
+        return target
