@@ -248,11 +248,18 @@ async def post_proposal_job():
                 )
 
             # Log action
-            await _log_action("proposal_posted", {
+            meta = {
                 "tweet_id": x_result.post_id,
                 "topic": topic,
-                "character_count": len(result["content"])
-            })
+                "character_count": len(result["content"]),
+            }
+            signals = analytics_service.derive_structured_outcome_from_text(
+                content=result["content"],
+                context={"topic": topic, "channel": "x"},
+            )
+            _merge_signal_meta(meta, signals)
+
+            await _log_action("proposal_posted", meta)
 
             logger.info(f"Posted proposal: {x_result.post_id}")
         else:
@@ -326,10 +333,22 @@ async def reply_mentions_job():
                         session.add(tweet)
                         session.commit()
 
-                    await _log_action("mention_replied", {
+                    meta = {
                         "reply_id": reply_result.post_id,
-                        "original_id": mention["id"]
-                    })
+                        "original_id": mention["id"],
+                    }
+                    reply_signals = analytics_service.derive_structured_outcome_from_text(
+                        content=result["content"],
+                        context={"topic": mention.get("username", "reply"), "channel": "x"},
+                    )
+                    mention_feedback = analytics_service.derive_structured_outcome_from_text(
+                        content=mention.get("text", ""),
+                        context={"topic": mention.get("id"), "channel": "x_mentions"},
+                    )
+                    _merge_signal_meta(meta, reply_signals)
+                    _merge_signal_meta(meta, mention_feedback)
+
+                    await _log_action("mention_replied", meta)
 
                     logger.info(f"Replied to mention: {reply_result.post_id}")
                 else:
@@ -369,11 +388,23 @@ async def search_and_engage_job():
                     if relevance >= 4:
                         if config.ENABLE_LIKES and random.random() < 0.8:
                             await x_client.like(tweet["id"])
-                            await _log_action("tweet_liked", {"tweet_id": tweet["id"], "term": term})
+                            like_meta = {"tweet_id": tweet["id"], "term": term}
+                            like_signals = analytics_service.derive_structured_outcome_from_text(
+                                content=tweet.get("text", ""),
+                                context={"topic": term, "channel": "x_search"},
+                            )
+                            _merge_signal_meta(like_meta, like_signals)
+                            await _log_action("tweet_liked", like_meta)
 
                         if config.ENABLE_REPOSTS and random.random() < 0.3:
                             await x_client.repost(tweet["id"])
-                            await _log_action("tweet_retweeted", {"tweet_id": tweet["id"], "term": term})
+                            repost_meta = {"tweet_id": tweet["id"], "term": term}
+                            repost_signals = analytics_service.derive_structured_outcome_from_text(
+                                content=tweet.get("text", ""),
+                                context={"topic": term, "channel": "x_search"},
+                            )
+                            _merge_signal_meta(repost_meta, repost_signals)
+                            await _log_action("tweet_retweeted", repost_meta)
 
                         if config.ENABLE_QUOTES and random.random() < 0.2:
                             context = {"original_tweet": tweet["text"], "topic": term}
@@ -388,10 +419,22 @@ async def search_and_engage_job():
                                 )
                                 quote_result = publish_result.get("x")
                                 if quote_result and not quote_result.dry_run:
-                                    await _log_action(
-                                        "quote_tweeted",
-                                        {"quote_id": quote_result.post_id, "original_id": tweet["id"]},
+                                    meta = {
+                                        "quote_id": quote_result.post_id,
+                                        "original_id": tweet["id"],
+                                    }
+                                    quote_signals = analytics_service.derive_structured_outcome_from_text(
+                                        content=result["content"],
+                                        context={"topic": term, "channel": "x"},
                                     )
+                                    source_signals = analytics_service.derive_structured_outcome_from_text(
+                                        content=tweet.get("text", ""),
+                                        context={"topic": term, "channel": "x_search"},
+                                    )
+                                    _merge_signal_meta(meta, quote_signals)
+                                    _merge_signal_meta(meta, source_signals)
+
+                                    await _log_action("quote_tweeted", meta)
 
             except Exception as e:
                 logger.error(f"Search engagement failed for term '{term}': {e}")
@@ -578,10 +621,27 @@ def _calculate_relevance(text: str, term: str) -> int:
     
     return min(score, 10)
 
+def _merge_signal_meta(base: Dict[str, Any], signals: Dict[str, Any]) -> None:
+    """Merge structured signal metadata into the base dictionary."""
+
+    if not signals:
+        return
+
+    for key, value in signals.items():
+        if isinstance(value, list):
+            if key in base and isinstance(base[key], list):
+                base[key].extend(value)
+            else:
+                base[key] = list(value)
+        else:
+            base[key] = value
+
+
 async def _log_action(kind: str, meta: Dict[str, Any]):
     """Log an action to the database"""
     try:
         with get_db_session() as session:
+            analytics_service.record_structured_outcome(session, kind, meta)
             action = Action(kind=kind, meta_json=meta)
             session.add(action)
             session.commit()

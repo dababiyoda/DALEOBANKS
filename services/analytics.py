@@ -1,12 +1,21 @@
-"""
-Analytics service for Fame, Authority, Revenue calculation and follower tracking
-"""
+"""Analytics service for mission-aligned impact measurement."""
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, UTC
 import statistics
+import re
 
-from db.models import Tweet, FollowersSnapshot, Redirect, Action
+from db.models import (
+    Tweet,
+    FollowersSnapshot,
+    Redirect,
+    Action,
+    PilotAcceptance,
+    ArtifactFork,
+    CoalitionPartner,
+    Citation,
+    HelpfulnessFeedback,
+)
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +39,23 @@ class AnalyticsService:
             "rts": 2.0,
             "replies": 1.5,
             "quotes": 1.5
+        }
+        default_signal_weights = {
+            "pilots": 0.3,
+            "artifacts": 0.2,
+            "coalitions": 0.2,
+            "citations": 0.15,
+            "helpfulness": 0.15,
+        }
+        impact_signal_weights = self.config.GOAL_WEIGHTS.get("IMPACT_SIGNALS", {})
+        merged_weights = {**default_signal_weights, **impact_signal_weights}
+        self.signal_weights = self._normalize_weight_map(merged_weights)
+        self.signal_targets = {
+            "pilots": 3,
+            "artifacts": 5,
+            "coalitions": 4,
+            "citations": 6,
+            "helpfulness": 5,
         }
     
     async def pull_and_update_metrics(self, session: Any, x_client) -> Dict[str, Any]:
@@ -60,6 +86,8 @@ class AnalyticsService:
             
             updated_count = 0
             penalty_recent = self.calculate_penalty_score(session, days=1)
+            impact_snapshot = self.calculate_impact_score(session, days=7)
+            mission_alignment = impact_snapshot["impact_score"] / 100 if impact_snapshot else 0.0
             for tweet in tweets_to_update:
                 if tweet.id in metrics:
                     tweet_metrics = metrics[tweet.id]
@@ -72,16 +100,20 @@ class AnalyticsService:
                     
                     # Calculate authority-weighted engagement
                     tweet.authority_score = self._calculate_authority_score(tweet_metrics)
-                    
-                    # Calculate J-score
-                    tweet.j_score = self._calculate_j_score(tweet, penalty=penalty_recent)
+
+                    # Calculate J-score with mission alignment from structured signals
+                    tweet.j_score = self._calculate_j_score(
+                        tweet,
+                        penalty=penalty_recent,
+                        mission_alignment=mission_alignment,
+                    )
                     
                     updated_count += 1
             
             session.commit()
             logger.info(f"Updated metrics for {updated_count} tweets")
 
-            weekly_impact = self.calculate_impact_score(session, days=7)["impact_score"]
+            weekly_impact = impact_snapshot["impact_score"]
             revenue_today = self.calculate_revenue_per_day(session)
             authority_week = self.calculate_authority_signals(session, days=7)
             fame_week = self.calculate_fame_score(session, days=7)["fame_score"]
@@ -205,56 +237,381 @@ class AnalyticsService:
         )
 
         penalty_score = rate_limit_actions * 2 + penalty_actions * 5
-        
+
         return float(penalty_score)
 
-    def calculate_impact_score(self, session: Any, days: int = 1) -> Dict[str, float]:
-        """Calculate an overall impact score.
+    def record_pilot_acceptance(
+        self,
+        session: Any,
+        *,
+        pilot_name: str,
+        accepted_by: Optional[str] = None,
+        scope: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        accepted_at: Optional[datetime] = None,
+    ) -> None:
+        """Persist a pilot acceptance signal."""
 
-        The impact metric is a composite of fame, revenue and authority. It
-        reflects both engagement and economic outcomes. Each sub‑metric is
-        normalized to keep the score within a reasonable range. The
-        weights used to combine the metrics can be adjusted via the
-        configuration.
+        record = PilotAcceptance(
+            pilot_name=pilot_name,
+            accepted_by=accepted_by,
+            scope=scope,
+            accepted_at=accepted_at or datetime.now(UTC),
+            metadata=metadata or {},
+        )
+        session.add(record)
 
-        Args:
-            session: A database session for querying persistent data.
-            days: The number of days over which to calculate the metric.
+    def record_artifact_fork(
+        self,
+        session: Any,
+        *,
+        artifact_name: str,
+        source_url: Optional[str] = None,
+        platform: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        forked_at: Optional[datetime] = None,
+    ) -> None:
+        """Persist an artifact fork signal."""
 
-        Returns:
-            A dictionary with the impact score and its components.
-        """
-        fame = self.calculate_fame_score(session, days)
-        revenue = self.calculate_revenue_per_day(session)
-        authority = self.calculate_authority_signals(session, days)
+        record = ArtifactFork(
+            artifact_name=artifact_name,
+            source_url=source_url,
+            platform=platform,
+            forked_at=forked_at or datetime.now(UTC),
+            metadata=metadata or {},
+        )
+        session.add(record)
 
-        # Normalize revenue to align roughly with fame scale. This divisor
-        # can be tuned based on typical revenue ranges (e.g. dollars per
-        # day). We choose 10 so that $100/day yields a comparable score.
-        revenue_norm = revenue / 10.0
+    def record_coalition_partner(
+        self,
+        session: Any,
+        *,
+        partner_name: str,
+        partner_type: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        joined_at: Optional[datetime] = None,
+    ) -> None:
+        """Persist a coalition partner signal."""
 
-        # Normalize authority score to 0–1 range by dividing by 10 (max 100)
-        authority_norm = authority / 10.0
+        record = CoalitionPartner(
+            partner_name=partner_name,
+            partner_type=partner_type,
+            joined_at=joined_at or datetime.now(UTC),
+            metadata=metadata or {},
+        )
+        session.add(record)
 
-        # Apply weights from configuration for the IMPACT goal. Fallback to
-        # equal weights if unspecified.
-        weights = self.config.GOAL_WEIGHTS.get("IMPACT", {
-            "alpha": 0.4,
-            "beta": 0.3,
-            "gamma": 0.2,
-            "lambda": 0.1,
-        })
-        alpha = weights.get("alpha", 0.4)
-        beta = weights.get("beta", 0.3)
-        gamma = weights.get("gamma", 0.2)
+    def record_citation(
+        self,
+        session: Any,
+        *,
+        source_title: str,
+        url: Optional[str] = None,
+        context: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        cited_at: Optional[datetime] = None,
+    ) -> None:
+        """Persist a citation signal."""
 
-        impact_score = alpha * fame["fame_score"] + beta * revenue_norm + gamma * authority_norm
+        record = Citation(
+            source_title=source_title,
+            url=url,
+            context=context,
+            cited_at=cited_at or datetime.now(UTC),
+            metadata=metadata or {},
+        )
+        session.add(record)
+
+    def record_helpfulness_feedback(
+        self,
+        session: Any,
+        *,
+        channel: str,
+        rating: float,
+        comment: Optional[str] = None,
+        reference_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        captured_at: Optional[datetime] = None,
+    ) -> None:
+        """Persist helpfulness feedback."""
+
+        record = HelpfulnessFeedback(
+            channel=channel,
+            rating=rating,
+            comment=comment,
+            reference_id=reference_id,
+            captured_at=captured_at or datetime.now(UTC),
+            metadata=metadata or {},
+        )
+        session.add(record)
+
+    def record_structured_outcome(
+        self,
+        session: Any,
+        kind: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist structured outcome signals derived from action metadata."""
+
+        if not metadata:
+            return
+
+        pilots = self._iterify(metadata.get("pilot_acceptances") or metadata.get("pilots_accepted"))
+        for entry in pilots:
+            if isinstance(entry, dict):
+                self.record_pilot_acceptance(
+                    session,
+                    pilot_name=entry.get("pilot_name") or entry.get("name") or kind,
+                    accepted_by=entry.get("accepted_by"),
+                    scope=entry.get("scope"),
+                    metadata={"source": kind, **{k: v for k, v in entry.items() if k not in {"pilot_name", "name", "accepted_by", "scope"}}},
+                    accepted_at=entry.get("accepted_at"),
+                )
+            else:
+                self.record_pilot_acceptance(
+                    session,
+                    pilot_name=str(entry) if entry is not None else kind,
+                    metadata={"source": kind},
+                )
+
+        forks = self._iterify(metadata.get("artifact_forks") or metadata.get("forks"))
+        for entry in forks:
+            if isinstance(entry, dict):
+                self.record_artifact_fork(
+                    session,
+                    artifact_name=entry.get("artifact_name") or entry.get("name") or kind,
+                    source_url=entry.get("url") or entry.get("source_url"),
+                    platform=entry.get("platform"),
+                    metadata={"source": kind, **{k: v for k, v in entry.items() if k not in {"artifact_name", "name", "url", "source_url", "platform"}}},
+                    forked_at=entry.get("forked_at"),
+                )
+            else:
+                self.record_artifact_fork(
+                    session,
+                    artifact_name=str(entry) if entry is not None else kind,
+                    metadata={"source": kind},
+                )
+
+        partners = self._iterify(metadata.get("coalition_partners") or metadata.get("partners"))
+        for entry in partners:
+            if isinstance(entry, dict):
+                self.record_coalition_partner(
+                    session,
+                    partner_name=entry.get("partner_name") or entry.get("name") or kind,
+                    partner_type=entry.get("partner_type") or entry.get("type"),
+                    metadata={"source": kind, **{k: v for k, v in entry.items() if k not in {"partner_name", "name", "partner_type", "type"}}},
+                    joined_at=entry.get("joined_at"),
+                )
+            else:
+                self.record_coalition_partner(
+                    session,
+                    partner_name=str(entry) if entry is not None else kind,
+                    metadata={"source": kind},
+                )
+
+        citations = self._iterify(metadata.get("citations") or metadata.get("receipts"))
+        for entry in citations:
+            if isinstance(entry, dict):
+                self.record_citation(
+                    session,
+                    source_title=entry.get("source_title") or entry.get("title") or (entry.get("url") or kind),
+                    url=entry.get("url"),
+                    context=entry.get("context"),
+                    metadata={"source": kind, **{k: v for k, v in entry.items() if k not in {"source_title", "title", "url", "context"}}},
+                    cited_at=entry.get("cited_at"),
+                )
+            else:
+                self.record_citation(
+                    session,
+                    source_title=str(entry) if entry is not None else kind,
+                    url=str(entry) if isinstance(entry, str) and entry.startswith("http") else None,
+                    metadata={"source": kind},
+                )
+
+        feedback_entries = self._iterify(metadata.get("helpfulness_feedback") or metadata.get("feedback"))
+        for entry in feedback_entries:
+            if isinstance(entry, dict):
+                rating = float(entry.get("rating", 0.0))
+                if rating <= 0 and "sentiment" in entry:
+                    sentiment = entry.get("sentiment", "neutral")
+                    rating = 4.0 if sentiment == "positive" else 2.0 if sentiment == "neutral" else 1.0
+                self.record_helpfulness_feedback(
+                    session,
+                    channel=entry.get("channel") or entry.get("source") or "unknown",
+                    rating=rating,
+                    comment=entry.get("comment"),
+                    reference_id=entry.get("reference_id"),
+                    metadata={"source": kind, **{k: v for k, v in entry.items() if k not in {"channel", "source", "rating", "comment", "reference_id", "sentiment"}}},
+                    captured_at=entry.get("captured_at"),
+                )
+            elif entry is not None:
+                self.record_helpfulness_feedback(
+                    session,
+                    channel="unknown",
+                    rating=float(entry) if isinstance(entry, (int, float)) else 0.0,
+                    metadata={"source": kind},
+                )
+
+    def derive_structured_outcome_from_text(
+        self,
+        *,
+        content: str,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Heuristically derive structured outcome signals from generated text."""
+
+        context = context or {}
+        lowered = content.lower()
+        signals: Dict[str, Any] = {}
+
+        if "pilot accepted" in lowered or "signed the pilot" in lowered:
+            signals["pilot_acceptances"] = [
+                {
+                    "pilot_name": context.get("topic", "pilot"),
+                    "accepted_by": context.get("audience"),
+                    "scope": context.get("scope"),
+                }
+            ]
+
+        if "fork" in lowered or "clone" in lowered:
+            signals["artifact_forks"] = [
+                {
+                    "artifact_name": context.get("artifact", context.get("topic", "artifact")),
+                    "platform": "github" if "github" in lowered else None,
+                }
+            ]
+
+        if "coalition" in lowered or "partner" in lowered or "ally" in lowered:
+            signals["coalition_partners"] = [
+                {
+                    "partner_name": context.get("partner") or context.get("topic", "partner"),
+                    "partner_type": context.get("partner_type"),
+                }
+            ]
+
+        citations = self.extract_citations_from_text(content)
+        if citations:
+            signals["citations"] = [
+                {"url": url, "source_title": url, "context": context.get("topic")}
+                for url in citations
+            ]
+
+        if any(word in lowered for word in ["thank you", "appreciate", "super helpful", "that helps"]):
+            signals["helpfulness_feedback"] = [
+                {
+                    "channel": context.get("channel", "x"),
+                    "rating": 4.5,
+                    "comment": "Positive acknowledgement detected",
+                }
+            ]
+
+        return signals
+
+    def extract_citations_from_text(self, content: str) -> List[str]:
+        """Extract citation-like URLs from text."""
+
+        if not content:
+            return []
+
+        pattern = re.compile(r"https?://[^\s)]+")
+        return pattern.findall(content)
+
+    def _iterify(self, value: Any) -> List[Any]:
+        """Ensure the provided value is treated as a list."""
+
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, (set, tuple)):
+            return list(value)
+        return [value]
+
+    def _normalize_weight_map(self, weights: Dict[str, float]) -> Dict[str, float]:
+        """Normalize a weight mapping so the values sum to 1."""
+
+        positive_weights = {k: max(v, 0.0) for k, v in weights.items()}
+        total = sum(positive_weights.values())
+        if total <= 0:
+            count = len(weights) or 1
+            return {key: 1.0 / count for key in weights} if weights else {}
+        return {key: value / total for key, value in positive_weights.items()}
+
+    def calculate_impact_score(self, session: Any, days: int = 1) -> Dict[str, Any]:
+        """Calculate mission-aligned impact from structured outcomes."""
+
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+
+        pilots = (
+            session.query(PilotAcceptance)
+            .filter(lambda record: record.accepted_at >= cutoff)
+            .all()
+        )
+        forks = (
+            session.query(ArtifactFork)
+            .filter(lambda record: record.forked_at >= cutoff)
+            .all()
+        )
+        partners = (
+            session.query(CoalitionPartner)
+            .filter(lambda record: record.joined_at >= cutoff)
+            .all()
+        )
+        citations = (
+            session.query(Citation)
+            .filter(lambda record: record.cited_at >= cutoff)
+            .all()
+        )
+        feedback_entries = (
+            session.query(HelpfulnessFeedback)
+            .filter(lambda record: record.captured_at >= cutoff)
+            .all()
+        )
+
+        pilot_count = len(pilots)
+        fork_count = len(forks)
+        partner_count = len(partners)
+        citation_count = len(citations)
+        helpfulness_count = len(feedback_entries)
+        helpfulness_avg = (
+            statistics.fmean(entry.rating for entry in feedback_entries)
+            if feedback_entries
+            else 0.0
+        )
+
+        normalized = {
+            "pilots": min(pilot_count / max(self.signal_targets["pilots"], 1), 1.0),
+            "artifacts": min(fork_count / max(self.signal_targets["artifacts"], 1), 1.0),
+            "coalitions": min(partner_count / max(self.signal_targets["coalitions"], 1), 1.0),
+            "citations": min(citation_count / max(self.signal_targets["citations"], 1), 1.0),
+            "helpfulness": min(helpfulness_avg / max(self.signal_targets["helpfulness"], 1), 1.0)
+            if helpfulness_count
+            else 0.0,
+        }
+
+        weighted_sum = sum(
+            self.signal_weights.get(key, 0.0) * normalized.get(key, 0.0)
+            for key in self.signal_weights
+        )
+
+        impact_score = round(weighted_sum * 100, 2)
+
+        components = {
+            "pilots": {"count": pilot_count, "normalized": round(normalized["pilots"], 3)},
+            "artifacts": {"count": fork_count, "normalized": round(normalized["artifacts"], 3)},
+            "coalitions": {"count": partner_count, "normalized": round(normalized["coalitions"], 3)},
+            "citations": {"count": citation_count, "normalized": round(normalized["citations"], 3)},
+            "helpfulness": {
+                "count": helpfulness_count,
+                "average_rating": round(helpfulness_avg, 2),
+                "normalized": round(normalized["helpfulness"], 3),
+            },
+        }
 
         return {
-            "impact_score": round(impact_score, 2),
-            "fame": fame["fame_score"],
-            "revenue_norm": revenue_norm,
-            "authority_norm": authority_norm,
+            "impact_score": impact_score,
+            "components": components,
+            "weights": self.signal_weights,
         }
 
     def calculate_goal_aligned_j_score(
@@ -434,22 +791,30 @@ class AnalyticsService:
         
         return authority_score
     
-    def _calculate_j_score(self, tweet: Tweet, *, penalty: float = 0.0) -> float:
+    def _calculate_j_score(
+        self,
+        tweet: Tweet,
+        *,
+        penalty: float = 0.0,
+        mission_alignment: float = 0.0,
+    ) -> float:
         """Calculate the objective function J score for a tweet."""
-        # Simplified J calculation for individual tweets
+
         engagement = (
-            self.engagement_weights["likes"] * (tweet.likes or 0) +
-            self.engagement_weights["rts"] * (tweet.rts or 0) +
-            self.engagement_weights["replies"] * (tweet.replies or 0) +
-            self.engagement_weights["quotes"] * (tweet.quotes or 0)
+            self.engagement_weights["likes"] * (tweet.likes or 0)
+            + self.engagement_weights["rts"] * (tweet.rts or 0)
+            + self.engagement_weights["replies"] * (tweet.replies or 0)
+            + self.engagement_weights["quotes"] * (tweet.quotes or 0)
         )
 
-        # Normalize to 0-1 scale
         engagement_score = min(engagement / 100, 1.0)
-        authority_score = min((tweet.authority_score or 0) / 10, 1.0)
+        mission_score = max(0.0, min(mission_alignment, 1.0))
 
-        # Simple J calculation
-        j_score = 0.7 * engagement_score + 0.3 * authority_score
+        weights = {"engagement": 0.5, "mission": 0.5}
+        j_score = (
+            weights["engagement"] * engagement_score
+            + weights["mission"] * mission_score
+        )
 
         goal_mode = (
             self.config.GOAL_MODE.upper()
