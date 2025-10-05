@@ -1,4 +1,5 @@
 from services.analytics import AnalyticsService
+from db.models import Tweet
 
 
 def test_jscore_floor_gating():
@@ -26,3 +27,15 @@ def test_jscore_penalty_reduces_score():
     )
 
     assert penalized < no_penalty
+
+
+def test_tweet_jscore_includes_mission_alignment():
+    service = AnalyticsService()
+    tweet = Tweet(id="1", text="example", kind="proposal")
+    tweet.likes = 10
+    tweet.rts = 2
+    tweet.replies = 1
+    high_alignment = service._calculate_j_score(tweet, mission_alignment=1.0)
+    low_alignment = service._calculate_j_score(tweet, mission_alignment=0.0)
+
+    assert high_alignment > low_alignment

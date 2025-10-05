@@ -48,6 +48,66 @@ class Action:
 
 
 @dataclass
+class PilotAcceptance:
+    """Records of pilots that were accepted by stakeholders."""
+
+    id: str = field(default_factory=_uuid)
+    pilot_name: str = ""
+    accepted_by: Optional[str] = None
+    scope: Optional[str] = None
+    accepted_at: datetime = field(default_factory=_utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ArtifactFork:
+    """Records of artifacts created or forked from agent outputs."""
+
+    id: str = field(default_factory=_uuid)
+    artifact_name: str = ""
+    source_url: Optional[str] = None
+    platform: Optional[str] = None
+    forked_at: datetime = field(default_factory=_utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CoalitionPartner:
+    """Organizations or individuals that joined coalition efforts."""
+
+    id: str = field(default_factory=_uuid)
+    partner_name: str = ""
+    partner_type: Optional[str] = None
+    joined_at: datetime = field(default_factory=_utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Citation:
+    """External citations attributed to the agent's work."""
+
+    id: str = field(default_factory=_uuid)
+    source_title: str = ""
+    url: Optional[str] = None
+    context: Optional[str] = None
+    cited_at: datetime = field(default_factory=_utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class HelpfulnessFeedback:
+    """Feedback captured about the agent's helpfulness."""
+
+    id: str = field(default_factory=_uuid)
+    channel: str = ""
+    rating: float = 0.0
+    comment: Optional[str] = None
+    reference_id: Optional[str] = None
+    captured_at: datetime = field(default_factory=_utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class KPI:
     """KPI tracking over time."""
 
@@ -130,6 +190,11 @@ __all__ = [
     "Tweet",
     "Action",
     "KPI",
+    "PilotAcceptance",
+    "ArtifactFork",
+    "CoalitionPartner",
+    "Citation",
+    "HelpfulnessFeedback",
     "Note",
     "FollowersSnapshot",
     "Redirect",

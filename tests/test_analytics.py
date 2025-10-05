@@ -7,6 +7,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from services.analytics import AnalyticsService
+from db.session import get_db_session, init_db
+
+
+def setup_function() -> None:
+    """Reset the in-memory store before each test."""
+
+    init_db()
 
 
 @pytest.mark.asyncio
@@ -20,28 +27,22 @@ async def test_pull_metrics_no_client_returns_zero() -> None:
     assert result == {"updated_count": 0}
 
 
-def test_calculate_impact_score_uses_config_weights() -> None:
+def test_calculate_impact_score_aggregates_structured_signals() -> None:
     service = AnalyticsService()
-    service.config.GOAL_WEIGHTS["IMPACT"] = {
-        "alpha": 1.0,
-        "beta": 2.0,
-        "gamma": 3.0,
-        "lambda": 0.0,
-    }
 
-    service.calculate_fame_score = MagicMock(
-        return_value={
-            "fame_score": 2.0,
-            "engagement_proxy": 0.0,
-            "follower_delta": 0.0,
-            "engagement_z": 0.0,
-            "follower_z": 0.0,
-        }
-    )
-    service.calculate_revenue_per_day = MagicMock(return_value=20.0)
-    service.calculate_authority_signals = MagicMock(return_value=15.0)
+    with get_db_session() as session:
+        service.record_pilot_acceptance(session, pilot_name="Solar pilot", accepted_by="City A")
+        service.record_artifact_fork(session, artifact_name="Playbook", platform="github")
+        service.record_artifact_fork(session, artifact_name="Playbook", platform="gitlab")
+        service.record_coalition_partner(session, partner_name="Climate Org")
+        service.record_citation(session, source_title="Energy Report", url="https://example.com/report")
+        service.record_helpfulness_feedback(session, channel="x", rating=4.0, comment="Great help")
+        session.commit()
 
-    result = service.calculate_impact_score(MagicMock(), days=1)
+        impact = service.calculate_impact_score(session, days=7)
 
-    expected = round(1.0 * 2.0 + 2.0 * (20.0 / 10.0) + 3.0 * (15.0 / 10.0), 2)
-    assert result["impact_score"] == expected
+    assert impact["components"]["pilots"]["count"] == 1
+    assert impact["components"]["artifacts"]["count"] == 2
+    assert impact["components"]["citations"]["count"] == 1
+    assert impact["components"]["helpfulness"]["average_rating"] == 4.0
+    assert impact["impact_score"] > 0
