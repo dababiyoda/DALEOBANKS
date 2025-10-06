@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional, List
 
 from config import get_config, subscribe_to_updates
 from services.linkedin_client import LinkedInClient
@@ -51,10 +51,38 @@ class _XAdapter(BaseSocialClient):
             logger.info("LIVE mode disabled; skipping X publish")
             return await self._dry_run(kind=kind, metadata=metadata)
 
+        media_ids: List[str] = []
+        if metadata.get("media"):
+            media_payload = metadata.get("media")
+            if isinstance(media_payload, dict):
+                media_payload = [media_payload]
+            for item in media_payload or []:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("path") or item.get("filepath")
+                if not path:
+                    continue
+                media_type = item.get("type") or item.get("media_type") or "image"
+                try:
+                    media_id = await self._client.upload_media(
+                        media_path=path,
+                        media_type=str(media_type),
+                    )
+                except Exception as exc:  # pragma: no cover - defensive log
+                    logger.warning("Failed to upload media %s: %s", path, exc)
+                    media_id = None
+                if media_id:
+                    media_ids.append(media_id)
+
+        if media_ids:
+            metadata = dict(metadata)
+            metadata["media_ids"] = list(media_ids)
+
         tweet_id = await self._client.create_tweet(
             content,
             quote_tweet_id=quote_to,
             in_reply_to=in_reply_to,
+            media_ids=media_ids or None,
             idempotency_key=metadata.get("idempotency_key"),
         )
 

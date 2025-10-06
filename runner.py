@@ -6,7 +6,7 @@ Orchestrates 24/7 autonomous operation
 import asyncio
 import random
 from datetime import datetime, timedelta, UTC
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import traceback
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -15,7 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from config import get_config, subscribe_to_updates
 from db.session import get_db_session, init_db
-from db.models import Action
+from db.models import Action, Tweet
 from services.multiplexer import SocialMultiplexer
 from services.x_client import XClient
 from services.llm_adapter import LLMAdapter
@@ -42,17 +42,20 @@ start_time = datetime.now(UTC)
 config = get_config()
 persona_store = PersonaStore()
 x_client = XClient()
+perception_service = PerceptionService()
 multiplexer = SocialMultiplexer(config=config, x_client=x_client)
 llm_adapter = LLMAdapter()
 generator = Generator(persona_store, llm_adapter)
-selector = Selector(persona_store)
+selector = Selector(
+    persona_store,
+    perception_service=perception_service,
+)
 analytics_service = AnalyticsService()
 kpi_service = KPIService()
 reflection_service = ReflectionService()
 planner_service = PlannerService()
 self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
-perception_service = PerceptionService()
 crisis_service = CrisisService()
 
 # Track pagination cursors for perception ingest to avoid refetching.
@@ -122,6 +125,28 @@ async def _add_jobs():
             jitter=180  # 3 minute jitter
         ),
         id='search_engage',
+        max_instances=1
+    )
+
+    # Thread publishing job
+    scheduler.add_job(
+        publish_thread_job,
+        IntervalTrigger(
+            minutes=random.randint(240, 360),
+            jitter=420
+        ),
+        id='post_thread',
+        max_instances=1
+    )
+
+    # Value-first DM job
+    scheduler.add_job(
+        value_dm_job,
+        IntervalTrigger(
+            minutes=random.randint(180, 300),
+            jitter=360
+        ),
+        id='value_dm',
         max_instances=1
     )
 
@@ -441,6 +466,182 @@ async def search_and_engage_job():
 
     except Exception as e:
         logger.error(f"Search and engage job failed: {e}")
+
+
+async def publish_thread_job():
+    """Generate and publish a persona-aligned thread."""
+
+    try:
+        if not crisis_service.guard(action="post_thread"):
+            return
+
+        action = await selector.decide_next_action()
+        if action.get("type") != "POST_THREAD":
+            logger.info("Selector chose different action, skipping thread")
+            return
+
+        topic = action.get("topic", "general")
+        intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL + 1)
+        thread_plan = await generator.make_thread(topic=topic, intensity=intensity)
+
+        if "error" in thread_plan:
+            logger.error("Thread generation failed: %s", thread_plan["error"])
+            return
+
+        posts = thread_plan.get("posts", [])
+        if not posts:
+            logger.info("Thread generation returned no posts")
+            return
+
+        previous_tweet_id: Optional[str] = None
+        posted_ids: List[str] = []
+
+        for index, post in enumerate(posts):
+            metadata = {
+                "topic": topic,
+                "thread_index": index,
+            }
+            media_payload = post.get("media")
+            if media_payload:
+                metadata["media"] = media_payload
+
+            publish_result = await multiplexer.publish(
+                post.get("content", ""),
+                kind="thread",
+                intensity=intensity,
+                in_reply_to=previous_tweet_id,
+                metadata=metadata,
+            )
+
+            x_result = publish_result.get("x")
+            if not x_result:
+                logger.info("No X result returned for thread segment %d", index)
+                previous_tweet_id = None
+                continue
+
+            previous_tweet_id = x_result.post_id
+            posted_ids.append(x_result.post_id)
+
+            if x_result.dry_run:
+                logger.info(
+                    "DRY RUN - Would publish thread segment %d: %s",
+                    index + 1,
+                    post.get("content", "")[:120],
+                )
+                continue
+
+            with get_db_session() as session:
+                tweet_record = Tweet(
+                    id=x_result.post_id,
+                    text=post.get("content", ""),
+                    kind="thread_root" if index == 0 else "thread_segment",
+                    topic=topic,
+                    ref_tweet_id=posted_ids[index - 1] if index > 0 else None,
+                    intensity=intensity,
+                )
+                session.add(tweet_record)
+                session.commit()
+
+            segment_meta = {
+                "tweet_id": x_result.post_id,
+                "thread_index": index,
+                "topic": topic,
+                "character_count": len(post.get("content", "")),
+            }
+            await _log_action("thread_segment_posted", segment_meta)
+
+        if posted_ids:
+            summary_meta = {
+                "thread_root": posted_ids[0],
+                "segment_count": len(posted_ids),
+                "topic": topic,
+                "intensity": intensity,
+            }
+            if thread_plan.get("dm_copy"):
+                summary_meta["dm_preview"] = thread_plan["dm_copy"][:140]
+            await _log_action("thread_published", summary_meta)
+
+        if thread_plan.get("dm_copy"):
+            logger.info("Thread DM copy prepared for follow-up outreach")
+
+    except Exception as exc:
+        logger.error("Thread job failed: %s", exc)
+
+
+async def value_dm_job():
+    """Send a value-first DM to a priority account."""
+
+    try:
+        if not config.ENABLE_DMS:
+            logger.info("DM capability disabled; skipping value DM job")
+            return
+
+        if not crisis_service.guard(action="send_value_dm"):
+            return
+
+        action = await selector.decide_next_action()
+        if action.get("type") != "SEND_VALUE_DM":
+            logger.info("Selector chose different action, skipping value DM")
+            return
+
+        recipient = action.get("recipient") or {}
+        recipient_id = str(
+            recipient.get("id")
+            or recipient.get("user_id")
+            or recipient.get("username", "")
+        ).strip()
+
+        if not recipient_id:
+            logger.info("No qualified DM recipient available")
+            return
+
+        intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
+        candidate_topics = recipient.get("topics")
+        if isinstance(candidate_topics, list) and candidate_topics:
+            topic = str(candidate_topics[0])
+        else:
+            topic = action.get("topic", "coordination")
+
+        seed = action.get("seed") or f"Share a concrete mechanism update on {topic}."
+        dm_result = await generator.make_dm_copy(
+            seed,
+            topic=topic,
+            recipient=recipient,
+            intensity=intensity,
+        )
+
+        if "error" in dm_result:
+            logger.error("DM generation failed: %s", dm_result.get("error"))
+            return
+
+        dm_text = dm_result.get("content", "").strip()
+        if not dm_text:
+            logger.info("DM copy empty; skipping send")
+            return
+
+        dm_meta = {
+            "recipient": recipient.get("username"),
+            "recipient_id": recipient_id,
+            "topic": topic,
+            "intensity": intensity,
+        }
+
+        if not config.LIVE or not x_client or not x_client.is_healthy():
+            logger.info("LIVE disabled or X client unavailable; DM will not be sent")
+            dm_meta["dry_run"] = True
+            await _log_action("value_dm_drafted", {**dm_meta, "preview": dm_text[:140]})
+            return
+
+        success = await x_client.send_dm(recipient_id, dm_text)
+        if success:
+            selector.mark_dm_sent(recipient_id)
+            await _log_action("value_dm_sent", {**dm_meta, "characters": len(dm_text)})
+            logger.info("Sent value-first DM to %s", recipient.get("username", recipient_id))
+        else:
+            logger.warning("DM send returned failure for %s", recipient_id)
+
+    except Exception as exc:
+        logger.error("Value DM job failed: %s", exc)
 
 
 async def perception_job():

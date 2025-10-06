@@ -151,6 +151,160 @@ class Generator:
         except Exception as e:
             logger.error(f"Quote generation failed: {e}")
             return {"error": str(e)}
+
+    async def make_thread(
+        self,
+        topic: str = "general",
+        intensity: int = 1,
+        include_dm: bool = True,
+    ) -> Dict[str, Any]:
+        """Generate a multi-post thread that respects persona templates and guardrails."""
+
+        try:
+            with get_db_session() as session:
+                memory_context = self.memory.get_context_for_generation(session)
+                system_prompt = self.persona_store.build_system_prompt(
+                    memory_context["improvement_notes"]
+                )
+
+                user_message = self._build_thread_prompt(
+                    topic,
+                    memory_context,
+                    intensity,
+                    include_dm=include_dm,
+                )
+
+                raw_response = await self.llm_adapter.chat(
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_message}],
+                    temperature=0.65,
+                )
+
+                parsed = self._parse_thread_response(raw_response)
+                if not parsed["posts"]:
+                    return {"error": "Thread generation returned no posts"}
+
+                validated_posts: List[Dict[str, Any]] = []
+                citations_found = False
+                for idx, post in enumerate(parsed["posts"]):
+                    text = post.get("text") or post.get("content")
+                    if not text:
+                        return {"error": f"Thread post {idx + 1} missing text"}
+
+                    validation = await self._validate_and_refine(
+                        text,
+                        "thread",
+                        topic,
+                        session,
+                        intensity,
+                    )
+
+                    if "error" in validation:
+                        return {
+                            "error": f"Thread post {idx + 1} failed validation",
+                            "details": validation,
+                        }
+
+                    sanitized_text = validation["content"]
+                    citations_found = citations_found or self.websearch.has_valid_citation(
+                        sanitized_text
+                    )
+
+                    media_items = post.get("media") or []
+                    if isinstance(media_items, dict):
+                        media_items = [media_items]
+
+                    validated_posts.append(
+                        {
+                            "content": sanitized_text,
+                            "media": [
+                                self._normalize_media_item(item)
+                                for item in media_items
+                                if isinstance(item, dict)
+                            ],
+                        }
+                    )
+
+                if intensity >= 3 and not citations_found:
+                    return {
+                        "error": "High-intensity threads must include at least one citation",
+                    }
+
+                response: Dict[str, Any] = {
+                    "topic": topic,
+                    "intensity": intensity,
+                    "posts": validated_posts,
+                }
+
+                if include_dm and parsed["dm_copy"]:
+                    dm_validation = await self.make_dm_copy(
+                        parsed["dm_copy"],
+                        topic=topic,
+                        intensity=intensity,
+                        skip_memory=True,
+                    )
+                    if "error" not in dm_validation:
+                        response["dm_copy"] = dm_validation["content"]
+
+                return response
+
+        except Exception as exc:
+            logger.error("Thread generation failed: %s", exc)
+            return {"error": str(exc)}
+
+    async def make_dm_copy(
+        self,
+        seed: Any,
+        *,
+        topic: str = "general",
+        recipient: Optional[Dict[str, Any]] = None,
+        intensity: int = 1,
+        skip_memory: bool = False,
+    ) -> Dict[str, Any]:
+        """Generate a value-first DM based on persona guardrails."""
+
+        try:
+            with get_db_session() as session:
+                memory_context = (
+                    {"improvement_notes": []}
+                    if skip_memory
+                    else self.memory.get_context_for_generation(session)
+                )
+                system_prompt = self.persona_store.build_system_prompt(
+                    memory_context.get("improvement_notes", [])
+                )
+
+                user_message = self._build_dm_prompt(
+                    seed,
+                    topic=topic,
+                    recipient=recipient,
+                    intensity=intensity,
+                )
+
+                dm_text = await self.llm_adapter.chat(
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_message}],
+                    temperature=0.55,
+                )
+
+                ethics = self.ethics_guard.validate_text(dm_text)
+                if not ethics.approved:
+                    return {"error": "DM failed ethics review", "reasons": ethics.reasons}
+
+                cleaned = dm_text.strip()
+                if len(cleaned) > 1000:
+                    cleaned = cleaned[:997].rstrip() + "..."
+
+                return {
+                    "content": cleaned,
+                    "topic": topic,
+                    "intensity": intensity,
+                    "recipient": recipient,
+                }
+
+        except Exception as exc:
+            logger.error("DM generation failed: %s", exc)
+            return {"error": str(exc)}
     
     def _build_proposal_prompt(self, topic: str, context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for proposal generation"""
@@ -264,7 +418,7 @@ Requirements:
     def _build_quote_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for quote tweet generation"""
         original_tweet = context.get("original_tweet", "")
-        
+
         prompt = f"""Generate a quote tweet commenting on:
 
 Original tweet: "{original_tweet}"
@@ -275,9 +429,99 @@ Requirements:
 - Build on the original idea constructively
 - Include actionable insight
 - Intensity level: {intensity} on scale 0-5"""
-        
+
         return prompt
-    
+
+    def _build_thread_prompt(
+        self,
+        topic: str,
+        memory_context: Dict[str, Any],
+        intensity: int,
+        *,
+        include_dm: bool,
+    ) -> str:
+        persona = self.persona_store.get_current_persona()
+        template = persona.get("templates", {}).get("thread", [])
+        if not isinstance(template, list) or not template:
+            template = [
+                "Open with the systemic problem",
+                "Map perspectives",
+                "Explain mechanism",
+                "Call to action",
+            ]
+
+        guardrails = persona.get("guardrails", [])
+        memory_notes = memory_context.get("improvement_notes", [])
+
+        dm_clause = "Also draft a short DM that provides value first." if include_dm else ""
+
+        prompt = [
+            f"Create a Twitter thread about {topic} that advances the mission.",
+            "Follow this outline strictly:",
+        ]
+        for index, section in enumerate(template, start=1):
+            prompt.append(f"{index}. {section}")
+        prompt.extend([
+            "",
+            "Guardrails you must respect:",
+        ])
+        for guardrail in guardrails:
+            prompt.append(f"- {guardrail}")
+        prompt.extend(
+            [
+                "",
+                "Each post must:",
+                "- Stay under 280 characters",
+                "- Include credible citations for strong claims",
+                "- Avoid hashtags unless absolutely necessary",
+                "- Use numbered thread style like '1/' only if the template implies ordering",
+                "",
+                "Return JSON with keys 'posts' (list of objects with 'text' and optional 'media')",
+                "and 'dm_copy' as a string. Media entries may include 'path' and 'type'.",
+                f"Intensity level: {intensity} on scale 0-5.",
+                dm_clause,
+            ]
+        )
+
+        if memory_notes:
+            prompt.extend(["", "Recent learning notes:"])
+            prompt.extend(f"- {note}" for note in memory_notes[-3:])
+
+        return "\n".join(filter(None, prompt))
+
+    def _build_dm_prompt(
+        self,
+        seed: Any,
+        *,
+        topic: str,
+        recipient: Optional[Dict[str, Any]],
+        intensity: int,
+    ) -> str:
+        persona = self.persona_store.get_current_persona()
+        guardrails = persona.get("guardrails", [])
+        recipient_handle = recipient.get("username") if recipient else None
+        header = "Write a value-first direct message" if recipient_handle else "Draft a value-first outreach message"
+
+        prompt_lines = [
+            f"{header} that references the topic '{topic}'.",
+            "- Start with a concrete observation or insight",
+            "- Offer something useful before any ask",
+            "- End with a light, optional next step",
+            f"- Intensity level: {intensity} on scale 0-5",
+        ]
+
+        if recipient_handle:
+            prompt_lines.append(f"- Address the recipient as @{recipient_handle}")
+
+        prompt_lines.append("- Keep it under 500 characters")
+        prompt_lines.append("- Absolutely respect these guardrails:")
+        prompt_lines.extend(f"  * {rule}" for rule in guardrails)
+
+        if isinstance(seed, str) and seed.strip():
+            prompt_lines.extend(["", "Incorporate this reference copy:", seed.strip()])
+
+        return "\n".join(prompt_lines)
+
     async def _validate_and_refine(self, content: str, content_type: str, topic: str, session, intensity: int) -> Dict[str, Any]:
         """Validate content and refine if needed"""
         # Ethics check
@@ -332,6 +576,16 @@ Requirements:
             if not self.websearch.has_valid_citation(content):
                 return {
                     "error": "Proposal must include at least one citation to a trusted source"
+                }
+
+        if content_type == "thread":
+            if intensity >= 3 and not self.websearch.validate_links(content):
+                return {
+                    "error": "High-intensity thread posts must reference a credible source"
+                }
+            if self.config.RAGEBAIT_GUARD and not self.ethics_guard.has_constructive_step(content):
+                return {
+                    "error": "Thread segments must include a constructive next step"
                 }
 
         if intensity >= 3:
@@ -414,3 +668,44 @@ Requirements:
             logger.error(f"Content mutation failed: {e}")
             # Simple word substitution fallback
             return content.replace("implement", "deploy").replace("mechanism", "system").replace("solution", "approach")
+
+    def _parse_thread_response(self, raw_response: str) -> Dict[str, Any]:
+        posts: List[Dict[str, Any]] = []
+        dm_copy: Optional[str] = None
+
+        try:
+            parsed = json.loads(raw_response)
+            posts_data = parsed.get("posts") if isinstance(parsed, dict) else []
+            if isinstance(posts_data, list):
+                for item in posts_data:
+                    if isinstance(item, dict):
+                        posts.append(item)
+                    elif isinstance(item, str):
+                        posts.append({"text": item})
+            dm_raw = parsed.get("dm_copy") if isinstance(parsed, dict) else None
+            if isinstance(dm_raw, str):
+                dm_copy = dm_raw.strip()
+        except json.JSONDecodeError:
+            segments = [seg.strip() for seg in raw_response.split("\n") if seg.strip()]
+            if segments:
+                posts = [{"text": seg} for seg in segments[:6]]
+                if len(segments) > 6:
+                    dm_copy = " ".join(segments[6:])
+
+        return {"posts": posts, "dm_copy": dm_copy}
+
+    def _normalize_media_item(self, media: Dict[str, Any]) -> Dict[str, Any]:
+        normalized: Dict[str, Any] = {}
+        path = media.get("path") or media.get("filepath")
+        if isinstance(path, str):
+            normalized["path"] = path
+        media_type = media.get("type") or media.get("media_type") or "image"
+        if isinstance(media_type, str):
+            normalized["type"] = media_type.lower()
+        alt_text = media.get("alt") or media.get("alt_text")
+        if isinstance(alt_text, str):
+            normalized["alt"] = alt_text
+        prompt = media.get("prompt")
+        if isinstance(prompt, str):
+            normalized["prompt"] = prompt
+        return normalized

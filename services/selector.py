@@ -1,7 +1,7 @@
 """Action selection based on persona, drives, optimizer, and constraints."""
 
 import random
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Mapping
 from datetime import datetime, timedelta, UTC
 
 from services.persona_store import PersonaStore
@@ -10,6 +10,7 @@ from services.logging_utils import get_logger
 from services.bandit import ThompsonBandit
 from services.analytics import AnalyticsService
 from services.crisis import CrisisService
+from services.perception import PerceptionService
 from config import get_config
 from db.session import get_db_session
 from db.models import Tweet
@@ -33,33 +34,50 @@ class Selector:
         *,
         analytics_service: Optional[AnalyticsService] = None,
         crisis_service: Optional[CrisisService] = None,
+        perception_service: Optional[PerceptionService] = None,
     ):
         self.persona_store = persona_store
         self.optimizer = Optimizer()
         self.config = get_config()
         self.drives = self._load_drives()
-        self.bandit = ThompsonBandit(["POST_PROPOSAL", "REPLY_MENTIONS", "SEARCH_ENGAGE", "REST"])
+        self.bandit = ThompsonBandit(
+            [
+                "POST_PROPOSAL",
+                "REPLY_MENTIONS",
+                "SEARCH_ENGAGE",
+                "POST_THREAD",
+                "SEND_VALUE_DM",
+                "REST",
+            ]
+        )
         self._last_arm: Optional[str] = None
         self.analytics = analytics_service or AnalyticsService()
         self.crisis = crisis_service or CrisisService()
+        self.perception = perception_service or PerceptionService()
         self._last_intensity_by_action: Dict[str, int] = {}
         self._last_successful_intensity: Dict[str, int] = {}
         self._latest_signal_snapshot: Dict[str, Any] = {}
+        self._recent_dm_targets: Dict[str, datetime] = {}
+        self.dm_cooldown_minutes = 24 * 60
 
         # Action types with their base probabilities
         self.action_types = {
-            "POST_PROPOSAL": 0.4,
-            "REPLY_MENTIONS": 0.3,
-            "SEARCH_ENGAGE": 0.2,
-            "REST": 0.1
+            "POST_PROPOSAL": 0.35,
+            "REPLY_MENTIONS": 0.25,
+            "SEARCH_ENGAGE": 0.18,
+            "POST_THREAD": 0.15,
+            "SEND_VALUE_DM": 0.07,
+            "REST": 0.0,
         }
-        
+
         # Minimum intervals between actions (minutes)
         self.min_intervals = {
             "POST_PROPOSAL": 45,
             "REPLY_MENTIONS": 12,
             "SEARCH_ENGAGE": 25,
-            "REST": 5
+            "POST_THREAD": 180,
+            "SEND_VALUE_DM": 240,
+            "REST": 5,
         }
         
         # Last action timestamps
@@ -237,14 +255,18 @@ class Selector:
         for action in available_actions:
             # Base probability
             base_prob = self.action_types[action]
-            
+
             # Persona content mix influence
             mix_factor = 1.0
             if action == "POST_PROPOSAL":
                 mix_factor = content_mix.get("proposals", 0.7) * 2
             elif action == "REPLY_MENTIONS":
                 mix_factor = content_mix.get("elite_replies", 0.2) * 5
-            
+            elif action == "POST_THREAD":
+                mix_factor = content_mix.get("proposals", 0.7) * 1.5
+            elif action == "SEND_VALUE_DM":
+                mix_factor = content_mix.get("summaries", 0.1) * 2
+
             # Drive influence
             drive_factor = 1.0
             drives = self.drives
@@ -254,10 +276,14 @@ class Selector:
                 drive_factor = drives.get("curiosity", 0.35) + drives.get("novelty", 0.25)
             elif action == "REST":
                 drive_factor = drives.get("stability", 0.10) * 2
-            
+            elif action == "POST_THREAD":
+                drive_factor = drives.get("impact", 0.3) + drives.get("stability", 0.1)
+            elif action == "SEND_VALUE_DM":
+                drive_factor = drives.get("impact", 0.3) + drives.get("curiosity", 0.35)
+
             # Optimizer influence
             optimizer_factor = optimizer_weights.get(action, 1.0)
-            
+
             # Combine factors
             final_prob = base_prob * mix_factor * drive_factor * optimizer_factor
             probabilities[action] = final_prob
@@ -334,6 +360,28 @@ class Selector:
                 signal_snapshot=signal_snapshot,
             )
 
+        elif action_type == "POST_THREAD":
+            with get_db_session() as session:
+                sampled_arms = self.optimizer.sample_arm_combination(session)
+            topics = ["systems", "coordination", "technology", "policy", "energy"]
+            params["topic"] = sampled_arms.get("topic") or random.choice(topics)
+            baseline_intensity = sampled_arms.get("intensity") or self.config.MIN_INTENSITY_LEVEL + 1
+            params["intensity"] = self._select_intensity(
+                "POST_THREAD",
+                baseline=baseline_intensity,
+                signal_snapshot=signal_snapshot,
+            )
+
+        elif action_type == "SEND_VALUE_DM":
+            candidate = self._select_dm_target()
+            if candidate:
+                params["recipient"] = candidate
+            params["intensity"] = self._select_intensity(
+                "SEND_VALUE_DM",
+                baseline=self.config.MIN_INTENSITY_LEVEL,
+                signal_snapshot=signal_snapshot,
+            )
+
         elif action_type == "REST":
             params["duration_minutes"] = random.randint(5, 15)
 
@@ -365,6 +413,75 @@ class Selector:
             "available_actions": self._get_available_actions(),
             "in_quiet_hours": self._is_quiet_hours()
         }
+
+    def mark_dm_sent(self, target_id: str) -> None:
+        """Record that a DM was sent to a target to enforce cooldowns."""
+
+        if not target_id:
+            return
+        self._recent_dm_targets[str(target_id)] = datetime.now(UTC)
+
+    def _select_dm_target(self) -> Optional[Dict[str, Any]]:
+        """Select an account eligible for a value-first DM."""
+
+        accounts = self._get_qualified_accounts()
+        if not accounts:
+            return None
+
+        cooldown = timedelta(minutes=self.dm_cooldown_minutes)
+        now = datetime.now(UTC)
+
+        for account in accounts:
+            target_id = account.get("id") or account.get("user_id") or account.get("username")
+            if not target_id:
+                continue
+            last = self._recent_dm_targets.get(str(target_id))
+            if last and now - last < cooldown:
+                continue
+            account["id"] = str(target_id)
+            return account
+
+        return None
+
+    def _get_qualified_accounts(
+        self,
+        min_authority: float = 0.75,
+        max_candidates: int = 5,
+    ) -> List[Dict[str, Any]]:
+        try:
+            accounts = self.perception.get_priority_accounts(
+                min_authority=min_authority,
+                max_count=max_candidates * 2,
+            )
+        except Exception as exc:
+            logger.warning("Failed to fetch priority accounts: %s", exc)
+            return []
+
+        qualified: List[Dict[str, Any]] = []
+        for account in accounts:
+            if not isinstance(account, dict):
+                continue
+            authority = float(account.get("authority_weight", 0.0))
+            if authority < min_authority:
+                continue
+            handle = account.get("username")
+            if not handle:
+                continue
+            candidate = dict(account)
+            candidate.setdefault(
+                "id",
+                str(candidate.get("user_id") or abs(hash(handle)) % 10_000_000),
+            )
+            qualified.append(candidate)
+
+        qualified.sort(
+            key=lambda item: (
+                float(item.get("authority_weight", 0.0)),
+                int(item.get("follower_count", 0)),
+            ),
+            reverse=True,
+        )
+        return qualified[:max_candidates]
 
     def _gather_signal_snapshot(self) -> Dict[str, Any]:
         """Collect recent analytics and crisis metrics for intensity policy."""
