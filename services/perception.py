@@ -41,6 +41,7 @@ class PerceptionService:
             "timeline": 25,
             "trends": 10,
             "keywords": 10,
+            "voices": 5,
         }
         if limits:
             for key, value in limits.items():
@@ -131,11 +132,17 @@ class PerceptionService:
             "mentions": [],
             "home_timeline": [],
             "trending_topics": [],
+            "voices": {},
             "meta": {},
         }
         new_state: Dict[str, Any] = {}
 
         if client is not None:
+            voice_state: Dict[str, Any] = {}
+            previous_voice_state = self._last_state.get("x_voice_cursors")
+            if isinstance(previous_voice_state, Mapping):
+                voice_state = dict(previous_voice_state)
+
             mentions = await self._fetch_mentions(client, since_id=since_id, limit=limit_config["mentions"])
             timeline = await self._fetch_timeline(
                 client,
@@ -143,12 +150,18 @@ class PerceptionService:
                 pagination_token=timeline_token,
             )
             trends = await self._fetch_trends(client, limit=limit_config["trends"])
+            voice_updates, voice_cursors = await self._fetch_voice_activity(
+                client,
+                limit=limit_config["voices"],
+                state=voice_state,
+            )
 
             x_payload.update(
                 {
                     "mentions": mentions,
                     "home_timeline": timeline.get("items", []),
                     "trending_topics": trends,
+                    "voices": voice_updates,
                     "meta": {k: v for k, v in timeline.items() if k != "items"},
                 }
             )
@@ -156,6 +169,11 @@ class PerceptionService:
             counts["x_mentions"] = len(mentions)
             counts["x_timeline"] = len(x_payload["home_timeline"])
             counts["x_trends"] = len(trends)
+            counts["x_voice_updates"] = sum(
+                len(info.get("posts", []))
+                for info in voice_updates.values()
+                if isinstance(info, Mapping)
+            )
 
             latest_id = self._latest_id(mentions, fallback=since_id)
             if latest_id:
@@ -165,10 +183,15 @@ class PerceptionService:
             elif "x_timeline_token" in self._last_state:
                 # Explicitly clear stale pagination tokens when exhausted.
                 new_state["x_timeline_token"] = None
+            if voice_cursors is not None:
+                new_state["x_voice_cursors"] = voice_cursors
+            elif "x_voice_cursors" in self._last_state:
+                new_state["x_voice_cursors"] = None
         else:
             counts["x_mentions"] = 0
             counts["x_timeline"] = 0
             counts["x_trends"] = 0
+            counts["x_voice_updates"] = 0
 
         payload["x"] = x_payload
 
@@ -251,6 +274,85 @@ class PerceptionService:
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error("perception_trends_error", extra={"error": str(exc)})
         return []
+
+    async def _fetch_voice_activity(
+        self,
+        client: Any,
+        *,
+        limit: int,
+        state: Mapping[str, Any],
+    ) -> Tuple[Dict[str, Dict[str, Any]], Optional[Dict[str, str]]]:
+        voice_payload: Dict[str, Dict[str, Any]] = {}
+        next_cursors: Dict[str, str] = {}
+
+        for voice in self._voices:
+            username = voice.get("username")
+            if not isinstance(username, str) or not username:
+                continue
+
+            pagination_token: Optional[str] = None
+            if isinstance(state, Mapping):
+                token = state.get(username)
+                if isinstance(token, str) and token:
+                    pagination_token = token
+
+            try:
+                result = await client.get_user_tweets(
+                    username=username,
+                    limit=limit,
+                    pagination_token=pagination_token,
+                )
+            except AttributeError:
+                logger.debug(
+                    "perception_voice_fetch_missing_api",
+                    extra={"username": username},
+                )
+                break
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.error(
+                    "perception_voice_error",
+                    extra={"username": username, "error": str(exc)},
+                )
+                continue
+
+            posts: List[Dict[str, Any]] = []
+            meta: Dict[str, Any] = {}
+            next_token: Optional[str] = None
+
+            if isinstance(result, list):
+                posts = list(result)[:limit]
+            elif isinstance(result, Mapping):
+                if "items" in result and isinstance(result.get("items"), list):
+                    posts = list(result.get("items", []))[:limit]
+                elif "tweets" in result and isinstance(result.get("tweets"), list):
+                    posts = list(result.get("tweets", []))[:limit]
+                elif "data" in result and isinstance(result.get("data"), list):
+                    posts = list(result.get("data", []))[:limit]
+
+                if "meta" in result and isinstance(result["meta"], Mapping):
+                    meta = dict(result["meta"])
+                    next_token = meta.get("next_token") or meta.get("next")
+                if next_token is None:
+                    token_value = result.get("next_token") or result.get("next")
+                    if isinstance(token_value, str) and token_value:
+                        next_token = token_value
+                if "rate_limit" in result and isinstance(result["rate_limit"], Mapping):
+                    meta.setdefault("rate_limit", result["rate_limit"])
+            else:
+                posts = []
+
+            voice_entry: Dict[str, Any] = {"posts": posts}
+            if meta:
+                voice_entry["meta"] = meta
+            voice_payload[username] = voice_entry
+
+            if isinstance(next_token, str) and next_token:
+                next_cursors[username] = next_token
+
+        if not next_cursors:
+            return voice_payload, None
+
+        return voice_payload, next_cursors
 
     async def _resolve_platform_sources(
         self,

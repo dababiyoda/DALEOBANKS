@@ -7,7 +7,8 @@ from services.perception import PerceptionService
 
 class DummyXClient:
     def __init__(self) -> None:
-        self.calls = {"mentions": [], "timeline": [], "trends": []}
+        self.calls = {"mentions": [], "timeline": [], "trends": [], "voices": []}
+        self._voice_pages = {}
 
     async def get_mentions(self, *, since_id=None, max_results=20):
         self.calls["mentions"].append({"since_id": since_id, "max_results": max_results})
@@ -32,6 +33,27 @@ class DummyXClient:
             {"name": "#Python", "tweet_volume": 500},
         ]
 
+    async def get_user_tweets(self, *, username, limit=5, pagination_token=None):
+        self.calls["voices"].append(
+            {"username": username, "limit": limit, "pagination_token": pagination_token}
+        )
+        if username not in self._voice_pages:
+            self._voice_pages[username] = 0
+
+        page = self._voice_pages[username]
+        self._voice_pages[username] += 1
+
+        posts = [
+            {"id": f"{username}-post-{page + 1}", "text": f"{username} update {page + 1}"}
+        ]
+        next_token = None if pagination_token else f"{username}-cursor-{page + 1}"
+
+        return {
+            "items": posts,
+            "next_token": next_token,
+            "rate_limit": {"remaining": 50},
+        }
+
 
 @pytest.mark.asyncio
 async def test_perception_ingest_records_event_without_client():
@@ -49,7 +71,9 @@ async def test_perception_ingest_records_event_without_client():
         event = events[0]
         assert event.counts["voices"] >= 0
         assert event.counts["x_mentions"] == 0
+        assert event.counts["x_voice_updates"] == 0
         assert event.payload["x"]["mentions"] == []
+        assert event.payload["x"]["voices"] == {}
         assert event.source == "perception"
 
 
@@ -76,9 +100,15 @@ async def test_perception_ingest_uses_x_client_payload():
     assert event.counts["x_mentions"] == 2
     assert event.counts["x_timeline"] == 1
     assert event.counts["x_trends"] == 2
+    assert event.counts["x_voice_updates"] >= 1
     assert event.payload["x"]["mentions"][0]["id"] == "111"
     assert event.payload["x"]["home_timeline"][0]["id"] == "t-1"
     assert event.payload["x"]["trending_topics"][0]["name"] == "#AI"
     assert event.payload["x"]["meta"]["next_token"] == "cursor-2"
+    voice_payload = event.payload["x"]["voices"]
+    assert "balajis" in voice_payload
+    assert voice_payload["balajis"]["posts"][0]["id"].startswith("balajis-post-")
+    assert voice_payload["balajis"]["meta"]["rate_limit"]["remaining"] == 50
     assert service.last_state["x_mentions_since_id"] == "222"
     assert service.last_state["x_timeline_token"] == "cursor-2"
+    assert service.last_state["x_voice_cursors"]["balajis"].startswith("balajis-cursor-")
