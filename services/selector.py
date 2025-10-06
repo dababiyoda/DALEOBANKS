@@ -315,6 +315,7 @@ class Selector:
                 sampled_arms = self.optimizer.sample_arm_combination(session)
 
             # Capture sampled metadata for downstream logging
+            sampled_arms["post_type"] = "proposal"
             params["arm_metadata"] = sampled_arms
 
             # Topic, CTA, hour bin come from optimizer sample with fallbacks
@@ -340,14 +341,31 @@ class Selector:
                 baseline=sampled_intensity,
                 signal_snapshot=signal_snapshot,
             )
+            sampled_arms["intensity"] = params["intensity"]
 
         elif action_type == "REPLY_MENTIONS":
+            with get_db_session() as session:
+                sampled_arms = self.optimizer.sample_arm_combination(session)
+
+            sampled_arms["post_type"] = "reply"
+            params["arm_metadata"] = sampled_arms
+
+            topics = ["technology", "economics", "policy", "coordination", "energy", "automation"]
+            params["topic"] = sampled_arms.get("topic") or random.choice(topics)
+
+            params["hour_bin"] = sampled_arms.get("hour_bin")
+            if params["hour_bin"] is None:
+                params["hour_bin"] = datetime.now().hour
+
+            params["cta_variant"] = sampled_arms.get("cta_variant") or "reply_default"
+
             params["max_mentions"] = 5
             params["priority"] = "high_authority_first"
             params["intensity"] = self._select_intensity(
                 "REPLY_MENTIONS",
                 signal_snapshot=signal_snapshot,
             )
+            sampled_arms["intensity"] = params["intensity"]
 
         elif action_type == "SEARCH_ENGAGE":
             # Select search terms based on persona interests
@@ -363,14 +381,26 @@ class Selector:
         elif action_type == "POST_THREAD":
             with get_db_session() as session:
                 sampled_arms = self.optimizer.sample_arm_combination(session)
+
+            sampled_arms["post_type"] = "thread"
+            params["arm_metadata"] = sampled_arms
+
             topics = ["systems", "coordination", "technology", "policy", "energy"]
             params["topic"] = sampled_arms.get("topic") or random.choice(topics)
+
+            params["hour_bin"] = sampled_arms.get("hour_bin")
+            if params["hour_bin"] is None:
+                params["hour_bin"] = datetime.now().hour
+
+            params["cta_variant"] = sampled_arms.get("cta_variant") or "thread_default"
+
             baseline_intensity = sampled_arms.get("intensity") or self.config.MIN_INTENSITY_LEVEL + 1
             params["intensity"] = self._select_intensity(
                 "POST_THREAD",
                 baseline=baseline_intensity,
                 signal_snapshot=signal_snapshot,
             )
+            sampled_arms["intensity"] = params["intensity"]
 
         elif action_type == "SEND_VALUE_DM":
             candidate = self._select_dm_target()

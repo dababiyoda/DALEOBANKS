@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 
 from services.optimizer import Optimizer
 from services.experiments import ExperimentsService
-from db.models import ArmsLog
+from db.models import ArmsLog, Tweet
+from db.session import get_db_session, init_db
 
 class TestOptimizer:
     """Test Thompson sampling optimizer"""
@@ -311,7 +312,94 @@ class TestExperimentsService:
         assert call_args.post_type == "proposal"
         assert call_args.sampled_prob == 0.7
         assert call_args.intensity == 3
-    
+
+    def test_arm_performance_across_post_formats(self):
+        """Ensure performance stats include proposals, threads, and replies."""
+        init_db()
+
+        with get_db_session() as session:
+            session.add(
+                Tweet(
+                    id="p1",
+                    text="Proposal",
+                    kind="proposal",
+                    topic="technology",
+                    hour_bin=10,
+                    cta_variant="learn_more",
+                    intensity=2,
+                    j_score=0.82,
+                )
+            )
+            session.add(
+                Tweet(
+                    id="t1",
+                    text="Thread",
+                    kind="thread_root",
+                    topic="energy",
+                    hour_bin=9,
+                    cta_variant="thread_default",
+                    intensity=3,
+                    j_score=0.65,
+                )
+            )
+            session.add(
+                Tweet(
+                    id="r1",
+                    text="Reply",
+                    kind="reply",
+                    topic="coordination",
+                    hour_bin=11,
+                    cta_variant="reply_default",
+                    intensity=2,
+                    j_score=0.7,
+                )
+            )
+
+            session.add(
+                ArmsLog(
+                    tweet_id="p1",
+                    post_type="proposal",
+                    topic="technology",
+                    hour_bin=10,
+                    cta_variant="learn_more",
+                    intensity=2,
+                    sampled_prob=0.3,
+                    reward_j=0.82,
+                )
+            )
+            session.add(
+                ArmsLog(
+                    tweet_id="t1",
+                    post_type="thread",
+                    topic="energy",
+                    hour_bin=9,
+                    cta_variant="thread_default",
+                    intensity=3,
+                    sampled_prob=0.5,
+                    reward_j=0.65,
+                )
+            )
+            session.add(
+                ArmsLog(
+                    tweet_id="r1",
+                    post_type="reply",
+                    topic="coordination",
+                    hour_bin=11,
+                    cta_variant="reply_default",
+                    intensity=2,
+                    sampled_prob=0.6,
+                    reward_j=0.7,
+                )
+            )
+
+            session.commit()
+
+            performance = self.experiments.get_arm_performance(session, days=30)
+
+        assert set(performance["post_type"].keys()) >= {"proposal", "thread", "reply"}
+        assert performance["post_type"]["thread"]["count"] == 1
+        assert performance["post_type"]["reply"]["count"] == 1
+
     @patch('services.experiments.get_db_session')
     def test_reward_updates(self, mock_db_session):
         """Test updating rewards when tweet metrics become available"""

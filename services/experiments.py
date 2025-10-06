@@ -29,7 +29,7 @@ class ExperimentsService:
         )
 
         self.arms = {
-            "post_type": ["proposal", "thread", "question", "insight"],
+            "post_type": ["proposal", "thread", "reply", "question", "insight"],
             "topic": ["technology", "economics", "coordination", "energy", "policy", "automation"],
             "hour_bin": list(range(24)),  # 0-23 hour bins
             "cta_variant": ["learn_more", "join_pilot", "provide_feedback", "share_experience", "book_call"],
