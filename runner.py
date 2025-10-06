@@ -322,12 +322,27 @@ async def reply_mentions_job():
         for mention in mentions[:max_mentions]:
             try:
                 # Generate reply
+                arm_metadata = action.get("arm_metadata") or {}
+                topic = action.get("topic") or arm_metadata.get("topic") or mention.get("username") or "reply"
+                hour_bin = action.get("hour_bin")
+                if hour_bin is None:
+                    hour_bin = arm_metadata.get("hour_bin")
+                if hour_bin is None:
+                    hour_bin = datetime.now().hour
+
+                try:
+                    normalized_hour_bin = int(hour_bin)
+                except (TypeError, ValueError):
+                    normalized_hour_bin = hour_bin
+
+                cta_variant = action.get("cta_variant") or arm_metadata.get("cta_variant") or "reply_default"
+
                 context = {
                     "original_tweet": mention["text"],
                     "author_info": {"username": mention.get("username", "unknown")},
-                    "topic": "reply"
+                    "topic": topic
                 }
-                
+
                 intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
                 result = await generator.make_reply(context, intensity)
                 
@@ -353,10 +368,33 @@ async def reply_mentions_job():
                             text=result["content"],
                             kind="reply",
                             ref_tweet_id=mention["id"],
+                            topic=topic,
+                            hour_bin=normalized_hour_bin,
+                            cta_variant=cta_variant,
                             intensity=intensity,
                         )
                         session.add(tweet)
                         session.commit()
+
+                        arm_hour_raw = arm_metadata.get("hour_bin", normalized_hour_bin)
+                        try:
+                            arm_hour_bin = int(arm_hour_raw)
+                        except (TypeError, ValueError):
+                            if isinstance(normalized_hour_bin, int):
+                                arm_hour_bin = normalized_hour_bin
+                            else:
+                                arm_hour_bin = datetime.now().hour
+
+                        optimizer.experiments.log_arm_selection(
+                            session,
+                            tweet_id=reply_result.post_id,
+                            post_type=(arm_metadata.get("post_type") or "reply"),
+                            topic=arm_metadata.get("topic", topic),
+                            hour_bin=arm_hour_bin,
+                            cta_variant=arm_metadata.get("cta_variant", cta_variant),
+                            intensity=arm_metadata.get("intensity", intensity),
+                            sampled_prob=arm_metadata.get("sampled_prob", 0.5),
+                        )
 
                     meta = {
                         "reply_id": reply_result.post_id,
@@ -482,6 +520,20 @@ async def publish_thread_job():
 
         topic = action.get("topic", "general")
         intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL + 1)
+        arm_metadata = action.get("arm_metadata") or {}
+
+        hour_bin = action.get("hour_bin")
+        if hour_bin is None:
+            hour_bin = arm_metadata.get("hour_bin")
+        if hour_bin is None:
+            hour_bin = datetime.now().hour
+
+        try:
+            normalized_hour_bin = int(hour_bin)
+        except (TypeError, ValueError):
+            normalized_hour_bin = hour_bin
+
+        cta_variant = action.get("cta_variant") or arm_metadata.get("cta_variant") or "thread_default"
         thread_plan = await generator.make_thread(topic=topic, intensity=intensity)
 
         if "error" in thread_plan:
@@ -501,6 +553,7 @@ async def publish_thread_job():
                 "topic": topic,
                 "thread_index": index,
             }
+            metadata["hour_bin"] = normalized_hour_bin
             media_payload = post.get("media")
             if media_payload:
                 metadata["media"] = media_payload
@@ -538,9 +591,32 @@ async def publish_thread_job():
                     topic=topic,
                     ref_tweet_id=posted_ids[index - 1] if index > 0 else None,
                     intensity=intensity,
+                    hour_bin=normalized_hour_bin,
+                    cta_variant=cta_variant,
                 )
                 session.add(tweet_record)
                 session.commit()
+
+                if index == 0:
+                    arm_hour_raw = arm_metadata.get("hour_bin", normalized_hour_bin)
+                    try:
+                        arm_hour_bin = int(arm_hour_raw)
+                    except (TypeError, ValueError):
+                        if isinstance(normalized_hour_bin, int):
+                            arm_hour_bin = normalized_hour_bin
+                        else:
+                            arm_hour_bin = datetime.now().hour
+
+                    optimizer.experiments.log_arm_selection(
+                        session,
+                        tweet_id=x_result.post_id,
+                        post_type=arm_metadata.get("post_type", "thread"),
+                        topic=arm_metadata.get("topic", topic),
+                        hour_bin=arm_hour_bin,
+                        cta_variant=arm_metadata.get("cta_variant", cta_variant),
+                        intensity=arm_metadata.get("intensity", intensity),
+                        sampled_prob=arm_metadata.get("sampled_prob", 0.5),
+                    )
 
             segment_meta = {
                 "tweet_id": x_result.post_id,
