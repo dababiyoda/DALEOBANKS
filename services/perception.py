@@ -89,6 +89,40 @@ class PerceptionService:
         }
         return counts, payload
 
+    def get_priority_accounts(
+        self,
+        *,
+        min_authority: float = 0.75,
+        max_count: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Return high-authority influencer accounts suitable for outreach."""
+
+        prioritized: List[Dict[str, Any]] = []
+        for voice in self._voices:
+            if not isinstance(voice, Mapping):
+                continue
+            authority = float(voice.get("authority_weight", 0.0))
+            if authority < min_authority:
+                continue
+            username = voice.get("username")
+            if not username:
+                continue
+            entry = dict(voice)
+            entry.setdefault(
+                "id",
+                entry.get("user_id") or entry.get("id") or abs(hash(username)) % 10_000_000,
+            )
+            prioritized.append(entry)
+
+        prioritized.sort(
+            key=lambda item: (
+                float(item.get("authority_weight", 0.0)),
+                int(item.get("follower_count", 0)),
+            ),
+            reverse=True,
+        )
+        return prioritized[:max_count]
+
     async def ingest(
         self,
         session,

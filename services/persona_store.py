@@ -30,6 +30,7 @@ class PersonaSchema:
     templates: Dict[str, Any]
     prompt_overrides: Optional[Dict[str, str]] = None
     intensity_settings: Optional[Dict[str, Any]] = None
+    engagement_focus: Optional[List[str]] = None
 
     _validators: Dict[str, Callable[["PersonaSchema"], None]] = field(init=False, repr=False, default_factory=dict)
 
@@ -70,6 +71,7 @@ class PersonaSchema:
             "templates": deepcopy(self.templates),
             "prompt_overrides": deepcopy(self.prompt_overrides),
             "intensity_settings": deepcopy(self.intensity_settings),
+            "engagement_focus": deepcopy(self.engagement_focus),
         }
         return data
 
