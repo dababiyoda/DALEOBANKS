@@ -16,14 +16,28 @@ class StubPersonaStore:
 
 
 @pytest.mark.asyncio
-async def test_enforce_steelman_cadence():
+async def test_enforce_steelman_preserves_two_sentence_cadence_with_citation():
     generator = Generator(StubPersonaStore(), StubLLM())
-    sample = "One long reply without cadence."  # base text is ignored in enforcement
+    sample = (
+        "We agree on the staffing constraint."
+        " Let's narrow scope and show receipts with Reuters coverage https://reuters.com/example."
+        " That keeps everyone aligned."
+    )
+
     enforced = generator._enforce_steelman(sample, intensity=3)
     sentences = generator._split_sentences(enforced)
-    assert len(sentences) == 3
-    lengths = [len(sentence.split()) for sentence in sentences]
-    assert lengths[0] <= 18
-    assert lengths[1] <= 18
-    assert lengths[2] >= 24
-    assert generator.critic.has_periodic_cadence(enforced)
+
+    assert 1 <= len(sentences) <= 2
+    assert "https://reuters.com/example" in enforced
+
+
+@pytest.mark.asyncio
+async def test_enforce_steelman_adds_safety_language_when_citation_missing():
+    generator = Generator(StubPersonaStore(), StubLLM())
+    sample = "We hear the urgency on timelines. We can revisit once we have receipts."
+
+    enforced = generator._enforce_steelman(sample, intensity=3)
+    sentences = generator._split_sentences(enforced)
+
+    assert 1 <= len(sentences) <= 2
+    assert "trusted receipt" in enforced.lower()
