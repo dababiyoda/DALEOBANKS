@@ -70,12 +70,13 @@ class Critic:
     def split_sentences(self, text: str) -> List[str]:
         return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
-    def has_periodic_cadence(self, text: str) -> bool:
+    def has_periodic_cadence(self, text: str, max_sentences: int = 2) -> bool:
+        """Check whether text satisfies the current cadence requirements for replies."""
+
         sentences = self.split_sentences(text)
-        if len(sentences) < 3:
+        if not sentences:
             return False
-        lengths = [len(sentence.split()) for sentence in sentences[:3]]
-        return lengths[0] <= 18 and lengths[1] <= 18 and lengths[2] >= 24
+        return len(sentences) <= max_sentences
     
     def check_completeness(self, text: str, content_type: str = "proposal") -> Tuple[bool, List[str]]:
         """

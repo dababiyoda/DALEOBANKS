@@ -389,31 +389,55 @@ Requirements:
         return combined.rstrip(".") + "."
 
     def _enforce_steelman(self, content: str, intensity: int) -> str:
+        normalized = content.strip()
         if intensity < 2:
-            return content
+            return normalized
 
-        sentences = self._split_sentences(content)
+        sentences = self._split_sentences(normalized)
+        if not sentences:
+            return normalized
 
-        if len(sentences) >= 3:
-            leading = sentences[:3]
-            if len(sentences) > 3:
-                leading[2] = " ".join([leading[2]] + sentences[3:])
-        else:
-            words = content.strip().split()
-            chunk = max(1, len(words) // 3)
-            first = " ".join(words[:chunk])
-            second = " ".join(words[chunk : 2 * chunk])
-            third = " ".join(words[2 * chunk :])
-            leading = [first, second or first, third or content]
+        # Only adjust cadence when the product demands citations (high intensity).
+        if intensity < 3:
+            return normalized
 
-        if self.critic.has_periodic_cadence(" ".join(leading)):
-            return " ".join(leading)
+        max_sentences = 2
+        if len(sentences) > max_sentences:
+            head = sentences[: max_sentences - 1]
+            tail_source = sentences[max_sentences - 1 :]
+            tail_clauses = []
+            for sentence in tail_source:
+                clause = sentence.strip().rstrip(".?!")
+                if clause:
+                    tail_clauses.append(clause)
 
-        short_one = self._truncate_sentence(leading[0], 18)
-        short_two = self._truncate_sentence(leading[1], 18)
-        long_third = self._build_synthesis_sentence(leading[2], [short_one.rstrip("."), short_two.rstrip(".")])
+            merged = head.copy()
+            if tail_clauses:
+                merged_tail = "; ".join(tail_clauses).strip()
+                if merged_tail:
+                    merged.append(merged_tail.rstrip(".?!") + ".")
+            sentences = merged or head
 
-        return " ".join([short_one, short_two, long_third]).strip()
+        refined = " ".join(sentences).strip()
+        if refined and not refined.endswith((".", "!", "?")):
+            refined = refined + "."
+
+        if not self.websearch.has_valid_citation(refined):
+            # Maintain cadence while injecting safety language about missing receipts.
+            updated_sentences = self._split_sentences(refined)
+            if updated_sentences:
+                last = updated_sentences[-1].rstrip(".?!")
+                safety = "we need a trusted receipt before escalating"
+                if safety not in last.lower():
+                    if last:
+                        updated_sentences[-1] = f"{last} — {safety}."
+                    else:
+                        updated_sentences[-1] = safety.capitalize() + "."
+                refined = " ".join(updated_sentences).strip()
+            else:
+                refined = "We need a trusted receipt before escalating."
+
+        return refined
     
     def _build_quote_prompt(self, context: Dict[str, Any], memory_context: Dict[str, Any], intensity: int) -> str:
         """Build prompt for quote tweet generation"""
@@ -563,13 +587,13 @@ Requirements:
         if content_type == "reply":
             content = self._enforce_steelman(content, intensity)
             sentences = self._split_sentences(content)
-            if intensity >= 2:
-                if len(sentences) != 3 or not self.critic.has_periodic_cadence(content):
-                    return {"error": "Replies at this intensity must follow short/short/long cadence"}
-                if intensity >= 3 and not self.websearch.validate_links(content):
-                    return {"error": "High-intensity replies must cite a credible source from the whitelist"}
-            elif len(sentences) > 2:
-                return {"error": "Reply exceeds two sentences. Provide receipts or stay silent"}
+            max_sentences = 2
+            if not sentences:
+                return {"error": "Reply must include substantive content."}
+            if len(sentences) > max_sentences:
+                return {"error": "Replies must stay within two sentences to remain sharp."}
+            if intensity >= 3 and not self.websearch.validate_links(content):
+                return {"error": "High-intensity replies must cite a credible source from the whitelist"}
 
         # Proposals must include at least one credible citation (receipt)
         if content_type == "proposal":
