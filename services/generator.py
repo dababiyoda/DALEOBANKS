@@ -334,10 +334,12 @@ Topic focus: {topic}"""
         """Build prompt for reply generation"""
         persona = self.persona_store.get_current_persona()
         template = persona.get("templates", {}).get("reply", "")
-        
+
         original_tweet = context.get("original_tweet", "")
         author_info = context.get("author_info", {})
-        
+
+        reply_override = self.persona_store.get_reply_style_override()
+
         prompt = f"""Generate a reply to this tweet:
 
 Original tweet: "{original_tweet}"
@@ -354,6 +356,9 @@ Requirements:
 - Be constructive and helpful
 - No self-promotion unless directly relevant
 - Intensity level: {intensity} on scale 0-5"""
+
+        if reply_override:
+            prompt = f"{reply_override}\n\n{prompt}"
 
         return prompt
 

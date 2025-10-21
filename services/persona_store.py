@@ -77,7 +77,17 @@ class PersonaSchema:
 
 class PersonaStore:
     """Manages persona with validation, versioning, and hot-reload"""
-    
+
+    OVERRIDE_KEY_ALIASES = {
+        "reply": [
+            "reply",
+            "reply_style",
+            "reply_style_human_only",
+            "REPLY_STYLE",
+            "REPLY_STYLE_HUMAN_ONLY",
+        ]
+    }
+
     def __init__(self, persona_file: str = "persona.json", base_persona_file: str = "prompts/base_persona.txt"):
         self.persona_file = persona_file
         self.base_persona_file = base_persona_file
@@ -132,12 +142,47 @@ class PersonaStore:
         if self.file_watch_enabled and self._has_file_changed():
             logger.info("Persona file changed, reloading...")
             self.load_persona()
-        
+
         if not self.current_persona:
             raise RuntimeError("No persona loaded")
-        
+
         return self.current_persona.copy()
-    
+
+    def get_prompt_override(self, key: str) -> Optional[str]:
+        """Return the prompt override associated with ``key``.
+
+        Supports simple alias resolution so workflow-specific keys can
+        remain stable even if the persona file uses a descriptive name.
+        Returns ``None`` when no matching override is configured.
+        """
+
+        persona = self.get_current_persona()
+        overrides = persona.get("prompt_overrides") or {}
+        if not overrides:
+            return None
+
+        normalized = key.lower()
+        search_keys: List[str] = []
+
+        alias_candidates = self.OVERRIDE_KEY_ALIASES.get(normalized, [])
+        search_keys.extend(alias_candidates)
+
+        for candidate in {key, key.lower(), key.upper()}:
+            if candidate not in search_keys:
+                search_keys.append(candidate)
+
+        for candidate in search_keys:
+            value = overrides.get(candidate)
+            if isinstance(value, str) and value.strip():
+                return value
+
+        return None
+
+    def get_reply_style_override(self) -> Optional[str]:
+        """Convenience helper for reply prompt overrides."""
+
+        return self.get_prompt_override("reply")
+
     def update_persona(self, new_persona_data: Dict[str, Any], actor: str = "system") -> int:
         """Update persona with validation and versioning"""
         try:

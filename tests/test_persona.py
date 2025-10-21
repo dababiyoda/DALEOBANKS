@@ -17,6 +17,13 @@ class TestPersonaStore:
     
     def setup_method(self):
         """Setup test fixtures"""
+        self.reply_override = (
+            "REPLY STYLE — HUMAN ONLY\n\n"
+            "Write like a human community builder typing in real time. Use contractions, varied sentence lengths, and natural pacing cues. "
+            "Mirror the other person's emotional temperature while staying grounded, empathetic, and composed. Reference shared reality or lived experience without claiming you have a body. "
+            "Offer one concrete next step, question, or invitation to move the conversation forward. Never mention models, prompts, or automation; speak in first-person singular with warmth and curiosity."
+        )
+
         self.test_persona = {
             "version": 1,
             "handle": "TestBot",
@@ -37,7 +44,9 @@ class TestPersonaStore:
                 "tweet": "Problem → Solution → Test",
                 "reply": "Address → Suggest → Next"
             },
-            "prompt_overrides": None
+            "prompt_overrides": {
+                "reply": self.reply_override
+            }
         }
         
         # Create temporary persona file
@@ -69,12 +78,19 @@ class TestPersonaStore:
     def test_persona_loading(self):
         """Test persona loading from file"""
         persona = self.persona_store.get_current_persona()
-        
+
         assert persona["handle"] == "TestBot"
         assert persona["mission"] == "Test mission"
         assert len(persona["beliefs"]) == 2
         assert persona["content_mix"]["proposals"] == 0.7
-    
+        assert persona["prompt_overrides"]["reply"] == self.reply_override
+
+    def test_reply_override_lookup(self):
+        """Reply prompt override should be surfaced for generators."""
+
+        override = self.persona_store.get_reply_style_override()
+        assert override == self.reply_override
+
     @patch('services.persona_store.get_db_session')
     def test_persona_update(self, mock_db_session):
         """Test persona update with versioning"""
