@@ -9,11 +9,13 @@ import json
 import os
 import sys
 import traceback
+import uuid
 from datetime import datetime, UTC
 from typing import Dict, List, Optional, Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -34,12 +36,27 @@ from services.generator import Generator
 from services.selector import Selector
 from services.optimizer import Optimizer
 from services.self_model import SelfModelService
+from services.security import (
+    RequestContext,
+    get_request_context,
+    require_role,
+    require_any_role,
+)
+from services.observability import (
+    elapsed,
+    metrics_router,
+    record_request_metrics,
+    request_timer,
+)
 
 # Import runner for background tasks
 import runner
 
 # Initialize logger
 logger = get_logger(__name__)
+
+# Global state
+config = get_config()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -51,14 +68,14 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.ALLOWED_ORIGINS or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global state
-config = get_config()
+app.include_router(metrics_router)
+
 persona_store = PersonaStore()
 admin_limiter = AdminRateLimiter()
 analytics_service = AnalyticsService()
@@ -97,12 +114,6 @@ class CrisisRequest(BaseModel):
     active: bool
     reason: Optional[str] = None
 
-# Dependency for admin auth
-async def verify_admin_token(x_admin_token: Optional[str] = Header(None)):
-    if not x_admin_token or x_admin_token != config.ADMIN_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid admin token")
-    return True
-
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -134,6 +145,36 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in websocket_connections:
             websocket_connections.remove(websocket)
 
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get(config.REQUEST_ID_HEADER, str(uuid.uuid4()))
+    request.state.request_id = request_id
+    start = request_timer()
+    try:
+        response = await call_next(request)
+    except HTTPException as exc:
+        response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "request_id": request_id})
+    except Exception as exc:
+        logger.error("Unhandled application error", extra_data={"error": str(exc), "path": request.url.path})
+        response = JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error", "request_id": request_id})
+
+    duration = elapsed(start)
+    ctx: Optional[RequestContext] = getattr(request.state, "request_context", None)
+    role = ctx.roles[0] if ctx else "anonymous"
+    record_request_metrics(request, response.status_code, duration, role)
+    response.headers[config.REQUEST_ID_HEADER] = request_id
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "request_id": request_id},
+    )
+
 # Broadcast updates to all connected clients
 async def broadcast_update(data: Dict[str, Any]):
     if not websocket_connections:
@@ -154,7 +195,7 @@ async def broadcast_update(data: Dict[str, Any]):
 # Dashboard API endpoints
 @app.get("/api/dashboard")
 @app.get("/dashboard")  # Support both routes
-async def get_dashboard():
+async def get_dashboard(_: RequestContext = Depends(get_request_context)):
     """Get dashboard overview data"""
     try:
         with get_db_session() as session:
@@ -372,7 +413,7 @@ async def get_persona_versions():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/persona/preview")
-async def preview_persona(request: PersonaUpdateRequest, _: bool = Depends(verify_admin_token)):
+async def preview_persona(request: PersonaUpdateRequest, _: RequestContext = Depends(require_role("admin"))):
     """Preview persona changes"""
     try:
         validated = persona_store.validate_persona(request.payload)
@@ -389,7 +430,7 @@ async def preview_persona(request: PersonaUpdateRequest, _: bool = Depends(verif
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/persona")
-async def update_persona(request: PersonaUpdateRequest, _: bool = Depends(verify_admin_token)):
+async def update_persona(request: PersonaUpdateRequest, _: RequestContext = Depends(require_role("admin"))):
     """Update persona with validation and versioning"""
     try:
         # Apply rate limiting
@@ -415,7 +456,7 @@ async def update_persona(request: PersonaUpdateRequest, _: bool = Depends(verify
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/persona/rollback/{version}")
-async def rollback_persona(version: int, _: bool = Depends(verify_admin_token)):
+async def rollback_persona(version: int, _: RequestContext = Depends(require_role("admin"))):
     """Rollback to previous persona version"""
     try:
         if not admin_limiter.allow_request():
@@ -436,7 +477,7 @@ async def rollback_persona(version: int, _: bool = Depends(verify_admin_token)):
 
 @app.get("/api/analytics")
 @app.get("/analytics")  # Support both routes
-async def get_analytics():
+async def get_analytics(_: RequestContext = Depends(get_request_context)):
     """Get analytics data"""
     try:
         with get_db_session() as session:
