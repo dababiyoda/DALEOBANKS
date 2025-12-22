@@ -7,7 +7,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 
 const isProduction = process.env.NODE_ENV === "production";
 const PORT = parseInt(process.env.PORT || "5000");
-const BACKEND_PORT = 5001; // Python backend on different port
+const BACKEND_PORT = parseInt(process.env.BACKEND_PORT || "5001"); // Python backend on different port
 
 // Start the Python FastAPI server on a different port
 const pythonPath = process.env.PYTHON_PATH || "python3";
