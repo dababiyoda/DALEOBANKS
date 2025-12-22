@@ -25,14 +25,28 @@ class Config:
     X_ACCESS_TOKEN: Optional[str]
     X_ACCESS_SECRET: Optional[str]
     ADMIN_TOKEN: str
-    
+    JWT_SECRET: str
+    JWT_ISSUER: Optional[str]
+    JWT_AUDIENCE: Optional[str]
+
     # Operation Mode
     GOAL_MODE: str
     LIVE: bool
     QUIET_HOURS_ET: Optional[List[int]]
-    
+
+    # Network safety
+    ALLOWED_ORIGINS: List[str]
+    ALLOWED_IPS: List[str]
+
     # Media settings
     MEDIA_CATEGORY: str
+
+    # Request observability
+    REQUEST_ID_HEADER: str
+
+    # Rate limiting
+    ROLE_RATE_LIMITS: Dict[str, int]
+    ROLE_RATE_LIMIT_WINDOW: int
     
     # Schedules (in minutes)
     POST_TWEET_EVERY: Tuple[int, int]
@@ -108,6 +122,21 @@ def _parse_platform_weights(raw: str) -> Dict[str, float]:
     return weights or {"x": 1.0}
 
 
+def _parse_role_limits(raw: str) -> Dict[str, int]:
+    limits: Dict[str, int] = {}
+    for chunk in raw.split(","):
+        if not chunk.strip():
+            continue
+        if ":" not in chunk:
+            continue
+        role, limit = chunk.split(":", 1)
+        try:
+            limits[role.strip().lower()] = int(limit.strip())
+        except ValueError:
+            continue
+    return limits
+
+
 def _build_config() -> Config:
     """Create a new ``Config`` instance from environment variables."""
 
@@ -138,14 +167,31 @@ def _build_config() -> Config:
         X_ACCESS_TOKEN=os.getenv("X_ACCESS_TOKEN"),
         X_ACCESS_SECRET=os.getenv("X_ACCESS_SECRET"),
         ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", "choose-a-long-random-string"),
+        JWT_SECRET=os.getenv("JWT_SECRET", "change-me-please"),
+        JWT_ISSUER=os.getenv("JWT_ISSUER", None),
+        JWT_AUDIENCE=os.getenv("JWT_AUDIENCE", None),
 
         # Operation Mode
         GOAL_MODE=os.getenv("GOAL_MODE", "IMPACT"),
         LIVE=os.getenv("LIVE", "false").lower() == "true",
         QUIET_HOURS_ET=quiet_hours,
 
+        # Network safety
+        ALLOWED_ORIGINS=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()],
+        ALLOWED_IPS=[ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()],
+
         # Media settings
         MEDIA_CATEGORY=os.getenv("MEDIA_CATEGORY", "tweet_image"),
+
+        # Request observability
+        REQUEST_ID_HEADER=os.getenv("REQUEST_ID_HEADER", "X-Request-ID"),
+
+        # Rate limiting
+        ROLE_RATE_LIMITS={
+            **{"default": 120, "admin": 30, "service": 300},
+            **_parse_role_limits(os.getenv("ROLE_RATE_LIMITS", ""))
+        },
+        ROLE_RATE_LIMIT_WINDOW=int(os.getenv("ROLE_RATE_LIMIT_WINDOW", 60)),
 
         # Schedules
         POST_TWEET_EVERY=(45, 90),
