@@ -1,10 +1,20 @@
-"""Pytest configuration providing basic asyncio support."""
+"""Pytest configuration providing basic asyncio support and offline stubs."""
 
 from __future__ import annotations
 
 import asyncio
 import inspect
+import sys
+from pathlib import Path
 from typing import Any
+
+# Fallback stubs for third-party packages (dotenv, numpy, openai, tenacity)
+# live in tests/stubs. Appending the directory to the END of sys.path means a
+# real installed package always takes precedence; the stubs only kick in when
+# the dependency is missing, keeping the suite runnable offline.
+_STUBS_DIR = str(Path(__file__).resolve().parent / "tests" / "stubs")
+if _STUBS_DIR not in sys.path:
+    sys.path.append(_STUBS_DIR)
 
 
 def pytest_pyfunc_call(pyfuncitem):  # pragma: no cover - pytest hook
