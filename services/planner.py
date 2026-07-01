@@ -202,10 +202,18 @@ class PlannerService:
                 time_allocation["experimentation"] = 20
                 time_allocation["content_creation"] = 30
             
+            # Fold in the lessons the reflection engine has learned so weekly
+            # strategy is informed by what actually worked, not just raw metrics.
+            try:
+                recent_lessons = self.memory.get_recent_improvement_notes(session)[:5]
+            except Exception:
+                recent_lessons = []
+
             return {
                 "focus": focus,
                 "priorities": priorities,
                 "time_allocation": time_allocation,
+                "recent_lessons": recent_lessons,
                 "strategic_theme": "Deploy mechanisms that coordinate human energy toward Type-1 civilization",
                 "success_metrics": ["J-score improvement", "Community engagement", "Mechanism adoption"]
             }
