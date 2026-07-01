@@ -822,7 +822,7 @@ async def nightly_reflection_job():
     """Perform nightly reflection and generate improvement note"""
     try:
         with get_db_session() as session:
-            improvement_note = reflection_service.generate_reflection(session)
+            improvement_note = await reflection_service.generate_reflection_async(session)
             await _log_action("nightly_reflection", {"note": improvement_note})
             logger.info(f"Nightly reflection completed: {improvement_note}")
 
