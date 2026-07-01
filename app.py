@@ -36,6 +36,7 @@ from services.generator import Generator
 from services.selector import Selector
 from services.optimizer import Optimizer
 from services.self_model import SelfModelService
+from services.reflection import ReflectionService
 from services.security import (
     RequestContext,
     get_request_context,
@@ -87,6 +88,7 @@ generator = Generator(persona_store, llm_adapter)
 selector = Selector(persona_store)
 optimizer = Optimizer()
 self_model_service = SelfModelService(persona_store)
+reflection_service = ReflectionService()
 
 # WebSocket connections for real-time updates
 websocket_connections: List[WebSocket] = []
@@ -383,6 +385,30 @@ async def handle_redirect(redirect_id: str):
 async def health_check():
     """Health check endpoint"""
     return {"ok": True, "timestamp": datetime.now(UTC).isoformat()}
+
+# Reflection / learned-mind endpoints
+@app.get("/api/reflections")
+async def get_reflections(limit: int = 20, _: RequestContext = Depends(get_request_context)):
+    """Return the agent's most recent learned lessons (its evolving 'mind')."""
+    try:
+        with get_db_session() as session:
+            lessons = reflection_service.get_recent_lessons(session, limit=limit)
+            return {"count": len(lessons), "lessons": lessons}
+    except Exception as e:
+        logger.error(f"Get reflections error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/reflect")
+async def trigger_reflection(_: RequestContext = Depends(require_role("admin"))):
+    """Run a deep reflection now and return the freshly generated lesson."""
+    try:
+        with get_db_session() as session:
+            lesson = await reflection_service.generate_reflection_async(session)
+        await broadcast_update({"type": "reflection", "lesson": lesson})
+        return {"success": True, "lesson": lesson}
+    except Exception as e:
+        logger.error(f"Trigger reflection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Persona management endpoints
 @app.get("/api/persona")
