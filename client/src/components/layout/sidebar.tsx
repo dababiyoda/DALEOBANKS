@@ -7,12 +7,14 @@ import {
   Settings, 
   FileText, 
   Heart,
-  Bot
+  Bot,
+  Sparkles
 } from "lucide-react";
 
 const navigation = [
   { name: "Overview", href: "/", icon: LayoutDashboard },
   { name: "Persona Editor", href: "/persona", icon: Brain },
+  { name: "The Mind", href: "/mind", icon: Sparkles },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Configuration", href: "/config", icon: Settings },
   { name: "Activity Log", href: "/logs", icon: FileText },
