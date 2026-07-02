@@ -31,6 +31,10 @@ from services.reflection import ReflectionService
 from services.logging_utils import get_logger
 from services.crisis import CrisisService
 from services.perception import PerceptionService
+from services.critic import Critic
+from services.ethics_guard import EthicsGuard
+from services.ledger import get_ledger
+from services.thought_dsl import ThoughtPlan, ThoughtInterpreter
 
 logger = get_logger(__name__)
 
@@ -57,6 +61,9 @@ planner_service = PlannerService()
 self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
 crisis_service = CrisisService()
+thought_interpreter = ThoughtInterpreter(
+    EthicsGuard(), critic=Critic(), ledger=get_ledger()
+)
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -232,6 +239,18 @@ async def post_proposal_job():
 
         if "error" in result:
             logger.error(f"Proposal generation failed: {result['error']}")
+            return
+
+        # Run the outbound content through the inspectable reasoning gate:
+        # the plan (and the exact gate decision) lands in the decision ledger
+        # before anything is published.
+        plan = ThoughtPlan(goal=f"post proposal on {topic}")
+        plan.add_action(result["content"])
+        verdict = thought_interpreter.run(plan)
+        if not verdict["completed"]:
+            logger.warning(
+                "Proposal blocked by thought gate: %s", verdict.get("reasons")
+            )
             return
 
         publish_result = await multiplexer.publish(
