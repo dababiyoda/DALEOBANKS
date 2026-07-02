@@ -31,6 +31,11 @@ if "SEMANTIC_INDEX_PATH" not in os.environ:
         tempfile.mkdtemp(prefix="daleobanks-semindex-"), "semantic_index.jsonl"
     )
 
+# Run the object store purely in memory so tests stay isolated (init_db()
+# gives every test a clean slate). Persistence has dedicated tests that
+# opt back in with a temp snapshot path.
+os.environ.setdefault("PERSIST_STORE", "false")
+
 
 def pytest_pyfunc_call(pyfuncitem):  # pragma: no cover - pytest hook
     """Allow pytest to run ``async def`` tests without extra plugins."""
