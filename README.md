@@ -64,13 +64,14 @@ NODE_ENV=production PORT=5000 BACKEND_PORT=5001 npm start
 
 ## Replit deployment
 A ready-to-use configuration is included:
-- `.replit` launches `scripts/replit-start.sh`, which installs Python/Node deps and starts the combined stack.
-- `replit.nix` ensures Python 3.11 and Node 20 are available.
+- `.replit` uses module-based config (`nodejs-20`, `python-3.11`, `web`) — no `replit.nix` needed.
+- The **Run** button executes the "Full Stack" workflow: `scripts/replit-start.sh` installs deps and starts the combined stack, waiting on port 5000.
+- Publishing is preconfigured as a **Reserved VM** deployment (the agent is a stateful 24/7 scheduler): the build step compiles the client/server bundle and installs Python deps, and `scripts/replit-deploy.sh` runs the production stack with port 5000 mapped to 80.
 
 Steps:
 1) Create a Replit from this repo.
-2) Add a `.env` using `.env.example` as a template (set API keys and tokens).
-3) Click **Run**. Express listens on port 5000 and spawns FastAPI on 5001.
+2) Add secrets in the Replit **Secrets** pane (`OPENAI_API_KEY`, X tokens, `ADMIN_TOKEN`, `JWT_SECRET`; see `.env.example` for the full list). Keep `LIVE` unset/false until you deliberately arm it.
+3) Click **Run** for development, or **Deploy → Reserved VM** to publish. Deployment secrets are configured separately in the deployment pane.
 
 ## Health checks & smoke tests
 After the stack is running:

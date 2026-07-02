@@ -120,3 +120,23 @@ The system implements a sophisticated cognitive architecture:
 - **WebSocket Scaling**: Real-time updates designed for horizontal scaling
 
 The architecture prioritizes modularity, safety, and autonomous operation while maintaining human oversight capabilities. The system is designed to evolve and optimize itself continuously while adhering to ethical guidelines and safety constraints.
+
+## Recent Updates (July 2026)
+
+### Safety spine (tamper-evident observability layer)
+- **Decision ledger** (`services/ledger.py`): append-only hash-chained JSONL log of every publish, identity change, lesson, reasoning step, and breaker event. Verified at startup; a broken chain disarms live mode. See `docs/SAFETY_AND_ROLLOUT.md`.
+- **Kill switch + rate governor**: single ledgered authority over `LIVE`; per-platform sliding-window caps. All platform adapters inherit the publish gate from `BaseSocialClient` (`_publish_impl` pattern).
+- **Heartbeat** (`services/heartbeat.py`): all scheduled jobs run supervised; 3 consecutive failures trip a breaker that disarms live posting. Re-arming is manual.
+- **Thought DSL** (`services/thought_dsl.py`): outbound proposals pass an ethics- and critic-gated, fully ledgered reasoning plan before publishing.
+- **Semantic memory** (`services/semantic_index.py`): durable associative lesson recall feeding generation.
+- **Curiosity drive**: bounded novelty bonus in the Thompson-sampling optimizer.
+
+### Replit environment
+- `.replit` uses module-based config (`nodejs-20`, `python-3.11`, `web`; nix channel `stable-24_05`); the legacy `replit.nix` was removed.
+- Run button executes the "Full Stack" workflow (`scripts/replit-start.sh`, waits on port 5000).
+- Publishing uses a Reserved VM deployment (`deploymentTarget = "vm"` — the agent is a stateful 24/7 scheduler): build compiles the client/server bundle and installs Python deps; `scripts/replit-deploy.sh` runs the production stack. Port 5000 maps to external 80.
+- Python packaging: `pyproject.toml` + `uv.lock` are in sync with `requirements.txt` (includes PyJWT, prometheus-client, pytest).
+- Secrets go in Replit Secrets (`OPENAI_API_KEY`, X tokens, `ADMIN_TOKEN`, `JWT_SECRET`); `LIVE` stays `false` until deliberately armed.
+
+### Testing
+- `python -m pytest` (117 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.

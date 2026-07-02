@@ -1,7 +1,7 @@
 [project]
-name = "repl-nix-workspace"
+name = "daleobanks"
 version = "0.1.0"
-description = "Add your description here"
+description = "Autonomous social AI agent with a tamper-evident safety spine"
 requires-python = ">=3.11"
 dependencies = [
     "apscheduler>=3.11.0",
@@ -9,8 +9,11 @@ dependencies = [
     "levenshtein>=0.27.1",
     "numpy>=2.3.2",
     "openai>=1.97.1",
+    "prometheus-client>=0.21.1",
     "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.7",
+    "pyjwt>=2.10.1",
+    "pytest>=8.3.3",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.20",
     "pyyaml>=6.0.2",

@@ -10,6 +10,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.db
+venv/
+.venv/
+.pythonlibs/
+.upm/
 
 # Runtime artifacts (see services/self_model.py)
 self_model_card.md.backup.*
