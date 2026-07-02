@@ -170,6 +170,14 @@ async def _add_jobs():
         max_instances=1
     )
 
+    # Inbound DM ingest job (hearing, not speaking - read-only)
+    scheduler.add_job(
+        heartbeat.supervise('dm_ingest', dm_ingest_job),
+        IntervalTrigger(minutes=15, jitter=90),
+        id='dm_ingest',
+        max_instances=1
+    )
+
     # Crisis monitoring job
     scheduler.add_job(
         heartbeat.supervise('crisis_watch', crisis_watch_job),
@@ -678,8 +686,98 @@ async def publish_thread_job():
         logger.error("Thread job failed: %s", exc)
 
 
+async def dm_ingest_job():
+    """Read incoming DMs so the agent can hear replies in private.
+
+    Inbound text is untrusted input: it is screened by the EthicsGuard
+    before it can influence anything, stored in the durable store, and
+    only metadata (never private message text) goes to the ledger.
+    """
+    try:
+        if not config.ENABLE_DMS or not x_client or not x_client.is_healthy():
+            return
+
+        payload = await x_client.get_dm_events()
+        events = payload.get("events") or []
+        if not events:
+            return
+
+        ledger = get_ledger()
+        new_count = 0
+        with get_db_session() as session:
+            seen_ids = {
+                action.meta_json.get("dm_event_id")
+                for action in session.query(Action)
+                .filter(lambda a: a.kind in ("dm_received", "dm_flagged"))
+                .all()
+                if action.meta_json
+            }
+
+            for event in events:
+                event_id = event.get("id")
+                sender_id = event.get("sender_id") or ""
+                text = event.get("text") or ""
+                if not event_id or event_id in seen_ids:
+                    continue
+                # Skip our own outbound messages in the event stream.
+                if x_client.self_id and sender_id == x_client.self_id:
+                    continue
+
+                verdict = ethics_guard.validate_text(text)
+                kind = "dm_received" if verdict.approved else "dm_flagged"
+                session.add(Action(kind=kind, meta_json={
+                    "dm_event_id": event_id,
+                    "sender_id": sender_id,
+                    "text": text,
+                    "created_at": event.get("created_at"),
+                    "flag_reasons": [] if verdict.approved else list(verdict.reasons),
+                }))
+                ledger.record("dm_received", {
+                    "event_id": event_id,
+                    "sender_id": sender_id,
+                    "flagged": not verdict.approved,
+                })
+                memory_service.record_interaction(
+                    session,
+                    user_id=sender_id or "unknown",
+                    kind="dm",
+                    text=text if verdict.approved else None,
+                )
+                new_count += 1
+            session.commit()
+
+        if new_count:
+            logger.info(f"Ingested {new_count} inbound DM events")
+
+    except Exception as e:
+        logger.error(f"DM ingest job failed: {e}")
+
+
+def _find_unanswered_dm(session) -> Optional[Dict[str, Any]]:
+    """Most recent clean inbound DM whose sender we haven't answered since."""
+    received = (
+        session.query(Action)
+        .filter(lambda a: a.kind == "dm_received")
+        .order_by(lambda a: a.created_at, descending=True)
+        .all()
+    )
+    if not received:
+        return None
+    answered = {
+        (a.meta_json or {}).get("reply_to_event_id")
+        for a in session.query(Action)
+        .filter(lambda a: a.kind in ("value_dm_sent", "value_dm_drafted"))
+        .all()
+    }
+    for action in received:
+        meta = action.meta_json or {}
+        if meta.get("dm_event_id") and meta["dm_event_id"] not in answered and meta.get("sender_id"):
+            return meta
+    return None
+
+
 async def value_dm_job():
-    """Send a value-first DM to a priority account."""
+    """Send a value-first DM: reply to unanswered inbound DMs first."""
 
     try:
         if not config.ENABLE_DMS:
@@ -689,10 +787,28 @@ async def value_dm_job():
         if not crisis_service.guard(action="send_value_dm"):
             return
 
-        action = await selector.decide_next_action()
-        if action.get("type") != "SEND_VALUE_DM":
-            logger.info("Selector chose different action, skipping value DM")
-            return
+        # Hearing before speaking: an unanswered inbound DM outranks
+        # cold outreach chosen by the selector.
+        inbound = None
+        with get_db_session() as session:
+            inbound = _find_unanswered_dm(session)
+
+        if inbound:
+            action = {
+                "type": "SEND_VALUE_DM",
+                "recipient": {"id": inbound["sender_id"], "topics": []},
+                "intensity": config.MIN_INTENSITY_LEVEL,
+                "seed": (
+                    "Reply helpfully and concretely to this message we received: "
+                    f"{inbound.get('text', '')[:280]}"
+                ),
+                "reply_to_event_id": inbound.get("dm_event_id"),
+            }
+        else:
+            action = await selector.decide_next_action()
+            if action.get("type") != "SEND_VALUE_DM":
+                logger.info("Selector chose different action, skipping value DM")
+                return
 
         recipient = action.get("recipient") or {}
         recipient_id = str(
@@ -735,6 +851,8 @@ async def value_dm_job():
             "topic": topic,
             "intensity": intensity,
         }
+        if action.get("reply_to_event_id"):
+            dm_meta["reply_to_event_id"] = action["reply_to_event_id"]
 
         if not config.LIVE or not x_client or not x_client.is_healthy():
             logger.info("LIVE disabled or X client unavailable; DM will not be sent")
@@ -746,6 +864,14 @@ async def value_dm_job():
         if success:
             selector.mark_dm_sent(recipient_id)
             await _log_action("value_dm_sent", {**dm_meta, "characters": len(dm_text)})
+            with get_db_session() as session:
+                memory_service.record_interaction(
+                    session,
+                    user_id=recipient_id,
+                    handle=recipient.get("username"),
+                    kind="dm_sent",
+                    topic=topic,
+                )
             logger.info("Sent value-first DM to %s", recipient.get("username", recipient_id))
         else:
             logger.warning("DM send returned failure for %s", recipient_id)
