@@ -176,6 +176,61 @@ class SensedEvent:
 
 
 @dataclass
+class Relationship:
+    """Durable social memory: one record per account the agent interacts with."""
+
+    id: str = ""  # platform user id (or handle when no id is available)
+    handle: Optional[str] = None
+    platform: str = "x"
+    interaction_count: int = 0
+    first_interaction_at: datetime = field(default_factory=_utcnow)
+    last_interaction_at: datetime = field(default_factory=_utcnow)
+    sentiment_score: float = 0.0  # running average in [-1, 1]
+    topics: List[str] = field(default_factory=list)
+    kinds: Dict[str, int] = field(default_factory=dict)  # interaction kind -> count
+
+
+@dataclass
+class Conversion:
+    """A real, recorded revenue event (vs. the legacy click estimate)."""
+
+    id: str = field(default_factory=_uuid)
+    redirect_id: Optional[str] = None
+    value: float = 0.0
+    currency: str = "USD"
+    source: str = "webhook"
+    occurred_at: datetime = field(default_factory=_utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class DiscoveryProposal:
+    """A proposed addition to the agent's perception seeds, pending human review."""
+
+    id: str = field(default_factory=_uuid)
+    kind: str = ""  # "influencer" | "keyword"
+    value: str = ""
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    status: str = "pending"  # pending | approved | rejected
+    created_at: datetime = field(default_factory=_utcnow)
+    decided_at: Optional[datetime] = None
+    actor: Optional[str] = None
+
+
+@dataclass
+class GoalProposal:
+    """A proposed OKR adjustment from the planner, pending human review."""
+
+    id: str = field(default_factory=_uuid)
+    proposal: Dict[str, Any] = field(default_factory=dict)
+    rationale: str = ""
+    status: str = "pending"  # pending | approved | rejected
+    created_at: datetime = field(default_factory=_utcnow)
+    decided_at: Optional[datetime] = None
+    actor: Optional[str] = None
+
+
+@dataclass
 class PersonaVersion:
     """Persona version history with audit trail."""
 
@@ -200,5 +255,9 @@ __all__ = [
     "Redirect",
     "ArmsLog",
     "SensedEvent",
+    "Relationship",
+    "Conversion",
+    "DiscoveryProposal",
+    "GoalProposal",
     "PersonaVersion",
 ]

@@ -30,6 +30,7 @@ from services.optimizer import Optimizer
 from services.reflection import ReflectionService
 from services.logging_utils import get_logger
 from services.crisis import CrisisService
+from services.memory import MemoryService
 from services.perception import PerceptionService
 from services.critic import Critic
 from services.ethics_guard import EthicsGuard
@@ -62,8 +63,10 @@ planner_service = PlannerService()
 self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
 crisis_service = CrisisService()
+memory_service = MemoryService()
+ethics_guard = EthicsGuard()
 thought_interpreter = ThoughtInterpreter(
-    EthicsGuard(), critic=Critic(), ledger=get_ledger()
+    ethics_guard, critic=Critic(), ledger=get_ledger()
 )
 heartbeat = Heartbeat(get_kill_switch(), get_ledger())
 
@@ -415,6 +418,16 @@ async def reply_mentions_job():
                             cta_variant=arm_metadata.get("cta_variant", cta_variant),
                             intensity=arm_metadata.get("intensity", intensity),
                             sampled_prob=arm_metadata.get("sampled_prob", 0.5),
+                        )
+
+                        # Social memory: remember who we talked to and how it felt.
+                        memory_service.record_interaction(
+                            session,
+                            user_id=mention.get("author_id") or mention.get("username", "unknown"),
+                            handle=mention.get("username"),
+                            kind="mention",
+                            topic=topic,
+                            text=mention.get("text"),
                         )
 
                     meta = {
