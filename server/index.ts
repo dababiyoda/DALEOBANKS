@@ -35,28 +35,30 @@ pythonProcess.on("exit", (code) => {
 const app = express();
 const server = createServer(app);
 
-// Proxy API and WebSocket requests to Python backend
+// Proxy API and WebSocket requests to Python backend.
+// Express strips the mount path from req.url before the proxy sees it, so
+// each proxy must re-add its prefix or the backend receives the wrong path.
 app.use('/api', createProxyMiddleware({
   target: `http://localhost:${BACKEND_PORT}`,
   changeOrigin: true,
   ws: false,
-  pathRewrite: {
-    '^/api': '/api'  // Keep the /api prefix
-  }
+  pathRewrite: (path) => `/api${path}`,
 }));
 
 app.use('/ws', createProxyMiddleware({
   target: `http://localhost:${BACKEND_PORT}`,
   changeOrigin: true,
-  ws: true
+  ws: true,
+  pathRewrite: (path) => `/ws${path === '/' ? '' : path}`,
 }));
 
 // Proxy other backend-specific routes
-const backendRoutes = ['/health', '/toggle', '/mode', '/persona', '/notes', '/redirects', '/config', '/metrics', '/logs'];
+const backendRoutes = ['/health', '/toggle', '/mode', '/persona', '/notes', '/redirects', '/config', '/metrics', '/logs', '/r'];
 backendRoutes.forEach(route => {
   app.use(route, createProxyMiddleware({
     target: `http://localhost:${BACKEND_PORT}`,
-    changeOrigin: true
+    changeOrigin: true,
+    pathRewrite: (path) => `${route}${path === '/' ? '' : path}`,
   }));
 });
 
