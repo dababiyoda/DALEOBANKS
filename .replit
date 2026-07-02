@@ -35,7 +35,7 @@ waitForPort = 5000
 # bundle and pre-installs Python deps so the run step boots fast enough
 # for the deployment health check.
 [deployment]
-build = ["bash", "-c", "npm ci && npm run build && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt"]
+build = ["bash", "-c", "npm ci && npm run build && python3 -m venv venv && PIP_USER=0 ./venv/bin/pip install -r requirements.txt"]
 run = ["bash", "scripts/replit-deploy.sh"]
 deploymentTarget = "vm"
 

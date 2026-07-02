@@ -5,6 +5,10 @@
 # the bundled production server (Express serving dist/public + FastAPI).
 set -euo pipefail
 
+# Replit's base environment configures pip for --user installs, which is
+# incompatible with a virtualenv. Force installs into the venv.
+export PIP_USER=0
+
 if [ ! -d "venv" ]; then
   python3 -m venv venv
 fi
