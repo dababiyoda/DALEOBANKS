@@ -2,6 +2,8 @@
 Thompson sampling optimizer for multi-armed bandit optimization
 """
 
+import math
+
 import numpy as np
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime, timedelta, UTC
@@ -24,6 +26,7 @@ class Optimizer:
         # Thompson sampling parameters
         self.epsilon_floor = 0.1  # Minimum exploration probability
         self.beta_prior = (2.0, 2.0)  # Beta(alpha, beta) prior
+        self.novelty_weight = 0.15  # Cap on the intrinsic-curiosity bonus
         
         # Goal mode weights
         self.goal_weights = self.config.GOAL_WEIGHTS[self.config.GOAL_MODE]
@@ -98,15 +101,36 @@ class Optimizer:
                 "sampled_prob": 0.5
             }
     
+    def novelty_bonus(self, arm_pull_counts: Dict[str, int],
+                      weight: Optional[float] = None) -> Dict[str, float]:
+        """Intrinsic curiosity: under-explored arms get a bounded bonus.
+
+        bonus = weight / sqrt(1 + pulls) -> large for untried arms, ->0 as an
+        arm accumulates pulls. Capped by ``weight`` so it nudges exploration
+        without ever overriding the engagement-based posterior or any safety
+        gate.
+        """
+        if weight is None:
+            weight = self.novelty_weight
+        return {
+            arm: weight / math.sqrt(1 + pulls)
+            for arm, pulls in arm_pull_counts.items()
+        }
+
     def _thompson_sample(self, performance: Dict[str, Any]) -> Dict[str, Any]:
         """Perform Thompson sampling for each arm dimension"""
         selected = {}
         total_prob = 1.0
-        
+
         for dimension in ["post_type", "topic", "hour_bin", "cta_variant", "intensity"]:
             if dimension in performance and performance[dimension]:
                 arm_probs = {}
-                
+                pull_counts = {
+                    arm: stats.get("count", 0)
+                    for arm, stats in performance[dimension].items()
+                }
+                bonuses = self.novelty_bonus(pull_counts)
+
                 # Calculate Thompson sampling probabilities
                 for arm, stats in performance[dimension].items():
                     # Convert J-scores to success/failure for Beta distribution
@@ -127,10 +151,13 @@ class Optimizer:
                     
                     try:
                         sampled_prob = np.random.beta(alpha, beta)
-                        arm_probs[arm] = sampled_prob
                     except Exception as e:
                         logger.warning(f"Beta sampling failed for {arm}: {e}")
-                        arm_probs[arm] = 0.5
+                        sampled_prob = 0.5
+
+                    # Curiosity drive: under-explored arms get a bounded lift
+                    # so the agent keeps exploring instead of ossifying.
+                    arm_probs[arm] = sampled_prob + bonuses.get(arm, 0.0)
                 
                 # Select arm with highest sampled probability
                 if arm_probs:
