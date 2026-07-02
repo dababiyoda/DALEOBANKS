@@ -84,8 +84,15 @@ After the stack is running:
 - `client/` – React frontend
 - `services/` – Backend services (e.g., persona, analytics, websearch)
 - `scripts/` – Replit helper scripts
+- `tests/` – Pytest suite (`tests/stubs/` holds offline dependency stubs)
+- `docs/` – Operational documentation
 
 ## Safety & operations notes
 - Keep `LIVE=false` until credentials and guardrails are fully validated.
 - Update `ALLOWED_ORIGINS` and `ALLOWED_IPS` before exposing publicly.
 - Rotate `ADMIN_TOKEN` and `JWT_SECRET` regularly in production.
+- Every publish, identity change, lesson, and gate decision is recorded in a
+  tamper-evident decision ledger (`data/decision_ledger.jsonl`). A broken
+  chain or repeated job failures automatically disarm live posting. See
+  [docs/SAFETY_AND_ROLLOUT.md](docs/SAFETY_AND_ROLLOUT.md) for the safety
+  spine and the discipline for rolling out new platforms.
