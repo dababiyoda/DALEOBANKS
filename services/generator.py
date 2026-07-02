@@ -69,14 +69,15 @@ class Generator:
         """Generate a proposal tweet"""
         try:
             with get_db_session() as session:
-                # Get context from memory
-                context = self.memory.get_context_for_generation(session)
-                
+                # Get context from memory, including lessons associatively
+                # related to this topic from the durable semantic index.
+                context = self.memory.get_context_for_generation(session, topic=topic)
+
                 # Build system prompt
                 system_prompt = self.persona_store.build_system_prompt(
                     context["improvement_notes"]
                 )
-                
+
                 # Prepare user message
                 user_message = self._build_proposal_prompt(topic, context, intensity)
                 
@@ -311,13 +312,20 @@ class Generator:
         persona = self.persona_store.get_current_persona()
         template = persona.get("templates", {}).get("tweet", "")
         
+        associative = context.get("associative_lessons") or []
+        lessons_block = ""
+        if associative:
+            lessons_block = "\nLessons learned on related topics:\n" + "\n".join(
+                f"- {lesson}" for lesson in associative
+            ) + "\n"
+
         prompt = f"""Generate a proposal tweet about {topic}.
 
 Template to follow: {template}
 
 Recent patterns that worked well:
 {json.dumps(context.get("learned_patterns", {}), indent=2)}
-
+{lessons_block}
 Requirements:
 - Must contain: Problem, Mechanism, Pilot, KPIs, Risks, CTA
 - Maximum 280 characters

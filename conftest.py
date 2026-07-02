@@ -25,6 +25,12 @@ if "LEDGER_PATH" not in os.environ:
         tempfile.mkdtemp(prefix="daleobanks-ledger-"), "decision_ledger.jsonl"
     )
 
+# Same for the semantic index (see services/semantic_index.py).
+if "SEMANTIC_INDEX_PATH" not in os.environ:
+    os.environ["SEMANTIC_INDEX_PATH"] = os.path.join(
+        tempfile.mkdtemp(prefix="daleobanks-semindex-"), "semantic_index.jsonl"
+    )
+
 
 def pytest_pyfunc_call(pyfuncitem):  # pragma: no cover - pytest hook
     """Allow pytest to run ``async def`` tests without extra plugins."""
