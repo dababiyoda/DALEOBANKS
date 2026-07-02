@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Save, Eye } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import type { DashboardResponse } from "@/types/api";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -24,7 +25,7 @@ export default function Dashboard() {
     summaries: 10
   });
 
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading } = useQuery<DashboardResponse>({
     queryKey: ["/api/dashboard"],
     refetchInterval: 30000, // Refresh every 30 seconds
   });

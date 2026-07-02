@@ -5,9 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AnalyticsCharts from "@/components/dashboard/analytics-charts";
 import { TrendingUp, TrendingDown, DollarSign, Users, Target, AlertTriangle } from "lucide-react";
+import type { AnalyticsSummary } from "@/types/api";
 
 export default function Analytics() {
-  const { data: analytics, isLoading } = useQuery({
+  const { data: analytics, isLoading } = useQuery<AnalyticsSummary>({
     queryKey: ["/api/analytics"],
     refetchInterval: 60000, // Refresh every minute
   });
@@ -69,7 +70,7 @@ export default function Analytics() {
                 <div className={`text-xs flex items-center mt-1 ${getChangeColor(analytics?.fame_score_change || 0)}`}>
                   {getChangeIcon(analytics?.fame_score_change || 0)}
                   <span className="ml-1">
-                    {analytics?.fame_score_change > 0 ? '+' : ''}{analytics?.fame_score_change?.toFixed(1) || '0.0'} from yesterday
+                    {(analytics?.fame_score_change ?? 0) > 0 ? '+' : ''}{analytics?.fame_score_change?.toFixed(1) || '0.0'} from yesterday
                   </span>
                 </div>
               </CardContent>
@@ -85,7 +86,7 @@ export default function Analytics() {
                 <div className={`text-xs flex items-center mt-1 ${getChangeColor(analytics?.revenue_change || 0)}`}>
                   {getChangeIcon(analytics?.revenue_change || 0)}
                   <span className="ml-1">
-                    {analytics?.revenue_change > 0 ? '+$' : '-$'}{Math.abs(analytics?.revenue_change || 0).toFixed(2)} from yesterday
+                    {(analytics?.revenue_change ?? 0) > 0 ? '+$' : '-$'}{Math.abs(analytics?.revenue_change || 0).toFixed(2)} from yesterday
                   </span>
                 </div>
               </CardContent>
@@ -101,7 +102,7 @@ export default function Analytics() {
                 <div className={`text-xs flex items-center mt-1 ${getChangeColor(analytics?.follower_change || 0)}`}>
                   {getChangeIcon(analytics?.follower_change || 0)}
                   <span className="ml-1">
-                    {analytics?.follower_change > 0 ? '+' : ''}{analytics?.follower_change || 0} today
+                    {(analytics?.follower_change ?? 0) > 0 ? '+' : ''}{analytics?.follower_change || 0} today
                   </span>
                 </div>
               </CardContent>

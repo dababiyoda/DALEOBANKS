@@ -10,7 +10,8 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, Zap, Target, Shield, Clock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { DashboardResponse } from "@/types/api";
 
 export default function Configuration() {
   const { toast } = useToast();
@@ -18,13 +19,17 @@ export default function Configuration() {
   const [goalMode, setGoalMode] = useState("FAME");
   const [liveMode, setLiveMode] = useState(true);
 
-  const { data: config, isLoading } = useQuery({
+  const { data: config, isLoading } = useQuery<DashboardResponse>({
     queryKey: ["/api/dashboard"],
-    onSuccess: (data) => {
-      setGoalMode(data?.goal_mode || "FAME");
-      setLiveMode(data?.system_status?.live_mode || true);
-    }
   });
+
+  // react-query v5 removed per-query onSuccess; sync local state from data.
+  useEffect(() => {
+    if (config) {
+      setGoalMode(config.goal_mode || "FAME");
+      setLiveMode(config.system_status?.live_mode ?? true);
+    }
+  }, [config]);
 
   const toggleLiveMutation = useMutation({
     mutationFn: (live: boolean) => api.post("/api/toggle", { live }),
