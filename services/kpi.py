@@ -127,18 +127,24 @@ class KPIService:
         return round(fame_score, 2)
     
     def _calculate_daily_revenue(self, session: Session, period_start: datetime, period_end: datetime) -> float:
-        """Calculate revenue from tracked redirects"""
-        # Calculate total revenue from redirects in the period
-        # This would track clicks on monetized links
+        """Revenue in the period: measured conversions when available."""
+        from db.models import Conversion
+
+        all_conversions = session.query(Conversion).all()
+        if all_conversions:
+            return round(
+                sum(
+                    c.value for c in all_conversions
+                    if period_start <= c.occurred_at <= period_end
+                ),
+                2,
+            )
+
+        # Legacy estimate: no conversions recorded yet.
         redirects = session.query(Redirect).all()
-        
         total_revenue = 0.0
         for redirect in redirects:
-            # In a real implementation, this would track clicks per day
-            # For now, we'll use a simple estimate
-            estimated_daily_revenue = redirect.clicks * 0.10  # $0.10 per click estimate
-            total_revenue += estimated_daily_revenue
-        
+            total_revenue += redirect.clicks * 0.10  # $0.10 per click estimate
         return round(total_revenue, 2)
     
     def _calculate_authority_signals(self, session: Session, period_start: datetime, period_end: datetime) -> float:

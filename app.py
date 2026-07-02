@@ -117,6 +117,13 @@ class CrisisRequest(BaseModel):
     active: bool
     reason: Optional[str] = None
 
+class ConversionRequest(BaseModel):
+    value: float
+    redirect_id: Optional[str] = None
+    source: Optional[str] = "webhook"
+    currency: Optional[str] = "USD"
+    metadata: Optional[Dict[str, Any]] = None
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -413,6 +420,67 @@ async def create_redirect(request: RedirectRequest):
         logger.error(f"Redirect creation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/conversions")
+async def record_conversion(
+    request: ConversionRequest,
+    _: RequestContext = Depends(require_any_role(["admin", "service"])),
+):
+    """Record a real revenue event (e.g. from a payment provider webhook)."""
+    try:
+        conversion = Conversion(
+            redirect_id=request.redirect_id,
+            value=float(request.value),
+            currency=request.currency or "USD",
+            source=request.source or "webhook",
+            metadata=request.metadata or {},
+        )
+        with get_db_session() as session:
+            session.add(conversion)
+            session.commit()
+
+        get_ledger().record("revenue_event", {
+            "conversion_id": conversion.id,
+            "value": conversion.value,
+            "currency": conversion.currency,
+            "redirect_id": conversion.redirect_id,
+            "source": conversion.source,
+        })
+        return {"success": True, "id": conversion.id}
+    except Exception as e:
+        logger.error(f"Conversion recording error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conversions")
+async def list_conversions(limit: int = 50, _: RequestContext = Depends(get_request_context)):
+    """List recorded revenue events, newest first."""
+    try:
+        with get_db_session() as session:
+            conversions = (
+                session.query(Conversion)
+                .order_by(lambda c: c.occurred_at, descending=True)
+                .limit(limit)
+                .all()
+            )
+            return {
+                "count": len(conversions),
+                "conversions": [
+                    {
+                        "id": c.id,
+                        "value": c.value,
+                        "currency": c.currency,
+                        "source": c.source,
+                        "redirect_id": c.redirect_id,
+                        "occurred_at": c.occurred_at.isoformat(),
+                    }
+                    for c in conversions
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Conversion list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/r/{redirect_id}")
 async def handle_redirect(redirect_id: str):
     """Handle redirect and track clicks"""
@@ -429,6 +497,10 @@ async def handle_redirect(redirect_id: str):
             # Increment clicks
             redirect.clicks = (redirect.clicks or 0) + 1
             session.commit()
+            get_ledger().record("link_click", {
+                "redirect_id": redirect.id,
+                "clicks": redirect.clicks,
+            })
             
             return RedirectResponse(url=str(redirect.target_url), status_code=302)
     except Exception as e:
