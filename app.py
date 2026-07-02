@@ -259,23 +259,69 @@ async def set_crisis(request: CrisisRequest):
         "crisis_reason": runner.crisis_service.reason,
     }
 
+async def _arming_preflight() -> Dict[str, Any]:
+    """Checks that must pass before live posting can be armed.
+
+    Disarming is always unconditional; only the arm direction is gated.
+    """
+    chain_ok, bad_seq = get_ledger().verify_chain()
+    breaker_clear = not runner.heartbeat.breaker_tripped
+    credentials_ok = await x_client.verify_credentials()
+
+    checks = {
+        "ledger_chain": chain_ok,
+        "breaker_clear": breaker_clear,
+        "x_credentials": credentials_ok,
+    }
+    if not chain_ok:
+        checks["ledger_chain_broken_at"] = bad_seq
+    return {"passed": all(v for k, v in checks.items() if isinstance(v, bool)), "checks": checks}
+
+
 @app.post("/api/toggle")
 async def toggle_live_mode(request: ToggleRequest):
-    """Toggle LIVE mode on/off"""
+    """Toggle LIVE mode. Arming requires a preflight; disarming never does."""
     try:
-        update_config(LIVE=request.live)
-        
+        if request.live:
+            preflight = await _arming_preflight()
+            if not preflight["passed"]:
+                get_ledger().record("arm_refused", {"checks": preflight["checks"]})
+                logger.warning(f"Arming refused by preflight: {preflight['checks']}")
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "Arming refused by preflight checks",
+                        "checks": preflight["checks"],
+                    },
+                )
+            get_kill_switch().set_armed(True, reason="manual_arm")
+            get_ledger().record("armed", {"checks": preflight["checks"]})
+        else:
+            get_kill_switch().set_armed(False, reason="manual_disarm")
+
         # Broadcast update to clients
         await broadcast_update({
             "type": "live_mode_changed",
             "live": config.LIVE
         })
-        
+
         logger.info(f"LIVE mode {'activated' if config.LIVE else 'paused'}")
         return {"live": config.LIVE}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Toggle error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/breaker/reset")
+async def reset_heartbeat_breaker(_: RequestContext = Depends(require_role("admin"))):
+    """Clear the heartbeat breaker after a trip. Does NOT re-arm live mode."""
+    runner.heartbeat.reset_breaker()
+    return {
+        "breaker_tripped": runner.heartbeat.breaker_tripped,
+        "live": config.LIVE,
+    }
 
 @app.post("/api/mode")
 async def set_goal_mode(request: ModeRequest):
