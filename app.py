@@ -124,6 +124,9 @@ class ConversionRequest(BaseModel):
     currency: Optional[str] = "USD"
     metadata: Optional[Dict[str, Any]] = None
 
+class DecisionRequest(BaseModel):
+    approve: bool
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -478,6 +481,74 @@ async def list_conversions(limit: int = 50, _: RequestContext = Depends(get_requ
             }
     except Exception as e:
         logger.error(f"Conversion list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/discoveries")
+async def list_discoveries(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    """List discovery proposals (new voices/keywords) awaiting review."""
+    try:
+        with get_db_session() as session:
+            proposals = (
+                session.query(DiscoveryProposal)
+                .filter(lambda p: p.status == status_filter)
+                .order_by(lambda p: p.created_at, descending=True)
+                .all()
+            )
+            return {
+                "count": len(proposals),
+                "proposals": [
+                    {
+                        "id": p.id,
+                        "kind": p.kind,
+                        "value": p.value,
+                        "evidence": p.evidence,
+                        "status": p.status,
+                        "created_at": p.created_at.isoformat(),
+                    }
+                    for p in proposals
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Discovery list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/discoveries/{proposal_id}/decision")
+async def decide_discovery(
+    proposal_id: str,
+    request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve or reject a discovery proposal. Only approval widens perception."""
+    try:
+        with get_db_session() as session:
+            proposal = (
+                session.query(DiscoveryProposal)
+                .filter(lambda p: p.id == proposal_id)
+                .first()
+            )
+            if proposal is None:
+                raise HTTPException(status_code=404, detail="Proposal not found")
+            if proposal.status != "pending":
+                raise HTTPException(status_code=409, detail=f"Proposal already {proposal.status}")
+
+            proposal.status = "approved" if request.approve else "rejected"
+            proposal.decided_at = datetime.now(UTC)
+            proposal.actor = "admin"
+            session.commit()
+
+        get_ledger().record("discovery_decision", {
+            "id": proposal.id,
+            "kind": proposal.kind,
+            "value": proposal.value,
+            "decision": proposal.status,
+        })
+        return {"success": True, "status": proposal.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Discovery decision error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

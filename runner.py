@@ -15,7 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from config import get_config, subscribe_to_updates
 from db.session import get_db_session, init_db
-from db.models import Action, Tweet
+from db.models import Action, DiscoveryProposal, Relationship, Tweet
 from services.multiplexer import SocialMultiplexer
 from services.x_client import XClient
 from services.llm_adapter import LLMAdapter
@@ -221,6 +221,14 @@ async def _add_jobs():
         heartbeat.supervise('nightly_reflection', nightly_reflection_job),
         CronTrigger(hour=config.NIGHTLY_REFLECTION_HOUR),
         id='nightly_reflection',
+        max_instances=1
+    )
+
+    # Daily discovery: propose new voices/keywords for human review
+    scheduler.add_job(
+        heartbeat.supervise('discovery', discovery_job),
+        CronTrigger(hour=6),
+        id='discovery',
         max_instances=1
     )
     
@@ -880,12 +888,93 @@ async def value_dm_job():
         logger.error("Value DM job failed: %s", exc)
 
 
+async def discovery_job():
+    """Propose new voices/keywords from real engagement, pending human review.
+
+    Proposals never take effect on their own: they are ledgered and sit
+    in the store until approved via POST /api/discoveries/{id}/decision.
+    """
+    try:
+        ledger = get_ledger()
+        filed = 0
+        with get_db_session() as session:
+            existing = {
+                (p.kind, p.value.lower())
+                for p in session.query(DiscoveryProposal).all()
+            }
+            known_voices = perception_service.known_influencers()
+            known_keywords = perception_service.known_keywords()
+
+            # Voices: accounts we keep genuinely interacting with.
+            relationships = (
+                session.query(Relationship)
+                .filter(lambda r: r.interaction_count >= 3)
+                .all()
+            )
+            for rel in relationships:
+                handle = (rel.handle or "").strip()
+                if not handle:
+                    continue
+                if handle.lower() in known_voices or ("influencer", handle.lower()) in existing:
+                    continue
+                proposal = DiscoveryProposal(
+                    kind="influencer",
+                    value=handle,
+                    evidence={
+                        "interactions": rel.interaction_count,
+                        "sentiment": rel.sentiment_score,
+                        "topics": list(rel.topics),
+                    },
+                )
+                session.add(proposal)
+                ledger.record("discovery_proposal", {
+                    "id": proposal.id, "kind": proposal.kind,
+                    "value": proposal.value, "evidence": proposal.evidence,
+                })
+                filed += 1
+
+            # Keywords: topics that repeatedly earn high J-scores.
+            topic_counts: Dict[str, int] = {}
+            high_j_tweets = (
+                session.query(Tweet)
+                .filter(lambda t: (t.j_score or 0) > 0.5, lambda t: bool(t.topic))
+                .all()
+            )
+            for tweet in high_j_tweets:
+                topic_counts[tweet.topic] = topic_counts.get(tweet.topic, 0) + 1
+            for topic, count in topic_counts.items():
+                if count < 2:
+                    continue
+                if topic.lower() in known_keywords or ("keyword", topic.lower()) in existing:
+                    continue
+                proposal = DiscoveryProposal(
+                    kind="keyword", value=topic,
+                    evidence={"high_j_tweets": count},
+                )
+                session.add(proposal)
+                ledger.record("discovery_proposal", {
+                    "id": proposal.id, "kind": proposal.kind,
+                    "value": proposal.value, "evidence": proposal.evidence,
+                })
+                filed += 1
+
+            session.commit()
+
+        if filed:
+            logger.info(f"Filed {filed} discovery proposals for human review")
+
+    except Exception as e:
+        logger.error(f"Discovery job failed: {e}")
+
+
 async def perception_job():
     """Run the perception ingest loop."""
     global _perception_state
 
     try:
         with get_db_session() as session:
+            # Human-approved discoveries widen perception before each scan.
+            perception_service.apply_approved_discoveries(session)
             total = await perception_service.ingest(
                 session,
                 x_client=x_client if x_client and x_client.is_healthy() else None,

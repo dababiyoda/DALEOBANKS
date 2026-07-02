@@ -71,6 +71,52 @@ class PerceptionService:
                 keywords.extend(str(word) for word in bucket)
         return keywords
 
+    def known_influencers(self) -> set:
+        """Lowercased usernames currently in the voice list."""
+        return {
+            str(voice.get("username", "")).lower()
+            for voice in self._voices
+            if isinstance(voice, Mapping) and voice.get("username")
+        }
+
+    def known_keywords(self) -> set:
+        """Lowercased keywords currently tracked."""
+        return {str(keyword).lower() for keyword in self._keywords}
+
+    def apply_approved_discoveries(self, session: Any) -> int:
+        """Merge human-approved discovery proposals into the live seeds.
+
+        Only proposals a human explicitly approved (status == "approved")
+        widen the agent's perception; pending or rejected ones never do.
+        """
+        from db.models import DiscoveryProposal
+
+        added = 0
+        approved = (
+            session.query(DiscoveryProposal)
+            .filter(lambda p: p.status == "approved")
+            .all()
+        )
+        for proposal in approved:
+            value = (proposal.value or "").strip()
+            if not value:
+                continue
+            if proposal.kind == "influencer":
+                if value.lower() not in self.known_influencers():
+                    self._voices.append({
+                        "username": value,
+                        "topics": list((proposal.evidence or {}).get("topics", [])),
+                        "authority_weight": 0.5,
+                        "engagement_priority": "medium",
+                        "source": "discovery",
+                    })
+                    added += 1
+            elif proposal.kind == "keyword":
+                if value.lower() not in self.known_keywords():
+                    self._keywords.append(value)
+                    added += 1
+        return added
+
     def _summarize(self) -> Tuple[Dict[str, int], Dict[str, List[str]]]:
         voices = len(self._voices)
         trend_topics = sorted({topic for voice in self._voices for topic in voice.get("topics", [])})
