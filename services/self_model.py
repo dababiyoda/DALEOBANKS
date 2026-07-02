@@ -9,6 +9,7 @@ from datetime import datetime, UTC
 from sqlalchemy.orm import Session
 
 from services.persona_store import PersonaStore
+from services.ledger import DecisionLedger
 from services.logging_utils import get_logger
 from db.session import get_db_session
 
@@ -16,11 +17,26 @@ logger = get_logger(__name__)
 
 class SelfModelService:
     """Manages self-model card and identity hash"""
-    
-    def __init__(self, persona_store: PersonaStore):
+
+    def __init__(self, persona_store: PersonaStore, ledger: Optional[DecisionLedger] = None):
         self.persona_store = persona_store
         self.model_card_path = "self_model_card.md"
         self.current_identity_hash: Optional[str] = None
+        self.ledger = ledger or DecisionLedger()
+
+    def _record_identity(self, new_hash: str, reason: str) -> None:
+        """Chain every identity drift into the tamper-evident ledger."""
+        if new_hash == self.current_identity_hash:
+            return
+        self.ledger.record(
+            "identity_change",
+            {
+                "old_hash": self.current_identity_hash,
+                "new_hash": new_hash,
+                "reason": reason,
+            },
+        )
+        self.current_identity_hash = new_hash
     
     async def ensure_self_model(self):
         """Ensure self-model exists and is current"""
@@ -36,8 +52,8 @@ class SelfModelService:
             if self.current_identity_hash != identity_hash:
                 logger.info("Identity hash mismatch, updating self-model...")
                 await self.update_self_model()
-            
-            self.current_identity_hash = identity_hash
+
+            self._record_identity(identity_hash, "ensure_self_model")
             
         except Exception as e:
             logger.error(f"Failed to ensure self-model: {e}")
@@ -53,8 +69,8 @@ class SelfModelService:
             
             with open(self.model_card_path, "w") as f:
                 f.write(model_card)
-            
-            self.current_identity_hash = identity_hash
+
+            self._record_identity(identity_hash, "create_self_model")
             logger.info(f"Created self-model card with identity hash: {identity_hash}")
             
         except Exception as e:
@@ -76,8 +92,8 @@ class SelfModelService:
             
             with open(self.model_card_path, "w") as f:
                 f.write(model_card)
-            
-            self.current_identity_hash = identity_hash
+
+            self._record_identity(identity_hash, "update_self_model")
             logger.info(f"Updated self-model card with identity hash: {identity_hash}")
             
         except Exception as e:

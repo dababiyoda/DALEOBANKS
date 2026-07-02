@@ -58,8 +58,8 @@ class KPIService:
         
         for kpi_name in self.kpi_definitions.keys():
             latest = session.query(KPI).filter(
-                KPI.name == kpi_name
-            ).order_by(KPI.period_end.desc()).first()
+                lambda kpi, name=kpi_name: kpi.name == name
+            ).order_by(lambda kpi: kpi.period_end, descending=True).first()
             
             if latest:
                 latest_kpis[kpi_name] = {
@@ -79,9 +79,9 @@ class KPIService:
         
         for kpi_name in self.kpi_definitions.keys():
             kpi_history = session.query(KPI).filter(
-                KPI.name == kpi_name,
-                KPI.period_end >= cutoff
-            ).order_by(KPI.period_end.asc()).all()
+                lambda kpi, name=kpi_name: kpi.name == name,
+                lambda kpi: kpi.period_end >= cutoff
+            ).order_by(lambda kpi: kpi.period_end).all()
             
             trends[kpi_name] = [
                 {
@@ -96,8 +96,8 @@ class KPIService:
     def _calculate_fame_score(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Calculate fame score based on engagement and follower growth"""
         tweets = session.query(Tweet).filter(
-            Tweet.created_at >= period_start,
-            Tweet.created_at <= period_end
+            lambda tweet: tweet.created_at >= period_start,
+            lambda tweet: tweet.created_at <= period_end
         ).all()
         
         if not tweets:
@@ -144,8 +144,8 @@ class KPIService:
     def _calculate_authority_signals(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Calculate authority signals from verified/high-follower interactions"""
         tweets = session.query(Tweet).filter(
-            Tweet.created_at >= period_start,
-            Tweet.created_at <= period_end
+            lambda tweet: tweet.created_at >= period_start,
+            lambda tweet: tweet.created_at <= period_end
         ).all()
         
         # Use authority_score field if available
@@ -162,8 +162,8 @@ class KPIService:
     def _calculate_engagement_rate(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Calculate engagement rate as percentage"""
         tweets = session.query(Tweet).filter(
-            Tweet.created_at >= period_start,
-            Tweet.created_at <= period_end
+            lambda tweet: tweet.created_at >= period_start,
+            lambda tweet: tweet.created_at <= period_end
         ).all()
         
         if not tweets:
@@ -171,7 +171,7 @@ class KPIService:
         
         # Get current follower count (approximate)
         latest_snapshot = session.query(FollowersSnapshot).order_by(
-            FollowersSnapshot.ts.desc()
+            lambda snapshot: snapshot.ts, descending=True
         ).first()
         
         follower_count = latest_snapshot.follower_count if latest_snapshot else 1000
@@ -199,8 +199,8 @@ class KPIService:
     def _calculate_tweet_frequency(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Calculate tweets per day in the period"""
         tweet_count = session.query(Tweet).filter(
-            Tweet.created_at >= period_start,
-            Tweet.created_at <= period_end
+            lambda tweet: tweet.created_at >= period_start,
+            lambda tweet: tweet.created_at <= period_end
         ).count()
         
         period_days = (period_end - period_start).days or 1
@@ -246,12 +246,12 @@ class KPIService:
     def _get_follower_growth(self, session: Session, period_start: datetime, period_end: datetime) -> float:
         """Get follower growth between two points"""
         start_snapshot = session.query(FollowersSnapshot).filter(
-            FollowersSnapshot.ts <= period_start
-        ).order_by(FollowersSnapshot.ts.desc()).first()
+            lambda snapshot: snapshot.ts <= period_start
+        ).order_by(lambda snapshot: snapshot.ts, descending=True).first()
         
         end_snapshot = session.query(FollowersSnapshot).filter(
-            FollowersSnapshot.ts <= period_end
-        ).order_by(FollowersSnapshot.ts.desc()).first()
+            lambda snapshot: snapshot.ts <= period_end
+        ).order_by(lambda snapshot: snapshot.ts, descending=True).first()
         
         if not start_snapshot or not end_snapshot:
             return 0.0

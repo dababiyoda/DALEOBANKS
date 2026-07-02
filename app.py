@@ -37,6 +37,7 @@ from services.selector import Selector
 from services.optimizer import Optimizer
 from services.self_model import SelfModelService
 from services.reflection import ReflectionService
+from services.ledger import get_kill_switch, get_ledger
 from services.security import (
     RequestContext,
     get_request_context,
@@ -205,7 +206,12 @@ async def get_dashboard(_: RequestContext = Depends(get_request_context)):
             kpis = kpi_service.get_latest_kpis(session)
             
             # Get recent activity
-            recent_actions = session.query(Action).order_by(Action.created_at.desc()).limit(10).all()
+            recent_actions = (
+                session.query(Action)
+                .order_by(lambda action: action.created_at, descending=True)
+                .limit(10)
+                .all()
+            )
             
             # Get system status
             status = {
@@ -366,14 +372,16 @@ async def handle_redirect(redirect_id: str):
     """Handle redirect and track clicks"""
     try:
         with get_db_session() as session:
-            redirect = session.query(Redirect).filter(Redirect.id == redirect_id).first()
+            redirect = (
+                session.query(Redirect)
+                .filter(lambda r: r.id == redirect_id)
+                .first()
+            )
             if not redirect:
                 raise HTTPException(status_code=404, detail="Redirect not found")
-            
+
             # Increment clicks
-            session.query(Redirect).filter(Redirect.id == redirect_id).update(
-                {Redirect.clicks: Redirect.clicks + 1}
-            )
+            redirect.clicks = (redirect.clicks or 0) + 1
             session.commit()
             
             return RedirectResponse(url=str(redirect.target_url), status_code=302)
@@ -425,7 +433,11 @@ async def get_persona_versions():
     """Get persona version history"""
     try:
         with get_db_session() as session:
-            versions = session.query(PersonaVersion).order_by(PersonaVersion.version.desc()).all()
+            versions = (
+                session.query(PersonaVersion)
+                .order_by(lambda v: v.version, descending=True)
+                .all()
+            )
             return [
                 {
                     "version": v.version,
@@ -522,10 +534,20 @@ async def startup_event():
     """Initialize application on startup"""
     try:
         logger.info("Starting DaLeoBanks AI Agent...")
-        
+
         # Initialize database
         init_db()
-        
+
+        # Verify the decision ledger before anything can act. A broken chain
+        # means the audit trail was tampered with or corrupted: go quiet and
+        # surface it rather than operating unaudited.
+        ledger = get_ledger()
+        chain_ok, bad_seq = ledger.verify_chain()
+        if not chain_ok:
+            logger.critical(f"Decision ledger chain broken at seq {bad_seq}; disarming live mode")
+            get_kill_switch().set_armed(False, reason=f"ledger_chain_broken_at_{bad_seq}")
+        ledger.record("startup", {"live": config.LIVE, "chain_ok": chain_ok})
+
         # Load persona and drives
         persona_store.load_persona()
         

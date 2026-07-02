@@ -8,15 +8,17 @@ from datetime import datetime, timedelta, UTC
 from db.models import Note, Action, Tweet
 from db.session import get_db_session
 from services.logging_utils import get_logger
+from services.semantic_index import get_semantic_index
 
 logger = get_logger(__name__)
 
 class MemoryService:
     """Manages different types of memory for the AI agent"""
-    
+
     def __init__(self):
         self.max_improvement_notes = 100
         self.prompt_notes_limit = 30
+        self.semantic_index = get_semantic_index()
     
     def get_episodic_memory(self, session: Any, hours: int = 24) -> List[Dict[str, Any]]:
         """Get recent episodic memories (actions and events)"""
@@ -111,8 +113,24 @@ class MemoryService:
                 session.delete(old_note)
         
         session.commit()
+
+        # Durable associative copy: the DB prunes old notes, the semantic
+        # index keeps every lesson recallable by similarity.
+        try:
+            self.semantic_index.add(text, meta={"kind": "improvement_note"})
+        except Exception as exc:
+            logger.error(f"Failed to index improvement note: {exc}")
+
         logger.info(f"Added improvement note: {text[:100]}...")
         return note.id
+
+    def search_similar_lessons(self, query: str, k: int = 5) -> List[str]:
+        """Recall past lessons associatively related to ``query``."""
+        try:
+            return [r["text"] for r in self.semantic_index.search(query, k=k)]
+        except Exception as exc:
+            logger.error(f"Semantic lesson search failed: {exc}")
+            return []
     
     def get_recent_improvement_notes(self, session: Any) -> List[str]:
         """Get recent improvement notes for prompting"""
@@ -125,12 +143,15 @@ class MemoryService:
         
         return [note.text for note in notes]
     
-    def get_context_for_generation(self, session: Any) -> Dict[str, Any]:
+    def get_context_for_generation(self, session: Any, topic: Optional[str] = None) -> Dict[str, Any]:
         """Get relevant context for content generation"""
-        return {
+        context = {
             "recent_actions": self.get_episodic_memory(session, hours=12),
             "learned_patterns": self.get_semantic_memory(session),
             "procedures": self.get_procedural_memory(),
             "social_context": self.get_social_memory(session),
             "improvement_notes": self.get_recent_improvement_notes(session)
         }
+        if topic:
+            context["associative_lessons"] = self.search_similar_lessons(topic, k=3)
+        return context

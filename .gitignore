@@ -4,3 +4,20 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+venv/
+.venv/
+.pythonlibs/
+.upm/
+
+# Runtime artifacts (see services/self_model.py)
+self_model_card.md.backup.*
+
+# Runtime state (see services/ledger.py, services/semantic_index.py)
+data/decision_ledger.jsonl
+data/semantic_index.jsonl

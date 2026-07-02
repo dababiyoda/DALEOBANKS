@@ -26,8 +26,8 @@ class FeedbackService:
             
             # Get recent tweets and their performance
             recent_tweets = session.query(Tweet).filter(
-                Tweet.created_at >= cutoff
-            ).order_by(Tweet.j_score.desc()).all()
+                lambda tweet: tweet.created_at >= cutoff
+            ).order_by(lambda tweet: tweet.j_score or 0, descending=True).all()
             
             if not recent_tweets:
                 return "No recent tweets to analyze. Consider increasing posting frequency."
@@ -166,7 +166,7 @@ class FeedbackService:
         cutoff = datetime.now(UTC) - timedelta(days=7)
         
         tweets = session.query(Tweet).filter(
-            Tweet.created_at >= cutoff
+            lambda tweet: tweet.created_at >= cutoff
         ).all()
         
         # Daily performance tracking

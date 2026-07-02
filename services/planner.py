@@ -123,7 +123,7 @@ class PlannerService:
         # Get recent tweets
         cutoff = datetime.now(UTC) - timedelta(days=7)
         recent_tweets = session.query(Tweet).filter(
-            Tweet.created_at >= cutoff
+            lambda tweet: tweet.created_at >= cutoff
         ).all()
         
         if not recent_tweets:

@@ -18,7 +18,7 @@ class MastodonClient(BaseSocialClient):
     def __init__(self, *, enabled: bool, live: bool) -> None:
         super().__init__(enabled=enabled, live=live)
 
-    async def publish(
+    async def _publish_impl(
         self,
         *,
         content: str,

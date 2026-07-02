@@ -1,9 +1,44 @@
+# Replit environment: module-based (replaces the legacy `language` field
+# and replit.nix). nodejs-20 + python-3.11 cover the dual Node/Python stack;
+# `web` enables the workspace webview/port tools.
+modules = ["nodejs-20", "python-3.11", "web"]
 run = "bash scripts/replit-start.sh"
 entrypoint = "server/index.ts"
-language = "nodejs"
+hidden = [".config", ".git", "node_modules", "dist", "venv", ".pythonlibs", "__pycache__", ".pytest_cache", "uv.lock", "attached_assets"]
 
 [env]
 PORT = "5000"
 BACKEND_PORT = "5001"
 PYTHON_PATH = "python3"
 NODE_ENV = "development"
+
+[nix]
+channel = "stable-24_05"
+
+# Run button: start the combined dev stack and wait until the Express
+# proxy is listening before opening the webview.
+[workflows]
+runButton = "Full Stack"
+
+[[workflows.workflow]]
+name = "Full Stack"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash scripts/replit-start.sh"
+waitForPort = 5000
+
+# Publishing via Replit Deployments. Reserved VM ("vm") because the agent
+# is a stateful 24/7 scheduler with WebSockets - autoscale would scale to
+# zero and kill the background jobs. Build compiles the client/server
+# bundle and pre-installs Python deps so the run step boots fast enough
+# for the deployment health check.
+[deployment]
+build = ["bash", "-c", "npm ci && npm run build && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt"]
+run = ["bash", "scripts/replit-deploy.sh"]
+deploymentTarget = "vm"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

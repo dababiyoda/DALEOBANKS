@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 from services.memory import MemoryService
 from services.analytics import AnalyticsService
 from services.kpi import KPIService
+from services.ledger import DecisionLedger
 from services.optimizer import Optimizer
 from services.llm_adapter import LLMAdapter
 from services.logging_utils import get_logger
@@ -28,12 +29,20 @@ logger = get_logger(__name__)
 class ReflectionService:
     """Generates structured, compounding reflections from recent activity."""
 
-    def __init__(self) -> None:
+    def __init__(self, ledger: DecisionLedger | None = None) -> None:
         self.memory = MemoryService()
         self.analytics = AnalyticsService()
         self.kpi = KPIService()
         self.optimizer = Optimizer()
         self.llm = LLMAdapter()
+        self.ledger = ledger or DecisionLedger()
+
+    def _chain_lesson(self, note: str, source: str) -> None:
+        """Record a learned lesson into the tamper-evident autobiography."""
+        try:
+            self.ledger.record("reflection_lesson", {"lesson": note, "source": source})
+        except Exception as exc:  # the ledger must never break learning
+            logger.error(f"Failed to chain reflection lesson: {exc}")
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -53,6 +62,7 @@ class ReflectionService:
                 "elite replies tomorrow to restart the engagement loop."
             )
             self.memory.add_improvement_note(session, note)
+            self._chain_lesson(note, source="idle_template")
             return note
 
         try:
@@ -65,6 +75,7 @@ class ReflectionService:
             return self.generate_reflection(session)
 
         self.memory.add_improvement_note(session, note)
+        self._chain_lesson(note, source="llm")
         logger.info(f"Reflection lesson recorded: {note[:120]}")
         return note
 
@@ -89,6 +100,7 @@ class ReflectionService:
                     note += " Address follower decline."
 
             self.memory.add_improvement_note(session, note)
+            self._chain_lesson(note, source="template")
             return note
         except Exception as exc:
             logger.error(f"Reflection generation failed: {exc}")

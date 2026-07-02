@@ -7,13 +7,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Moon, Sun, User, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import type { DashboardResponse } from "@/types/api";
 
 export default function Header() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: dashboardData } = useQuery({
+  const { data: dashboardData } = useQuery<DashboardResponse>({
     queryKey: ["/api/dashboard"],
   });
 

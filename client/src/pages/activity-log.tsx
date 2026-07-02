@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Search, Filter, Download, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import type { ActivityItem, DashboardResponse } from "@/types/api";
 
 export default function ActivityLog() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -14,7 +15,7 @@ export default function ActivityLog() {
 
   const { data: activities, isLoading, refetch } = useQuery({
     queryKey: ["/api/dashboard"],
-    select: (data) => data?.recent_activity || [],
+    select: (data: DashboardResponse): ActivityItem[] => data?.recent_activity || [],
     refetchInterval: 30000,
   });
 

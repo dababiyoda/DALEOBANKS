@@ -17,14 +17,15 @@ import {
   XCircle,
   Clock
 } from "lucide-react";
+import type { DashboardResponse, HealthResponse } from "@/types/api";
 
 export default function Health() {
-  const { data: dashboardData, isLoading, refetch } = useQuery({
+  const { data: dashboardData, isLoading, refetch } = useQuery<DashboardResponse>({
     queryKey: ["/api/dashboard"],
     refetchInterval: 10000, // Refresh every 10 seconds for health monitoring
   });
 
-  const { data: healthData } = useQuery({
+  const { data: healthData } = useQuery<HealthResponse>({
     queryKey: ["/api/health"],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
