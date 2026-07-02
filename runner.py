@@ -33,7 +33,8 @@ from services.crisis import CrisisService
 from services.perception import PerceptionService
 from services.critic import Critic
 from services.ethics_guard import EthicsGuard
-from services.ledger import get_ledger
+from services.heartbeat import Heartbeat
+from services.ledger import get_kill_switch, get_ledger
 from services.thought_dsl import ThoughtPlan, ThoughtInterpreter
 
 logger = get_logger(__name__)
@@ -64,6 +65,7 @@ crisis_service = CrisisService()
 thought_interpreter = ThoughtInterpreter(
     EthicsGuard(), critic=Critic(), ledger=get_ledger()
 )
+heartbeat = Heartbeat(get_kill_switch(), get_ledger())
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -104,7 +106,7 @@ async def _add_jobs():
     
     # Proposal posting job
     scheduler.add_job(
-        post_proposal_job,
+        heartbeat.supervise('post_proposal', post_proposal_job),
         IntervalTrigger(
             minutes=random.randint(*config.POST_TWEET_EVERY),
             jitter=300  # 5 minute jitter
@@ -115,7 +117,7 @@ async def _add_jobs():
     
     # Reply to mentions job
     scheduler.add_job(
-        reply_mentions_job,
+        heartbeat.supervise('reply_mentions', reply_mentions_job),
         IntervalTrigger(
             minutes=random.randint(*config.REPLY_MENTIONS_EVERY),
             jitter=120  # 2 minute jitter
@@ -126,7 +128,7 @@ async def _add_jobs():
     
     # Search and engage job
     scheduler.add_job(
-        search_and_engage_job,
+        heartbeat.supervise('search_engage', search_and_engage_job),
         IntervalTrigger(
             minutes=random.randint(*config.SEARCH_ENGAGE_EVERY),
             jitter=180  # 3 minute jitter
@@ -137,7 +139,7 @@ async def _add_jobs():
 
     # Thread publishing job
     scheduler.add_job(
-        publish_thread_job,
+        heartbeat.supervise('post_thread', publish_thread_job),
         IntervalTrigger(
             minutes=random.randint(240, 360),
             jitter=420
@@ -148,7 +150,7 @@ async def _add_jobs():
 
     # Value-first DM job
     scheduler.add_job(
-        value_dm_job,
+        heartbeat.supervise('value_dm', value_dm_job),
         IntervalTrigger(
             minutes=random.randint(180, 300),
             jitter=360
@@ -159,7 +161,7 @@ async def _add_jobs():
 
     # Perception ingest job
     scheduler.add_job(
-        perception_job,
+        heartbeat.supervise('perception_ingest', perception_job),
         IntervalTrigger(minutes=15, jitter=60),
         id='perception_ingest',
         max_instances=1
@@ -167,7 +169,7 @@ async def _add_jobs():
 
     # Crisis monitoring job
     scheduler.add_job(
-        crisis_watch_job,
+        heartbeat.supervise('crisis_watch', crisis_watch_job),
         IntervalTrigger(minutes=5, jitter=30),
         id='crisis_watch',
         max_instances=1
@@ -175,7 +177,7 @@ async def _add_jobs():
     
     # Analytics pull job
     scheduler.add_job(
-        analytics_pull_job,
+        heartbeat.supervise('analytics_pull', analytics_pull_job),
         IntervalTrigger(
             minutes=random.randint(*config.ANALYTICS_PULL_EVERY),
             jitter=300
@@ -186,7 +188,7 @@ async def _add_jobs():
     
     # KPI rollup job
     scheduler.add_job(
-        kpi_rollup_job,
+        heartbeat.supervise('kpi_rollup', kpi_rollup_job),
         IntervalTrigger(
             minutes=random.randint(*config.KPI_ROLLUP_EVERY),
             jitter=600
@@ -197,7 +199,7 @@ async def _add_jobs():
     
     # Daily follower snapshot
     scheduler.add_job(
-        follower_snapshot_job,
+        heartbeat.supervise('follower_snapshot', follower_snapshot_job),
         CronTrigger(hour=config.FOLLOWER_SNAPSHOT_DAILY_HOUR),
         id='follower_snapshot',
         max_instances=1
@@ -205,7 +207,7 @@ async def _add_jobs():
     
     # Nightly reflection
     scheduler.add_job(
-        nightly_reflection_job,
+        heartbeat.supervise('nightly_reflection', nightly_reflection_job),
         CronTrigger(hour=config.NIGHTLY_REFLECTION_HOUR),
         id='nightly_reflection',
         max_instances=1
@@ -213,7 +215,7 @@ async def _add_jobs():
     
     # Weekly planning
     scheduler.add_job(
-        weekly_planning_job,
+        heartbeat.supervise('weekly_planning', weekly_planning_job),
         CronTrigger(day_of_week='sun', hour=5),  # Sunday at 5 AM
         id='weekly_planning',
         max_instances=1
