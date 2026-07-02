@@ -13,3 +13,7 @@ __pycache__/
 
 # Runtime artifacts (see services/self_model.py)
 self_model_card.md.backup.*
+
+# Runtime state (see services/ledger.py, services/semantic_index.py)
+data/decision_ledger.jsonl
+data/semantic_index.jsonl

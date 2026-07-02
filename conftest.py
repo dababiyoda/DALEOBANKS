@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,13 @@ from typing import Any
 _STUBS_DIR = str(Path(__file__).resolve().parent / "tests" / "stubs")
 if _STUBS_DIR not in sys.path:
     sys.path.append(_STUBS_DIR)
+
+# Keep the decision ledger out of the working tree during test runs; tests
+# that assert on ledger contents construct their own DecisionLedger(path=...).
+if "LEDGER_PATH" not in os.environ:
+    os.environ["LEDGER_PATH"] = os.path.join(
+        tempfile.mkdtemp(prefix="daleobanks-ledger-"), "decision_ledger.jsonl"
+    )
 
 
 def pytest_pyfunc_call(pyfuncitem):  # pragma: no cover - pytest hook

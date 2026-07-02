@@ -37,6 +37,7 @@ from services.selector import Selector
 from services.optimizer import Optimizer
 from services.self_model import SelfModelService
 from services.reflection import ReflectionService
+from services.ledger import get_kill_switch, get_ledger
 from services.security import (
     RequestContext,
     get_request_context,
@@ -522,10 +523,20 @@ async def startup_event():
     """Initialize application on startup"""
     try:
         logger.info("Starting DaLeoBanks AI Agent...")
-        
+
         # Initialize database
         init_db()
-        
+
+        # Verify the decision ledger before anything can act. A broken chain
+        # means the audit trail was tampered with or corrupted: go quiet and
+        # surface it rather than operating unaudited.
+        ledger = get_ledger()
+        chain_ok, bad_seq = ledger.verify_chain()
+        if not chain_ok:
+            logger.critical(f"Decision ledger chain broken at seq {bad_seq}; disarming live mode")
+            get_kill_switch().set_armed(False, reason=f"ledger_chain_broken_at_{bad_seq}")
+        ledger.record("startup", {"live": config.LIVE, "chain_ok": chain_ok})
+
         # Load persona and drives
         persona_store.load_persona()
         

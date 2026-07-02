@@ -32,7 +32,7 @@ class _XAdapter(BaseSocialClient):
         self._client = client
         self._config = config or get_config()
 
-    async def publish(
+    async def _publish_impl(
         self,
         *,
         content: str,
