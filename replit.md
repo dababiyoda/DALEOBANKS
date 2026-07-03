@@ -154,4 +154,4 @@ The architecture prioritizes modularity, safety, and autonomous operation while 
 - **Relationship-aware replies**: reply prompts include the account's interaction history, sentiment trend, and topics from social memory.
 
 ### Testing
-- `python -m pytest` (150 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.
+- `python -m pytest` (172 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.
