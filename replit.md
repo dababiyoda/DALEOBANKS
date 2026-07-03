@@ -146,6 +146,7 @@ The architecture prioritizes modularity, safety, and autonomous operation while 
 - **Measured revenue**: `POST /api/conversions` records real revenue events; revenue KPIs prefer conversions over the legacy click estimate.
 - **Gated discovery**: daily job proposes new voices/keywords from real engagement; `POST /api/discoveries/{id}/decision` approves; only approvals widen perception.
 - **Constitution**: `constitution.md` hashed into the ledger at startup, re-verified nightly (drift disarms). Planner files OKR changes as `GoalProposal`s, applied only after `POST /api/goals/proposals/{id}/decision` approval.
+- **Dream consolidation**: a daily idle-hours job clusters near-duplicate lessons (same embedding as the semantic index) and merges each cluster into one sharper lesson via the LLM, with a deterministic keep-newest fallback; every compression is ledgered as `memory_consolidated`.
 
 ### Testing
 - `python -m pytest` (150 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.

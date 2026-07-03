@@ -32,6 +32,7 @@ from services.logging_utils import get_logger
 from services.crisis import CrisisService
 from services.memory import MemoryService
 from services.perception import PerceptionService
+from services.consolidation import ConsolidationService
 from services.constitution import ConstitutionGuard
 from services.critic import Critic
 from services.ethics_guard import EthicsGuard
@@ -71,6 +72,7 @@ thought_interpreter = ThoughtInterpreter(
 )
 heartbeat = Heartbeat(get_kill_switch(), get_ledger())
 constitution_guard = ConstitutionGuard(ledger=get_ledger(), kill_switch=get_kill_switch())
+consolidation_service = ConsolidationService(llm_adapter, ledger=get_ledger())
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -231,6 +233,14 @@ async def _add_jobs():
         heartbeat.supervise('discovery', discovery_job),
         CronTrigger(hour=6),
         id='discovery',
+        max_instances=1
+    )
+
+    # Dream consolidation: merge near-duplicate lessons while idle
+    scheduler.add_job(
+        heartbeat.supervise('dream_consolidation', dream_consolidation_job),
+        CronTrigger(hour=5),
+        id='dream_consolidation',
         max_instances=1
     )
     
@@ -1083,6 +1093,17 @@ async def nightly_reflection_job():
 
     except Exception as e:
         logger.error(f"Nightly reflection job failed: {e}")
+
+async def dream_consolidation_job():
+    """Merge near-duplicate lessons into sharper ones during idle hours."""
+    try:
+        with get_db_session() as session:
+            result = await consolidation_service.consolidate(session)
+        if result.get("clusters_merged"):
+            logger.info(f"Dream consolidation: {result}")
+    except Exception as e:
+        logger.error(f"Dream consolidation job failed: {e}")
+
 
 async def weekly_planning_job():
     """Perform weekly planning and update OKRs"""
