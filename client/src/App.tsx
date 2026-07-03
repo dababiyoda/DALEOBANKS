@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/ui/theme-provider";
 import Dashboard from "@/pages/dashboard";
 import PersonaEditor from "@/pages/persona-editor";
 import Mind from "@/pages/mind";
+import Approvals from "@/pages/approvals";
 import Analytics from "@/pages/analytics";
 import Configuration from "@/pages/configuration";
 import ActivityLog from "@/pages/activity-log";
@@ -34,6 +35,7 @@ function Router() {
             <Route path="/logs" component={ActivityLog} />
             <Route path="/health" component={Health} />
             <Route path="/mind" component={Mind} />
+            <Route path="/approvals" component={Approvals} />
             <Route component={NotFound} />
           </Switch>
         </main>

@@ -7,6 +7,25 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+const ADMIN_JWT_KEY = "daleobanks-admin-jwt";
+
+export function getAdminJwt(): string | null {
+  return localStorage.getItem(ADMIN_JWT_KEY);
+}
+
+export function setAdminJwt(token: string | null): void {
+  if (token) {
+    localStorage.setItem(ADMIN_JWT_KEY, token);
+  } else {
+    localStorage.removeItem(ADMIN_JWT_KEY);
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAdminJwt();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -14,7 +33,10 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders(),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
