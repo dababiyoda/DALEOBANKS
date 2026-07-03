@@ -29,8 +29,9 @@ Events currently chained: `startup`, `publish_attempt` / `publish_gated` /
 `breaker_tripped` / `breaker_reset` (heartbeat), `armed` / `arm_refused`
 (arming ceremony), `dm_received` (metadata only — never private text),
 `revenue_event` / `link_click`, `discovery_proposal` /
-`discovery_decision`, `okr_proposal` / `okr_decision`, and
-`constitution_hash` / `constitution_tampered` / `constitution_missing`.
+`discovery_decision`, `okr_proposal` / `okr_decision`, `memory_consolidated` (dream
+consolidation), and `constitution_hash` / `constitution_tampered` /
+`constitution_missing`.
 
 The app verifies the chain at startup (`app.py`); a broken chain disarms
 live mode before anything can act.
