@@ -60,6 +60,10 @@ class Generator:
         from services.websearch import WebSearchService
         self.websearch = WebSearchService()
 
+        # Library of previously verified citations, recallable by topic
+        from services.evidence_library import get_evidence_library
+        self.evidence_library = get_evidence_library()
+
         # Duplicate detection settings
         self.duplicate_check_days = 30
         self.similarity_threshold = 0.8
@@ -325,6 +329,14 @@ class Generator:
                 f"- {item}" for item in observed
             ) + "\n"
 
+        receipts = self.evidence_library.recall(topic, k=3)
+        if receipts:
+            lessons_block += (
+                "\nVerified sources you may cite (already vetted):\n"
+                + "\n".join(f"- {r['url']}" for r in receipts)
+                + "\n"
+            )
+
         prompt = f"""Generate a proposal tweet about {topic}.
 
 Template to follow: {template}
@@ -354,11 +366,21 @@ Topic focus: {topic}"""
 
         reply_override = self.persona_store.get_reply_style_override()
 
+        relationship = context.get("relationship") or {}
+        relationship_block = ""
+        if relationship:
+            topics = ", ".join(relationship.get("topics", [])) or "unknown"
+            relationship_block = (
+                f"\nHistory with this account: {relationship.get('interactions', 0)} prior "
+                f"interactions, sentiment trend {relationship.get('sentiment', 0.0):+.2f}, "
+                f"topics they care about: {topics}. Be consistent with that history.\n"
+            )
+
         prompt = f"""Generate a reply to this tweet:
 
 Original tweet: "{original_tweet}"
 Author: {author_info.get("username", "unknown")} (followers: {author_info.get("followers", 0)})
-
+{relationship_block}
 Template to follow: {template}
 
 Tone rules:
@@ -650,6 +672,17 @@ Requirements:
                     requirement_text = ", ".join(requirements[:-1]) + f", and {requirements[-1]}"
 
                 return {"error": f"High-intensity content must {requirement_text}."}
+
+        # Content passed every gate: bank its trusted citations so future
+        # generation starts with pre-vetted receipts for this topic.
+        try:
+            for url in self.websearch.extract_urls(content):
+                if self.websearch.is_trusted(url):
+                    self.evidence_library.record(
+                        url=url, topic=topic, context=content[:160]
+                    )
+        except Exception as e:
+            logger.error(f"Evidence banking failed: {e}")
 
         return {
             "content": content,

@@ -97,6 +97,11 @@ class SemanticIndex:
             self._vectors.append(vector)
         return record["id"]
 
+    def records(self) -> List[Dict[str, Any]]:
+        """All stored records in insertion order (copies)."""
+        with self._lock:
+            return [dict(record) for record in self._records]
+
     def search(self, query: str, k: int = 5,
                min_score: float = 0.05) -> List[Dict[str, Any]]:
         """Top-k most similar memories, newest first among ties."""

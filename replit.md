@@ -149,7 +149,9 @@ The architecture prioritizes modularity, safety, and autonomous operation while 
 - **Dream consolidation**: a daily idle-hours job clusters near-duplicate lessons (same embedding as the semantic index) and merges each cluster into one sharper lesson via the LLM, with a deterministic keep-newest fallback; every compression is ledgered as `memory_consolidated`.
 - **Approvals page** (`/approvals`): lists pending discovery and goal proposals with approve/reject; `POST /api/auth/token` exchanges the ADMIN_TOKEN for a 12-hour admin JWT the client attaches to all requests.
 - **World model** (`data/world_model.jsonl`): every observed mention, timeline post, and trend is durably embedded; generation context includes topic-relevant observations.
-- **Internal simulator**: advisory reception prediction (topic/hour history with shrinkage) ledgered as `reception_prediction` before each proposal publish.
+- **Internal simulator**: advisory reception prediction (topic/hour history with shrinkage) ledgered as `reception_prediction` before each proposal publish; forecasts are stored on the Tweet (`predicted_j`), audited nightly (`prediction_accuracy`), and self-calibrate against past errors.
+- **Evidence library** (`data/evidence_library.jsonl`): trusted citations from validated content are banked once and recalled by topic into proposal prompts as pre-vetted sources.
+- **Relationship-aware replies**: reply prompts include the account's interaction history, sentiment trend, and topics from social memory.
 
 ### Testing
-- `python -m pytest` (150 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.
+- `python -m pytest` (172 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.

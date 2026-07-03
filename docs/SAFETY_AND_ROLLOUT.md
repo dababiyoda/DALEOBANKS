@@ -30,7 +30,7 @@ Events currently chained: `startup`, `publish_attempt` / `publish_gated` /
 (arming ceremony), `dm_received` (metadata only — never private text),
 `revenue_event` / `link_click`, `discovery_proposal` /
 `discovery_decision`, `okr_proposal` / `okr_decision`, `memory_consolidated` (dream
-consolidation), `reception_prediction` (internal simulator),
+consolidation), `reception_prediction` / `prediction_accuracy` (self-calibrating simulator),
 `admin_token_issued` (dashboard admin sessions), and
 `constitution_hash` / `constitution_tampered` / `constitution_missing`.
 
