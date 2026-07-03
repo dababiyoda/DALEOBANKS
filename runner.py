@@ -15,7 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from config import get_config, subscribe_to_updates
 from db.session import get_db_session, init_db
-from db.models import Action, Tweet
+from db.models import Action, DiscoveryProposal, Relationship, Tweet
 from services.multiplexer import SocialMultiplexer
 from services.x_client import XClient
 from services.llm_adapter import LLMAdapter
@@ -30,7 +30,9 @@ from services.optimizer import Optimizer
 from services.reflection import ReflectionService
 from services.logging_utils import get_logger
 from services.crisis import CrisisService
+from services.memory import MemoryService
 from services.perception import PerceptionService
+from services.constitution import ConstitutionGuard
 from services.critic import Critic
 from services.ethics_guard import EthicsGuard
 from services.heartbeat import Heartbeat
@@ -62,10 +64,13 @@ planner_service = PlannerService()
 self_model_service = SelfModelService(persona_store)
 optimizer = Optimizer()
 crisis_service = CrisisService()
+memory_service = MemoryService()
+ethics_guard = EthicsGuard()
 thought_interpreter = ThoughtInterpreter(
-    EthicsGuard(), critic=Critic(), ledger=get_ledger()
+    ethics_guard, critic=Critic(), ledger=get_ledger()
 )
 heartbeat = Heartbeat(get_kill_switch(), get_ledger())
+constitution_guard = ConstitutionGuard(ledger=get_ledger(), kill_switch=get_kill_switch())
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -167,6 +172,14 @@ async def _add_jobs():
         max_instances=1
     )
 
+    # Inbound DM ingest job (hearing, not speaking - read-only)
+    scheduler.add_job(
+        heartbeat.supervise('dm_ingest', dm_ingest_job),
+        IntervalTrigger(minutes=15, jitter=90),
+        id='dm_ingest',
+        max_instances=1
+    )
+
     # Crisis monitoring job
     scheduler.add_job(
         heartbeat.supervise('crisis_watch', crisis_watch_job),
@@ -210,6 +223,14 @@ async def _add_jobs():
         heartbeat.supervise('nightly_reflection', nightly_reflection_job),
         CronTrigger(hour=config.NIGHTLY_REFLECTION_HOUR),
         id='nightly_reflection',
+        max_instances=1
+    )
+
+    # Daily discovery: propose new voices/keywords for human review
+    scheduler.add_job(
+        heartbeat.supervise('discovery', discovery_job),
+        CronTrigger(hour=6),
+        id='discovery',
         max_instances=1
     )
     
@@ -415,6 +436,16 @@ async def reply_mentions_job():
                             cta_variant=arm_metadata.get("cta_variant", cta_variant),
                             intensity=arm_metadata.get("intensity", intensity),
                             sampled_prob=arm_metadata.get("sampled_prob", 0.5),
+                        )
+
+                        # Social memory: remember who we talked to and how it felt.
+                        memory_service.record_interaction(
+                            session,
+                            user_id=mention.get("author_id") or mention.get("username", "unknown"),
+                            handle=mention.get("username"),
+                            kind="mention",
+                            topic=topic,
+                            text=mention.get("text"),
                         )
 
                     meta = {
@@ -665,8 +696,98 @@ async def publish_thread_job():
         logger.error("Thread job failed: %s", exc)
 
 
+async def dm_ingest_job():
+    """Read incoming DMs so the agent can hear replies in private.
+
+    Inbound text is untrusted input: it is screened by the EthicsGuard
+    before it can influence anything, stored in the durable store, and
+    only metadata (never private message text) goes to the ledger.
+    """
+    try:
+        if not config.ENABLE_DMS or not x_client or not x_client.is_healthy():
+            return
+
+        payload = await x_client.get_dm_events()
+        events = payload.get("events") or []
+        if not events:
+            return
+
+        ledger = get_ledger()
+        new_count = 0
+        with get_db_session() as session:
+            seen_ids = {
+                action.meta_json.get("dm_event_id")
+                for action in session.query(Action)
+                .filter(lambda a: a.kind in ("dm_received", "dm_flagged"))
+                .all()
+                if action.meta_json
+            }
+
+            for event in events:
+                event_id = event.get("id")
+                sender_id = event.get("sender_id") or ""
+                text = event.get("text") or ""
+                if not event_id or event_id in seen_ids:
+                    continue
+                # Skip our own outbound messages in the event stream.
+                if x_client.self_id and sender_id == x_client.self_id:
+                    continue
+
+                verdict = ethics_guard.validate_text(text)
+                kind = "dm_received" if verdict.approved else "dm_flagged"
+                session.add(Action(kind=kind, meta_json={
+                    "dm_event_id": event_id,
+                    "sender_id": sender_id,
+                    "text": text,
+                    "created_at": event.get("created_at"),
+                    "flag_reasons": [] if verdict.approved else list(verdict.reasons),
+                }))
+                ledger.record("dm_received", {
+                    "event_id": event_id,
+                    "sender_id": sender_id,
+                    "flagged": not verdict.approved,
+                })
+                memory_service.record_interaction(
+                    session,
+                    user_id=sender_id or "unknown",
+                    kind="dm",
+                    text=text if verdict.approved else None,
+                )
+                new_count += 1
+            session.commit()
+
+        if new_count:
+            logger.info(f"Ingested {new_count} inbound DM events")
+
+    except Exception as e:
+        logger.error(f"DM ingest job failed: {e}")
+
+
+def _find_unanswered_dm(session) -> Optional[Dict[str, Any]]:
+    """Most recent clean inbound DM whose sender we haven't answered since."""
+    received = (
+        session.query(Action)
+        .filter(lambda a: a.kind == "dm_received")
+        .order_by(lambda a: a.created_at, descending=True)
+        .all()
+    )
+    if not received:
+        return None
+    answered = {
+        (a.meta_json or {}).get("reply_to_event_id")
+        for a in session.query(Action)
+        .filter(lambda a: a.kind in ("value_dm_sent", "value_dm_drafted"))
+        .all()
+    }
+    for action in received:
+        meta = action.meta_json or {}
+        if meta.get("dm_event_id") and meta["dm_event_id"] not in answered and meta.get("sender_id"):
+            return meta
+    return None
+
+
 async def value_dm_job():
-    """Send a value-first DM to a priority account."""
+    """Send a value-first DM: reply to unanswered inbound DMs first."""
 
     try:
         if not config.ENABLE_DMS:
@@ -676,10 +797,28 @@ async def value_dm_job():
         if not crisis_service.guard(action="send_value_dm"):
             return
 
-        action = await selector.decide_next_action()
-        if action.get("type") != "SEND_VALUE_DM":
-            logger.info("Selector chose different action, skipping value DM")
-            return
+        # Hearing before speaking: an unanswered inbound DM outranks
+        # cold outreach chosen by the selector.
+        inbound = None
+        with get_db_session() as session:
+            inbound = _find_unanswered_dm(session)
+
+        if inbound:
+            action = {
+                "type": "SEND_VALUE_DM",
+                "recipient": {"id": inbound["sender_id"], "topics": []},
+                "intensity": config.MIN_INTENSITY_LEVEL,
+                "seed": (
+                    "Reply helpfully and concretely to this message we received: "
+                    f"{inbound.get('text', '')[:280]}"
+                ),
+                "reply_to_event_id": inbound.get("dm_event_id"),
+            }
+        else:
+            action = await selector.decide_next_action()
+            if action.get("type") != "SEND_VALUE_DM":
+                logger.info("Selector chose different action, skipping value DM")
+                return
 
         recipient = action.get("recipient") or {}
         recipient_id = str(
@@ -722,6 +861,8 @@ async def value_dm_job():
             "topic": topic,
             "intensity": intensity,
         }
+        if action.get("reply_to_event_id"):
+            dm_meta["reply_to_event_id"] = action["reply_to_event_id"]
 
         if not config.LIVE or not x_client or not x_client.is_healthy():
             logger.info("LIVE disabled or X client unavailable; DM will not be sent")
@@ -733,6 +874,14 @@ async def value_dm_job():
         if success:
             selector.mark_dm_sent(recipient_id)
             await _log_action("value_dm_sent", {**dm_meta, "characters": len(dm_text)})
+            with get_db_session() as session:
+                memory_service.record_interaction(
+                    session,
+                    user_id=recipient_id,
+                    handle=recipient.get("username"),
+                    kind="dm_sent",
+                    topic=topic,
+                )
             logger.info("Sent value-first DM to %s", recipient.get("username", recipient_id))
         else:
             logger.warning("DM send returned failure for %s", recipient_id)
@@ -741,12 +890,93 @@ async def value_dm_job():
         logger.error("Value DM job failed: %s", exc)
 
 
+async def discovery_job():
+    """Propose new voices/keywords from real engagement, pending human review.
+
+    Proposals never take effect on their own: they are ledgered and sit
+    in the store until approved via POST /api/discoveries/{id}/decision.
+    """
+    try:
+        ledger = get_ledger()
+        filed = 0
+        with get_db_session() as session:
+            existing = {
+                (p.kind, p.value.lower())
+                for p in session.query(DiscoveryProposal).all()
+            }
+            known_voices = perception_service.known_influencers()
+            known_keywords = perception_service.known_keywords()
+
+            # Voices: accounts we keep genuinely interacting with.
+            relationships = (
+                session.query(Relationship)
+                .filter(lambda r: r.interaction_count >= 3)
+                .all()
+            )
+            for rel in relationships:
+                handle = (rel.handle or "").strip()
+                if not handle:
+                    continue
+                if handle.lower() in known_voices or ("influencer", handle.lower()) in existing:
+                    continue
+                proposal = DiscoveryProposal(
+                    kind="influencer",
+                    value=handle,
+                    evidence={
+                        "interactions": rel.interaction_count,
+                        "sentiment": rel.sentiment_score,
+                        "topics": list(rel.topics),
+                    },
+                )
+                session.add(proposal)
+                ledger.record("discovery_proposal", {
+                    "id": proposal.id, "kind": proposal.kind,
+                    "value": proposal.value, "evidence": proposal.evidence,
+                })
+                filed += 1
+
+            # Keywords: topics that repeatedly earn high J-scores.
+            topic_counts: Dict[str, int] = {}
+            high_j_tweets = (
+                session.query(Tweet)
+                .filter(lambda t: (t.j_score or 0) > 0.5, lambda t: bool(t.topic))
+                .all()
+            )
+            for tweet in high_j_tweets:
+                topic_counts[tweet.topic] = topic_counts.get(tweet.topic, 0) + 1
+            for topic, count in topic_counts.items():
+                if count < 2:
+                    continue
+                if topic.lower() in known_keywords or ("keyword", topic.lower()) in existing:
+                    continue
+                proposal = DiscoveryProposal(
+                    kind="keyword", value=topic,
+                    evidence={"high_j_tweets": count},
+                )
+                session.add(proposal)
+                ledger.record("discovery_proposal", {
+                    "id": proposal.id, "kind": proposal.kind,
+                    "value": proposal.value, "evidence": proposal.evidence,
+                })
+                filed += 1
+
+            session.commit()
+
+        if filed:
+            logger.info(f"Filed {filed} discovery proposals for human review")
+
+    except Exception as e:
+        logger.error(f"Discovery job failed: {e}")
+
+
 async def perception_job():
     """Run the perception ingest loop."""
     global _perception_state
 
     try:
         with get_db_session() as session:
+            # Human-approved discoveries widen perception before each scan.
+            perception_service.apply_approved_discoveries(session)
             total = await perception_service.ingest(
                 session,
                 x_client=x_client if x_client and x_client.is_healthy() else None,
@@ -842,6 +1072,10 @@ async def follower_snapshot_job():
 async def nightly_reflection_job():
     """Perform nightly reflection and generate improvement note"""
     try:
+        # Values check: a constitution that changed underneath a running
+        # process disarms live posting before any further learning.
+        constitution_guard.verify()
+
         with get_db_session() as session:
             improvement_note = await reflection_service.generate_reflection_async(session)
             await _log_action("nightly_reflection", {"note": improvement_note})

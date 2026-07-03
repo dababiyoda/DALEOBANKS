@@ -5,10 +5,11 @@ Memory management for episodic, semantic, procedural, and social memory
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, UTC
 
-from db.models import Note, Action, Tweet
+from db.models import Note, Action, Tweet, Relationship
 from db.session import get_db_session
 from services.logging_utils import get_logger
 from services.semantic_index import get_semantic_index
+from services.sentiment import SentimentService
 
 logger = get_logger(__name__)
 
@@ -18,7 +19,9 @@ class MemoryService:
     def __init__(self):
         self.max_improvement_notes = 100
         self.prompt_notes_limit = 30
+        self.max_relationship_topics = 10
         self.semantic_index = get_semantic_index()
+        self.sentiment = SentimentService()
     
     def get_episodic_memory(self, session: Any, hours: int = 24) -> List[Dict[str, Any]]:
         """Get recent episodic memories (actions and events)"""
@@ -82,14 +85,108 @@ class MemoryService:
             ]
         }
     
+    def record_interaction(
+        self,
+        session: Any,
+        *,
+        user_id: str,
+        handle: Optional[str] = None,
+        kind: str = "mention",
+        topic: Optional[str] = None,
+        text: Optional[str] = None,
+    ) -> Relationship:
+        """Upsert a relationship record for an account we interacted with."""
+        user_id = str(user_id)
+        rel = (
+            session.query(Relationship)
+            .filter(lambda r: r.id == user_id)
+            .first()
+        )
+        if rel is None:
+            rel = Relationship(id=user_id, handle=handle)
+            session.add(rel)
+
+        rel.interaction_count += 1
+        rel.last_interaction_at = datetime.now(UTC)
+        if handle:
+            rel.handle = handle
+        rel.kinds[kind] = rel.kinds.get(kind, 0) + 1
+        if topic and topic not in rel.topics:
+            rel.topics.append(topic)
+            rel.topics = rel.topics[-self.max_relationship_topics:]
+        if text:
+            score = self.sentiment.analyze_sentiment(text).get("score", 0.0)
+            count = rel.interaction_count
+            rel.sentiment_score = round(
+                (rel.sentiment_score * (count - 1) + score) / count, 3
+            )
+        session.commit()
+
+        # Associative copy so "what do I know about this person" is recallable.
+        try:
+            summary = f"{rel.handle or user_id} {kind}"
+            if topic:
+                summary += f" about {topic}"
+            if text:
+                summary += f": {text[:120]}"
+            self.semantic_index.add(summary, meta={"kind": "social", "user_id": user_id})
+        except Exception as exc:
+            logger.error(f"Failed to index interaction: {exc}")
+
+        return rel
+
+    def get_relationship(self, session: Any, user_id: str) -> Optional[Relationship]:
+        """Fetch the relationship record for a single account, if any."""
+        user_id = str(user_id)
+        return (
+            session.query(Relationship)
+            .filter(lambda r: r.id == user_id)
+            .first()
+        )
+
     def get_social_memory(self, session: Any) -> Dict[str, Any]:
         """Get social context and relationships"""
-        # This would track follower interactions, influential accounts, etc.
-        # For now, return basic structure
+        relationships = (
+            session.query(Relationship)
+            .order_by(lambda r: r.last_interaction_at, descending=True)
+            .limit(100)
+            .all()
+        )
+
+        influential = sorted(
+            relationships, key=lambda r: r.interaction_count, reverse=True
+        )[:10]
+
+        allies = [r for r in relationships if r.sentiment_score > 0.2 and r.interaction_count >= 2]
+        critics = [r for r in relationships if r.sentiment_score < -0.2 and r.interaction_count >= 2]
+        new_contacts = [r for r in relationships if r.interaction_count == 1]
+
+        topic_communities: Dict[str, List[str]] = {}
+        for rel in relationships:
+            label = rel.handle or rel.id
+            for topic in rel.topics:
+                topic_communities.setdefault(topic, []).append(label)
+
+        def _summarize(rels: List[Relationship]) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "id": r.id,
+                    "handle": r.handle,
+                    "interactions": r.interaction_count,
+                    "sentiment": r.sentiment_score,
+                    "topics": list(r.topics),
+                }
+                for r in rels
+            ]
+
         return {
-            "influential_interactions": [],
-            "follower_segments": [],
-            "topic_communities": []
+            "influential_interactions": _summarize(influential),
+            "follower_segments": {
+                "allies": _summarize(allies[:10]),
+                "critics": _summarize(critics[:10]),
+                "new_contacts": _summarize(new_contacts[:10]),
+            },
+            "topic_communities": topic_communities,
         }
     
     def add_improvement_note(self, session: Any, text: str) -> str:

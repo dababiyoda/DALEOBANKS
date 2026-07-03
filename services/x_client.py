@@ -46,6 +46,7 @@ class XClient:
     def __init__(self):
         self.config = get_config()
         self.client = None
+        self.self_id: Optional[str] = None
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         # Track idempotency keys to prevent duplicate writes
         # The key is a tuple of (endpoint, idempotency_key)
@@ -76,17 +77,72 @@ class XClient:
                 wait_on_rate_limit=True
             )
             
-            # Test connection
-            self.client.get_me()
+            # Test connection and remember our own account id so ingest
+            # jobs can distinguish inbound from outbound events.
+            me = self.client.get_me()
+            if me and getattr(me, "data", None):
+                self.self_id = str(me.data.id)
             logger.info("X API client initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize X client: {e}")
             self.client = None
-    
+
     def is_healthy(self) -> bool:
         """Check if client is healthy"""
         return self.client is not None
+
+    async def verify_credentials(self) -> bool:
+        """Verify credentials with a real API call (used by arming preflight)."""
+        if not self.client:
+            return False
+        try:
+            me = await asyncio.to_thread(self.client.get_me)
+            if me and getattr(me, "data", None):
+                self.self_id = str(me.data.id)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Credential verification failed: {e}")
+            return False
+
+    async def get_dm_events(
+        self,
+        max_results: int = 50,
+        pagination_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch recent DM events. Read-only, so safe in any LIVE state."""
+        if not self.client:
+            return {"events": [], "next_token": None}
+        if not self._check_circuit_breaker("get_dm_events"):
+            return {"events": [], "next_token": None}
+        try:
+            kwargs: Dict[str, Any] = {
+                "dm_event_fields": ["id", "text", "sender_id", "event_type", "created_at"],
+                "max_results": max_results,
+            }
+            if pagination_token:
+                kwargs["pagination_token"] = pagination_token
+            response = await asyncio.to_thread(
+                self.client.get_direct_message_events, **kwargs
+            )
+            events: List[Dict[str, Any]] = []
+            for event in (getattr(response, "data", None) or []):
+                created_at = getattr(event, "created_at", None)
+                events.append({
+                    "id": str(event.id),
+                    "text": getattr(event, "text", "") or "",
+                    "sender_id": str(getattr(event, "sender_id", "") or ""),
+                    "event_type": getattr(event, "event_type", "") or "",
+                    "created_at": created_at.isoformat() if created_at else None,
+                })
+            meta = getattr(response, "meta", None) or {}
+            self._record_success("get_dm_events")
+            return {"events": events, "next_token": meta.get("next_token")}
+        except Exception as e:
+            logger.error(f"Failed to fetch DM events: {e}")
+            self._record_failure("get_dm_events")
+            return {"events": [], "next_token": None}
     
     def _check_circuit_breaker(self, endpoint: str) -> bool:
         """Check if circuit breaker allows requests"""

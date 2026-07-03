@@ -117,6 +117,16 @@ class CrisisRequest(BaseModel):
     active: bool
     reason: Optional[str] = None
 
+class ConversionRequest(BaseModel):
+    value: float
+    redirect_id: Optional[str] = None
+    source: Optional[str] = "webhook"
+    currency: Optional[str] = "USD"
+    metadata: Optional[Dict[str, Any]] = None
+
+class DecisionRequest(BaseModel):
+    approve: bool
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -259,23 +269,69 @@ async def set_crisis(request: CrisisRequest):
         "crisis_reason": runner.crisis_service.reason,
     }
 
+async def _arming_preflight() -> Dict[str, Any]:
+    """Checks that must pass before live posting can be armed.
+
+    Disarming is always unconditional; only the arm direction is gated.
+    """
+    chain_ok, bad_seq = get_ledger().verify_chain()
+    breaker_clear = not runner.heartbeat.breaker_tripped
+    credentials_ok = await x_client.verify_credentials()
+
+    checks = {
+        "ledger_chain": chain_ok,
+        "breaker_clear": breaker_clear,
+        "x_credentials": credentials_ok,
+    }
+    if not chain_ok:
+        checks["ledger_chain_broken_at"] = bad_seq
+    return {"passed": all(v for k, v in checks.items() if isinstance(v, bool)), "checks": checks}
+
+
 @app.post("/api/toggle")
 async def toggle_live_mode(request: ToggleRequest):
-    """Toggle LIVE mode on/off"""
+    """Toggle LIVE mode. Arming requires a preflight; disarming never does."""
     try:
-        update_config(LIVE=request.live)
-        
+        if request.live:
+            preflight = await _arming_preflight()
+            if not preflight["passed"]:
+                get_ledger().record("arm_refused", {"checks": preflight["checks"]})
+                logger.warning(f"Arming refused by preflight: {preflight['checks']}")
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "Arming refused by preflight checks",
+                        "checks": preflight["checks"],
+                    },
+                )
+            get_kill_switch().set_armed(True, reason="manual_arm")
+            get_ledger().record("armed", {"checks": preflight["checks"]})
+        else:
+            get_kill_switch().set_armed(False, reason="manual_disarm")
+
         # Broadcast update to clients
         await broadcast_update({
             "type": "live_mode_changed",
             "live": config.LIVE
         })
-        
+
         logger.info(f"LIVE mode {'activated' if config.LIVE else 'paused'}")
         return {"live": config.LIVE}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Toggle error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/breaker/reset")
+async def reset_heartbeat_breaker(_: RequestContext = Depends(require_role("admin"))):
+    """Clear the heartbeat breaker after a trip. Does NOT re-arm live mode."""
+    runner.heartbeat.reset_breaker()
+    return {
+        "breaker_tripped": runner.heartbeat.breaker_tripped,
+        "live": config.LIVE,
+    }
 
 @app.post("/api/mode")
 async def set_goal_mode(request: ModeRequest):
@@ -367,6 +423,202 @@ async def create_redirect(request: RedirectRequest):
         logger.error(f"Redirect creation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/conversions")
+async def record_conversion(
+    request: ConversionRequest,
+    _: RequestContext = Depends(require_any_role(["admin", "service"])),
+):
+    """Record a real revenue event (e.g. from a payment provider webhook)."""
+    try:
+        conversion = Conversion(
+            redirect_id=request.redirect_id,
+            value=float(request.value),
+            currency=request.currency or "USD",
+            source=request.source or "webhook",
+            metadata=request.metadata or {},
+        )
+        with get_db_session() as session:
+            session.add(conversion)
+            session.commit()
+
+        get_ledger().record("revenue_event", {
+            "conversion_id": conversion.id,
+            "value": conversion.value,
+            "currency": conversion.currency,
+            "redirect_id": conversion.redirect_id,
+            "source": conversion.source,
+        })
+        return {"success": True, "id": conversion.id}
+    except Exception as e:
+        logger.error(f"Conversion recording error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conversions")
+async def list_conversions(limit: int = 50, _: RequestContext = Depends(get_request_context)):
+    """List recorded revenue events, newest first."""
+    try:
+        with get_db_session() as session:
+            conversions = (
+                session.query(Conversion)
+                .order_by(lambda c: c.occurred_at, descending=True)
+                .limit(limit)
+                .all()
+            )
+            return {
+                "count": len(conversions),
+                "conversions": [
+                    {
+                        "id": c.id,
+                        "value": c.value,
+                        "currency": c.currency,
+                        "source": c.source,
+                        "redirect_id": c.redirect_id,
+                        "occurred_at": c.occurred_at.isoformat(),
+                    }
+                    for c in conversions
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Conversion list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/discoveries")
+async def list_discoveries(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    """List discovery proposals (new voices/keywords) awaiting review."""
+    try:
+        with get_db_session() as session:
+            proposals = (
+                session.query(DiscoveryProposal)
+                .filter(lambda p: p.status == status_filter)
+                .order_by(lambda p: p.created_at, descending=True)
+                .all()
+            )
+            return {
+                "count": len(proposals),
+                "proposals": [
+                    {
+                        "id": p.id,
+                        "kind": p.kind,
+                        "value": p.value,
+                        "evidence": p.evidence,
+                        "status": p.status,
+                        "created_at": p.created_at.isoformat(),
+                    }
+                    for p in proposals
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Discovery list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/discoveries/{proposal_id}/decision")
+async def decide_discovery(
+    proposal_id: str,
+    request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve or reject a discovery proposal. Only approval widens perception."""
+    try:
+        with get_db_session() as session:
+            proposal = (
+                session.query(DiscoveryProposal)
+                .filter(lambda p: p.id == proposal_id)
+                .first()
+            )
+            if proposal is None:
+                raise HTTPException(status_code=404, detail="Proposal not found")
+            if proposal.status != "pending":
+                raise HTTPException(status_code=409, detail=f"Proposal already {proposal.status}")
+
+            proposal.status = "approved" if request.approve else "rejected"
+            proposal.decided_at = datetime.now(UTC)
+            proposal.actor = "admin"
+            session.commit()
+
+        get_ledger().record("discovery_decision", {
+            "id": proposal.id,
+            "kind": proposal.kind,
+            "value": proposal.value,
+            "decision": proposal.status,
+        })
+        return {"success": True, "status": proposal.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Discovery decision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/goals/proposals")
+async def list_goal_proposals(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    """List proposed OKR changes awaiting human review."""
+    try:
+        with get_db_session() as session:
+            proposals = (
+                session.query(GoalProposal)
+                .filter(lambda p: p.status == status_filter)
+                .order_by(lambda p: p.created_at, descending=True)
+                .all()
+            )
+            return {
+                "count": len(proposals),
+                "proposals": [
+                    {
+                        "id": p.id,
+                        "proposal": p.proposal,
+                        "rationale": p.rationale,
+                        "status": p.status,
+                        "created_at": p.created_at.isoformat(),
+                    }
+                    for p in proposals
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Goal proposal list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/goals/proposals/{proposal_id}/decision")
+async def decide_goal_proposal(
+    proposal_id: str,
+    request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve or reject a proposed OKR change. Approved proposals become
+    the active OKR at the next planning cycle."""
+    try:
+        with get_db_session() as session:
+            proposal = (
+                session.query(GoalProposal)
+                .filter(lambda p: p.id == proposal_id)
+                .first()
+            )
+            if proposal is None:
+                raise HTTPException(status_code=404, detail="Proposal not found")
+            if proposal.status != "pending":
+                raise HTTPException(status_code=409, detail=f"Proposal already {proposal.status}")
+
+            proposal.status = "approved" if request.approve else "rejected"
+            proposal.decided_at = datetime.now(UTC)
+            proposal.actor = "admin"
+            session.commit()
+
+        get_ledger().record("okr_decision", {
+            "id": proposal.id,
+            "decision": proposal.status,
+            "proposal": proposal.proposal,
+        })
+        return {"success": True, "status": proposal.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Goal proposal decision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/r/{redirect_id}")
 async def handle_redirect(redirect_id: str):
     """Handle redirect and track clicks"""
@@ -383,6 +635,10 @@ async def handle_redirect(redirect_id: str):
             # Increment clicks
             redirect.clicks = (redirect.clicks or 0) + 1
             session.commit()
+            get_ledger().record("link_click", {
+                "redirect_id": redirect.id,
+                "clicks": redirect.clicks,
+            })
             
             return RedirectResponse(url=str(redirect.target_url), status_code=302)
     except Exception as e:
@@ -547,6 +803,10 @@ async def startup_event():
             logger.critical(f"Decision ledger chain broken at seq {bad_seq}; disarming live mode")
             get_kill_switch().set_armed(False, reason=f"ledger_chain_broken_at_{bad_seq}")
         ledger.record("startup", {"live": config.LIVE, "chain_ok": chain_ok})
+
+        # Record the constitution hash: the fixed values this process runs
+        # under. Runtime drift is checked nightly and disarms live mode.
+        runner.constitution_guard.load_and_record()
 
         # Load persona and drives
         persona_store.load_persona()

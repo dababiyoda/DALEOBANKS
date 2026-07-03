@@ -186,17 +186,28 @@ class AnalyticsService:
         }
     
     def calculate_revenue_per_day(self, session: Any) -> float:
-        """Calculate revenue per day from tracked redirects"""
-        # Get all redirects and their click data
+        """Revenue for the last 24h: measured conversions when available.
+
+        Recorded Conversion events (POST /api/conversions) are ground
+        truth. The legacy clicks-based estimate is only used while no
+        conversion has ever been recorded, so the number is never a
+        silent guess once real tracking is wired up.
+        """
+        from db.models import Conversion
+
+        all_conversions = session.query(Conversion).all()
+        if all_conversions:
+            cutoff = datetime.now(UTC) - timedelta(days=1)
+            return round(
+                sum(c.value for c in all_conversions if c.occurred_at >= cutoff), 2
+            )
+
+        # Legacy estimate: no conversions recorded yet.
         redirects = session.query(Redirect).all()
-        
         total_revenue = 0.0
         for redirect in redirects:
-            # Revenue = clicks × revenue per click
-            revenue_per_click = 0.05  # Default $0.05 per click
-            redirect_revenue = redirect.clicks * revenue_per_click
-            total_revenue += redirect_revenue
-        
+            revenue_per_click = 0.05  # Estimated $0.05 per click
+            total_revenue += redirect.clicks * revenue_per_click
         return round(total_revenue, 2)
     
     def calculate_authority_signals(self, session: Any, days: int = 1) -> float:

@@ -20,10 +20,13 @@ logger = get_logger(__name__)
 class PlannerService:
     """Weekly planning and strategic OKR management"""
     
-    def __init__(self):
+    def __init__(self, ledger=None):
+        from services.ledger import DecisionLedger
+
         self.memory = MemoryService()
         self.analytics = AnalyticsService()
         self.kpi_service = KPIService()
+        self.ledger = ledger or DecisionLedger()
         
         # Default OKR template
         self.default_okr = {
@@ -316,6 +319,49 @@ class PlannerService:
             logger.error(f"Tactical planning failed: {e}")
             return self._get_default_tasks()
     
+    def get_active_okr(self, session: Session) -> Dict[str, Any]:
+        """The OKR in force: the latest human-approved proposal, else default.
+
+        The agent never applies its own goal changes - it files proposals
+        (see _file_goal_proposal) and this method only honors ones a human
+        approved via POST /api/goals/proposals/{id}/decision.
+        """
+        from db.models import GoalProposal
+
+        approved = (
+            session.query(GoalProposal)
+            .filter(lambda p: p.status == "approved")
+            .order_by(lambda p: p.decided_at or p.created_at, descending=True)
+            .first()
+        )
+        if approved and approved.proposal:
+            return dict(approved.proposal)
+        return dict(self.default_okr)
+
+    def _file_goal_proposal(self, session: Session, proposal: Dict[str, Any], rationale: str) -> None:
+        """Record a proposed OKR change, pending human review. Idempotent."""
+        from db.models import GoalProposal
+
+        pending = (
+            session.query(GoalProposal)
+            .filter(lambda p: p.status == "pending")
+            .all()
+        )
+        if any(p.proposal == proposal for p in pending):
+            return
+
+        record = GoalProposal(proposal=proposal, rationale=rationale)
+        session.add(record)
+        session.commit()
+        try:
+            self.ledger.record("okr_proposal", {
+                "id": record.id,
+                "proposal": proposal,
+                "rationale": rationale,
+            })
+        except Exception as exc:
+            logger.error(f"Failed to ledger OKR proposal: {exc}")
+
     async def _update_okrs(self, session: Session, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Update OKRs based on recent performance"""
         try:
@@ -336,16 +382,26 @@ class PlannerService:
                 (progress["artifacts_published"] / 2 * 100)
             ) / 3
             
-            # Adjust OKRs if needed
-            current_okr = self.default_okr.copy()
-            
+            # The OKR in force is the latest human-approved one. Heuristic
+            # adjustments become ledgered proposals, never silent rewrites.
+            current_okr = self.get_active_okr(session)
+
+            proposed = None
+            rationale = ""
             if total_progress > 80:
-                # Increase ambition
-                current_okr["key_results"][0] = "Generate 8 high-quality proposal posts"
+                proposed = dict(current_okr)
+                proposed["key_results"] = list(current_okr["key_results"])
+                proposed["key_results"][0] = "Generate 8 high-quality proposal posts"
+                rationale = f"Progress at {total_progress:.0f}%: raise ambition"
             elif total_progress < 30:
-                # Reduce scope to ensure achievability
-                current_okr["key_results"][0] = "Generate 4 high-quality proposal posts"
-            
+                proposed = dict(current_okr)
+                proposed["key_results"] = list(current_okr["key_results"])
+                proposed["key_results"][0] = "Generate 4 high-quality proposal posts"
+                rationale = f"Progress at {total_progress:.0f}%: reduce scope for achievability"
+
+            if proposed and proposed != current_okr:
+                self._file_goal_proposal(session, proposed, rationale)
+
             return {
                 "current_okr": current_okr,
                 "progress": total_progress,
