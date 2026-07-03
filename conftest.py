@@ -31,6 +31,12 @@ if "SEMANTIC_INDEX_PATH" not in os.environ:
         tempfile.mkdtemp(prefix="daleobanks-semindex-"), "semantic_index.jsonl"
     )
 
+# Same for the world model (see services/world_model.py).
+if "WORLD_MODEL_PATH" not in os.environ:
+    os.environ["WORLD_MODEL_PATH"] = os.path.join(
+        tempfile.mkdtemp(prefix="daleobanks-worldmodel-"), "world_model.jsonl"
+    )
+
 # Run the object store purely in memory so tests stay isolated (init_db()
 # gives every test a clean slate). Persistence has dedicated tests that
 # opt back in with a temp snapshot path.

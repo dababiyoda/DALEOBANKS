@@ -10,7 +10,8 @@ import os
 import sys
 import traceback
 import uuid
-from datetime import datetime, UTC
+import secrets
+from datetime import datetime, timedelta, UTC
 from typing import Dict, List, Optional, Any
 
 import uvicorn
@@ -126,6 +127,9 @@ class ConversionRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     approve: bool
+
+class TokenRequest(BaseModel):
+    admin_token: str
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
@@ -268,6 +272,38 @@ async def set_crisis(request: CrisisRequest):
         "crisis_state": "PAUSED" if runner.crisis_service.is_paused() else "NORMAL",
         "crisis_reason": runner.crisis_service.reason,
     }
+
+@app.post("/api/auth/token")
+async def issue_admin_token(request: TokenRequest):
+    """Exchange the ADMIN_TOKEN for a short-lived admin JWT.
+
+    This is what lets the dashboard perform admin actions (approvals,
+    breaker reset, persona updates) without shipping the raw admin token
+    on every request.
+    """
+    import jwt as pyjwt
+
+    if not secrets.compare_digest(request.admin_token, config.ADMIN_TOKEN):
+        logger.warning("Admin token exchange failed: invalid token")
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    now = datetime.now(UTC)
+    expires_hours = 12
+    claims: Dict[str, Any] = {
+        "sub": "admin",
+        "roles": ["admin"],
+        "iat": now,
+        "exp": now + timedelta(hours=expires_hours),
+    }
+    if config.JWT_ISSUER:
+        claims["iss"] = config.JWT_ISSUER
+    if config.JWT_AUDIENCE:
+        claims["aud"] = config.JWT_AUDIENCE
+
+    token = pyjwt.encode(claims, config.JWT_SECRET, algorithm="HS256")
+    get_ledger().record("admin_token_issued", {"expires_hours": expires_hours})
+    return {"token": token, "expires_in": expires_hours * 3600}
+
 
 async def _arming_preflight() -> Dict[str, Any]:
     """Checks that must pass before live posting can be armed.

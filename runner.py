@@ -38,7 +38,9 @@ from services.critic import Critic
 from services.ethics_guard import EthicsGuard
 from services.heartbeat import Heartbeat
 from services.ledger import get_kill_switch, get_ledger
+from services.simulator import ReceptionPredictor
 from services.thought_dsl import ThoughtPlan, ThoughtInterpreter
+from services.world_model import get_world_model
 
 logger = get_logger(__name__)
 
@@ -73,6 +75,7 @@ thought_interpreter = ThoughtInterpreter(
 heartbeat = Heartbeat(get_kill_switch(), get_ledger())
 constitution_guard = ConstitutionGuard(ledger=get_ledger(), kill_switch=get_kill_switch())
 consolidation_service = ConsolidationService(llm_adapter, ledger=get_ledger())
+reception_predictor = ReceptionPredictor()
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -285,6 +288,21 @@ async def post_proposal_job():
                 "Proposal blocked by thought gate: %s", verdict.get("reasons")
             )
             return
+
+        # Internal simulator (advisory): predict reception from history and
+        # ledger it next to the publish so predicted-vs-actual is auditable.
+        try:
+            with get_db_session() as session:
+                prediction = reception_predictor.predict(
+                    session, topic=topic, hour=action.get("hour_bin"),
+                )
+            get_ledger().record("reception_prediction", {
+                "topic": topic,
+                "hour": action.get("hour_bin"),
+                **prediction,
+            })
+        except Exception as exc:
+            logger.error(f"Reception prediction failed: {exc}")
 
         publish_result = await multiplexer.publish(
             result["content"],
@@ -995,6 +1013,14 @@ async def perception_job():
             )
             _perception_state = perception_service.last_state
         payload = perception_service.last_payload
+
+        # Fold what was seen into the durable world model so knowledge of
+        # the environment outlives the scan.
+        try:
+            if isinstance(payload, dict):
+                get_world_model().observe_perception(payload)
+        except Exception as exc:
+            logger.error(f"World model update failed: {exc}")
         counts = perception_service.last_counts
         mentions = payload.get("x", {}).get("mentions", []) if isinstance(payload, dict) else []
         mention_velocity = counts.get("x_mentions") if isinstance(counts, dict) else None

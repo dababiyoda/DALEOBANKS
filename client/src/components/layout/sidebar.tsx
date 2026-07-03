@@ -1,20 +1,22 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  Brain, 
-  BarChart3, 
-  Settings, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Brain,
+  BarChart3,
+  Settings,
+  FileText,
   Heart,
   Bot,
-  Sparkles
+  Sparkles,
+  CheckSquare
 } from "lucide-react";
 
 const navigation = [
   { name: "Overview", href: "/", icon: LayoutDashboard },
   { name: "Persona Editor", href: "/persona", icon: Brain },
   { name: "The Mind", href: "/mind", icon: Sparkles },
+  { name: "Approvals", href: "/approvals", icon: CheckSquare },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Configuration", href: "/config", icon: Settings },
   { name: "Activity Log", href: "/logs", icon: FileText },
