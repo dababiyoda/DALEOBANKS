@@ -35,6 +35,7 @@ class Tweet:
     quotes: int = 0
     authority_score: float = 0.0
     j_score: Optional[float] = 0.0
+    predicted_j: Optional[float] = None  # simulator forecast at publish time
 
 
 @dataclass

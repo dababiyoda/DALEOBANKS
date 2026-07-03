@@ -23,4 +23,5 @@ data/decision_ledger.jsonl
 data/semantic_index.jsonl
 data/agent_store.jsonl
 data/world_model.jsonl
+data/evidence_library.jsonl
 self_model_card.md

@@ -60,6 +60,11 @@ class ReceptionPredictor:
         hour_estimate = self._shrunk_mean(hour_scores, global_mean)
         predicted = 0.6 * topic_estimate + 0.4 * hour_estimate
 
+        # Self-calibration: past predicted-vs-actual pairs correct the
+        # forecaster's systematic bias, shrunk while evidence is thin.
+        bias = self._bias_correction(scored)
+        predicted += bias
+
         evidence = len(topic_scores) + len(hour_scores)
         confidence = round(min(evidence / 20.0, 1.0), 3)
 
@@ -73,7 +78,43 @@ class ReceptionPredictor:
                 "hour": len(hour_scores),
             },
             "global_mean": round(global_mean, 3),
+            "bias_correction": round(bias, 4),
         }
+
+    def prediction_accuracy(self, session: Any) -> Dict[str, Any]:
+        """How well have past forecasts matched reality?"""
+        pairs = self._scored_pairs(session)
+        if not pairs:
+            return {"pairs": 0, "mean_error": None, "mean_abs_error": None}
+        errors = [actual - predicted for predicted, actual in pairs]
+        return {
+            "pairs": len(pairs),
+            "mean_error": round(mean(errors), 4),
+            "mean_abs_error": round(mean(abs(e) for e in errors), 4),
+        }
+
+    def _scored_pairs(self, session: Any) -> List[tuple]:
+        tweets = (
+            session.query(Tweet)
+            .filter(
+                lambda t: t.predicted_j is not None,
+                lambda t: t.j_score is not None,
+            )
+            .all()
+        )
+        return [(t.predicted_j, t.j_score) for t in tweets]
+
+    def _bias_correction(self, scored: List[Tweet]) -> float:
+        pairs = [
+            (t.predicted_j, t.j_score)
+            for t in scored
+            if t.predicted_j is not None
+        ]
+        if not pairs:
+            return 0.0
+        raw_bias = mean(actual - predicted for predicted, actual in pairs)
+        weight = len(pairs) / (len(pairs) + self.shrinkage)
+        return raw_bias * weight
 
     def _shrunk_mean(self, scores: List[float], global_mean: float) -> float:
         """Sample mean pulled toward the global mean when evidence is thin."""

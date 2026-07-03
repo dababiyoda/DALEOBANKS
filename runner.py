@@ -291,6 +291,7 @@ async def post_proposal_job():
 
         # Internal simulator (advisory): predict reception from history and
         # ledger it next to the publish so predicted-vs-actual is auditable.
+        prediction: Dict[str, Any] = {}
         try:
             with get_db_session() as session:
                 prediction = reception_predictor.predict(
@@ -326,6 +327,7 @@ async def post_proposal_job():
                     hour_bin=action.get("hour_bin"),
                     cta_variant=action.get("cta_variant"),
                     intensity=action.get("intensity"),
+                    predicted_j=prediction.get("predicted_j"),
                 )
                 session.add(tweet)
                 session.commit()
@@ -412,6 +414,20 @@ async def reply_mentions_job():
                     "author_info": {"username": mention.get("username", "unknown")},
                     "topic": topic
                 }
+
+                # Social memory: replies acknowledge shared history.
+                with get_db_session() as session:
+                    rel = memory_service.get_relationship(
+                        session,
+                        mention.get("author_id") or mention.get("username", ""),
+                    )
+                if rel:
+                    context["relationship"] = {
+                        "handle": rel.handle,
+                        "interactions": rel.interaction_count,
+                        "sentiment": rel.sentiment_score,
+                        "topics": list(rel.topics),
+                    }
 
                 intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
                 result = await generator.make_reply(context, intensity)
@@ -1111,6 +1127,16 @@ async def nightly_reflection_job():
         # Values check: a constitution that changed underneath a running
         # process disarms live posting before any further learning.
         constitution_guard.verify()
+
+        # Forecast audit: how well have reception predictions matched
+        # reality? Ledgered so calibration drift is visible over time.
+        try:
+            with get_db_session() as session:
+                accuracy = reception_predictor.prediction_accuracy(session)
+            if accuracy.get("pairs"):
+                get_ledger().record("prediction_accuracy", accuracy)
+        except Exception as exc:
+            logger.error(f"Prediction accuracy audit failed: {exc}")
 
         with get_db_session() as session:
             improvement_note = await reflection_service.generate_reflection_async(session)
