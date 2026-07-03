@@ -552,6 +552,73 @@ async def decide_discovery(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/goals/proposals")
+async def list_goal_proposals(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    """List proposed OKR changes awaiting human review."""
+    try:
+        with get_db_session() as session:
+            proposals = (
+                session.query(GoalProposal)
+                .filter(lambda p: p.status == status_filter)
+                .order_by(lambda p: p.created_at, descending=True)
+                .all()
+            )
+            return {
+                "count": len(proposals),
+                "proposals": [
+                    {
+                        "id": p.id,
+                        "proposal": p.proposal,
+                        "rationale": p.rationale,
+                        "status": p.status,
+                        "created_at": p.created_at.isoformat(),
+                    }
+                    for p in proposals
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Goal proposal list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/goals/proposals/{proposal_id}/decision")
+async def decide_goal_proposal(
+    proposal_id: str,
+    request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve or reject a proposed OKR change. Approved proposals become
+    the active OKR at the next planning cycle."""
+    try:
+        with get_db_session() as session:
+            proposal = (
+                session.query(GoalProposal)
+                .filter(lambda p: p.id == proposal_id)
+                .first()
+            )
+            if proposal is None:
+                raise HTTPException(status_code=404, detail="Proposal not found")
+            if proposal.status != "pending":
+                raise HTTPException(status_code=409, detail=f"Proposal already {proposal.status}")
+
+            proposal.status = "approved" if request.approve else "rejected"
+            proposal.decided_at = datetime.now(UTC)
+            proposal.actor = "admin"
+            session.commit()
+
+        get_ledger().record("okr_decision", {
+            "id": proposal.id,
+            "decision": proposal.status,
+            "proposal": proposal.proposal,
+        })
+        return {"success": True, "status": proposal.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Goal proposal decision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/r/{redirect_id}")
 async def handle_redirect(redirect_id: str):
     """Handle redirect and track clicks"""
@@ -736,6 +803,10 @@ async def startup_event():
             logger.critical(f"Decision ledger chain broken at seq {bad_seq}; disarming live mode")
             get_kill_switch().set_armed(False, reason=f"ledger_chain_broken_at_{bad_seq}")
         ledger.record("startup", {"live": config.LIVE, "chain_ok": chain_ok})
+
+        # Record the constitution hash: the fixed values this process runs
+        # under. Runtime drift is checked nightly and disarms live mode.
+        runner.constitution_guard.load_and_record()
 
         # Load persona and drives
         persona_store.load_persona()

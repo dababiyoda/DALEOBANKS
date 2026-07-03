@@ -32,6 +32,7 @@ from services.logging_utils import get_logger
 from services.crisis import CrisisService
 from services.memory import MemoryService
 from services.perception import PerceptionService
+from services.constitution import ConstitutionGuard
 from services.critic import Critic
 from services.ethics_guard import EthicsGuard
 from services.heartbeat import Heartbeat
@@ -69,6 +70,7 @@ thought_interpreter = ThoughtInterpreter(
     ethics_guard, critic=Critic(), ledger=get_ledger()
 )
 heartbeat = Heartbeat(get_kill_switch(), get_ledger())
+constitution_guard = ConstitutionGuard(ledger=get_ledger(), kill_switch=get_kill_switch())
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -1070,6 +1072,10 @@ async def follower_snapshot_job():
 async def nightly_reflection_job():
     """Perform nightly reflection and generate improvement note"""
     try:
+        # Values check: a constitution that changed underneath a running
+        # process disarms live posting before any further learning.
+        constitution_guard.verify()
+
         with get_db_session() as session:
             improvement_note = await reflection_service.generate_reflection_async(session)
             await _log_action("nightly_reflection", {"note": improvement_note})
