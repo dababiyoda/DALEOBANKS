@@ -147,6 +147,9 @@ The architecture prioritizes modularity, safety, and autonomous operation while 
 - **Gated discovery**: daily job proposes new voices/keywords from real engagement; `POST /api/discoveries/{id}/decision` approves; only approvals widen perception.
 - **Constitution**: `constitution.md` hashed into the ledger at startup, re-verified nightly (drift disarms). Planner files OKR changes as `GoalProposal`s, applied only after `POST /api/goals/proposals/{id}/decision` approval.
 - **Dream consolidation**: a daily idle-hours job clusters near-duplicate lessons (same embedding as the semantic index) and merges each cluster into one sharper lesson via the LLM, with a deterministic keep-newest fallback; every compression is ledgered as `memory_consolidated`.
+- **Approvals page** (`/approvals`): lists pending discovery and goal proposals with approve/reject; `POST /api/auth/token` exchanges the ADMIN_TOKEN for a 12-hour admin JWT the client attaches to all requests.
+- **World model** (`data/world_model.jsonl`): every observed mention, timeline post, and trend is durably embedded; generation context includes topic-relevant observations.
+- **Internal simulator**: advisory reception prediction (topic/hour history with shrinkage) ledgered as `reception_prediction` before each proposal publish.
 
 ### Testing
 - `python -m pytest` (150 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.
