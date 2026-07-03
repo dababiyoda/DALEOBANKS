@@ -26,17 +26,54 @@ Events currently chained: `startup`, `publish_attempt` / `publish_gated` /
 `publish_result` (every platform write), `kill_switch`, `identity_change`,
 `reflection_lesson`, `plan_start` / `plan_step` / `plan_critique` /
 `plan_halt` / `plan_done` (reasoning traces), `cycle_error` /
-`breaker_tripped` / `breaker_reset` (heartbeat).
+`breaker_tripped` / `breaker_reset` (heartbeat), `armed` / `arm_refused`
+(arming ceremony), `dm_received` (metadata only — never private text),
+`revenue_event` / `link_click`, `discovery_proposal` /
+`discovery_decision`, `okr_proposal` / `okr_decision`, and
+`constitution_hash` / `constitution_tampered` / `constitution_missing`.
 
 The app verifies the chain at startup (`app.py`); a broken chain disarms
 live mode before anything can act.
 
-### Kill switch
+### Kill switch and the arming ceremony
 `KillSwitch` is the single authority over live posting. It wraps the existing
 `config.LIVE` toggle, so disarming propagates instantly to the multiplexer
 and every adapter through the config-update mechanism. `LIVE` defaults to
-false; automatic transitions only ever *disarm*. Re-arming is a human
-decision made through the dashboard toggle or `POST /api/toggle`.
+false; automatic transitions only ever *disarm*.
+
+Arming is a ceremony, not a flag flip: `POST /api/toggle` with `live=true`
+runs a preflight — ledger chain verification, heartbeat breaker state, and a
+real X credential check (`get_me` API call) — and refuses with HTTP 409 and
+the failed checks if any gate fails. Both outcomes are ledgered (`armed` /
+`arm_refused`). Disarming is unconditional under every failure combination.
+After a breaker trip, `POST /api/breaker/reset` (admin) clears the breaker
+without re-arming.
+
+### Constitution
+`constitution.md` states the agent's fixed values. Its hash is recorded in
+the ledger at startup and re-verified during the nightly cycle; runtime
+drift records `constitution_tampered` and disarms live posting. The agent
+can propose changes to its goals — never to its constitution; amendments
+happen only through a human commit and restart.
+
+### Human gates on self-modification
+The mind widens itself only through gates a human holds:
+
+- **Discovery**: a daily job proposes new voices (accounts with repeated
+  genuine engagement) and keywords (topics that repeatedly earn high
+  J-scores). Proposals are ledgered and pending until decided via
+  `POST /api/discoveries/{id}/decision`; only approvals reach perception.
+- **Goals**: the planner files OKR adjustments as ledgered `GoalProposal`s.
+  The active OKR is the latest human-approved proposal (else the default),
+  decided via `POST /api/goals/proposals/{id}/decision`.
+
+### Inbound senses
+The `dm_ingest` job reads incoming DMs (read-only, safe in any LIVE state).
+Inbound text is untrusted input: it passes the EthicsGuard before it can
+influence anything (harmful messages are stored as `dm_flagged` and never
+become reply candidates), and the ledger records metadata only — private
+message text never enters the tamper-evident log. The value-DM job answers
+unanswered inbound DMs before doing any cold outreach.
 
 ### Publish gate (`services/social_base.py`)
 `BaseSocialClient.publish` is a template method. Before any adapter's

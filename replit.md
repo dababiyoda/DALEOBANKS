@@ -138,5 +138,14 @@ The architecture prioritizes modularity, safety, and autonomous operation while 
 - Python packaging: `pyproject.toml` + `uv.lock` are in sync with `requirements.txt` (includes PyJWT, prometheus-client, pytest).
 - Secrets go in Replit Secrets (`OPENAI_API_KEY`, X tokens, `ADMIN_TOKEN`, `JWT_SECRET`); `LIVE` stays `false` until deliberately armed.
 
+### Capabilities added after the safety spine
+- **Durable memory**: `db/session.py` persists the object store to atomic JSONL snapshots (`data/agent_store.jsonl`); tweets, KPIs, actions, relationships, and bandit history survive restarts. `PERSIST_STORE` / `DB_SNAPSHOT_PATH` control it.
+- **Arming ceremony**: `POST /api/toggle live=true` runs a preflight (ledger chain, breaker state, real X credential check) and refuses with 409 on failure; disarm is unconditional. `POST /api/breaker/reset` clears a tripped breaker without re-arming.
+- **DM ingest**: `dm_ingest` job reads incoming DMs (ethics-screened, ledger gets metadata only, never private text); the value-DM job answers unanswered inbound DMs before cold outreach.
+- **Social memory**: `Relationship` records (counts, sentiment average, topics) fed by mention replies and DMs; `get_social_memory` returns real segments.
+- **Measured revenue**: `POST /api/conversions` records real revenue events; revenue KPIs prefer conversions over the legacy click estimate.
+- **Gated discovery**: daily job proposes new voices/keywords from real engagement; `POST /api/discoveries/{id}/decision` approves; only approvals widen perception.
+- **Constitution**: `constitution.md` hashed into the ledger at startup, re-verified nightly (drift disarms). Planner files OKR changes as `GoalProposal`s, applied only after `POST /api/goals/proposals/{id}/decision` approval.
+
 ### Testing
-- `python -m pytest` (117 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.
+- `python -m pytest` (150 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.
