@@ -39,6 +39,7 @@ from services.ethics_guard import EthicsGuard
 from services.heartbeat import Heartbeat
 from services.ledger import get_kill_switch, get_ledger
 from services.thought_dsl import ThoughtPlan, ThoughtInterpreter
+from services.world_model import get_world_model
 
 logger = get_logger(__name__)
 
@@ -995,6 +996,14 @@ async def perception_job():
             )
             _perception_state = perception_service.last_state
         payload = perception_service.last_payload
+
+        # Fold what was seen into the durable world model so knowledge of
+        # the environment outlives the scan.
+        try:
+            if isinstance(payload, dict):
+                get_world_model().observe_perception(payload)
+        except Exception as exc:
+            logger.error(f"World model update failed: {exc}")
         counts = perception_service.last_counts
         mentions = payload.get("x", {}).get("mentions", []) if isinstance(payload, dict) else []
         mention_velocity = counts.get("x_mentions") if isinstance(counts, dict) else None

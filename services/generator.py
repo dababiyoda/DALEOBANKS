@@ -319,6 +319,12 @@ class Generator:
                 f"- {lesson}" for lesson in associative
             ) + "\n"
 
+        observed = context.get("world_context") or []
+        if observed:
+            lessons_block += "\nRecently observed in the environment:\n" + "\n".join(
+                f"- {item}" for item in observed
+            ) + "\n"
+
         prompt = f"""Generate a proposal tweet about {topic}.
 
 Template to follow: {template}

@@ -251,4 +251,12 @@ class MemoryService:
         }
         if topic:
             context["associative_lessons"] = self.search_similar_lessons(topic, k=3)
+            try:
+                from services.world_model import get_world_model
+                context["world_context"] = [
+                    r["text"] for r in get_world_model().recall(topic, k=3)
+                ]
+            except Exception as exc:
+                logger.error(f"World model recall failed: {exc}")
+                context["world_context"] = []
         return context
