@@ -31,7 +31,9 @@ Events currently chained: `startup`, `publish_attempt` / `publish_gated` /
 `revenue_event` / `link_click`, `discovery_proposal` /
 `discovery_decision`, `okr_proposal` / `okr_decision`, `memory_consolidated` (dream
 consolidation), `reception_prediction` / `prediction_accuracy` (self-calibrating simulator),
-`admin_token_issued` (dashboard admin sessions), and
+`admin_token_issued` (dashboard admin sessions),
+`operator_prompted` / `operator_command` (operator approval line),
+`instinct_verdict` / `identity_gate` (the reflex layer), and
 `constitution_hash` / `constitution_tampered` / `constitution_missing`.
 
 The app verifies the chain at startup (`app.py`); a broken chain disarms
@@ -68,6 +70,45 @@ The mind widens itself only through gates a human holds:
 - **Goals**: the planner files OKR adjustments as ledgered `GoalProposal`s.
   The active OKR is the latest human-approved proposal (else the default),
   decided via `POST /api/goals/proposals/{id}/decision`.
+
+### Operator approval line (`services/operator_line.py`)
+When the agent needs judgment rather than rules, it files an
+`ApprovalRequest` and prompts the operator — by SMS when Twilio is
+configured (`TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` /
+`OPERATOR_PHONE`), and always in the dashboard inbox
+(`GET /api/operator/requests`). Commands run through one parser whether they
+arrive as a signed Twilio webhook (`POST /api/operator/sms`, signature- and
+sender-validated before anything is parsed) or from the dashboard
+(`POST /api/operator/command`, admin JWT):
+
+`YES [id]`, `NO [id]`, `EDIT [id] <text>`, `WHY [id]`, `HOLD [id]`,
+`FREEZE`, `NEWS`, `INTERVIEW`, `OPINION: <thought>`
+
+Three rules are load-bearing: **YES approves exactly one request** (bound to
+its id; a bare YES refuses to act when more than one request is pending) and
+never enables standing autonomy; **FREEZE disarms outbound action
+immediately** through the kill switch; **OPINION becomes a `SelfSignal`** —
+a signal the agent weighs, never automatic doctrine. Every prompt and
+command is ledgered (`operator_prompted` / `operator_command`).
+
+### Instinct Engine and Identity Gate (`services/instinct.py`)
+A deterministic reflex layer that runs on every posting path, before and
+after generation:
+
+- **Instinct Engine** (pre-generation) scores each opportunity — identity
+  fit, mission fit, business leverage, relationship value, credibility risk,
+  ragebait risk, evidence need — and returns one of `engage`, `ignore`,
+  `save_for_later`, `research_first`, `human_review`, `block`, `dm_instead`,
+  `create_asset`. Ragebait and insults are blocked before a single token is
+  generated; hostile relationships get de-escalated privately instead of
+  publicly; high-stakes opportunities file an operator approval request.
+- **Identity Gate** (post-generation) scores the draft — belief fit, voice
+  fit, mission fit, credibility risk, drift risk — and returns `allow`,
+  `rewrite` (one regeneration attempt), `block`, or `needs_human` (files an
+  `ApprovalRequest`). Drafts with unsourced strong claims stop here.
+
+Both layers only narrow what the existing gates may see; they never publish.
+Every verdict is ledgered (`instinct_verdict` / `identity_gate`).
 
 ### Inbound senses
 The `dm_ingest` job reads incoming DMs (read-only, safe in any LIVE state).

@@ -228,3 +228,49 @@ async def test_reply_mentions_logs_bandit_metadata(monkeypatch):
     assert stored.cta_variant == "reply_default"
     assert log_calls and log_calls[0]["post_type"] == "reply"
     assert log_calls[0]["hour_bin"] == 9
+
+
+@pytest.mark.asyncio
+async def test_reply_mentions_instinct_blocks_ragebait(monkeypatch):
+    init_db()
+
+    mention = {
+        "id": "m2",
+        "text": "RT if you agree! They DESTROYED him! Wake up sheeple!",
+        "username": "baiter",
+    }
+    generated = []
+    published = []
+
+    class FakeXClient:
+        async def get_mentions(self):
+            return [mention]
+
+    async def fake_make_reply(context, intensity):
+        generated.append(context)
+        return {"content": "engaging with the bait"}
+
+    async def fake_publish(content, **kwargs):
+        published.append(content)
+        return {"x": SocialPostResult(platform="x", post_id="r2", dry_run=False, meta={})}
+
+    async def fake_decide():
+        return {"type": "REPLY_MENTIONS", "intensity": 2, "topic": "coordination"}
+
+    previous_live = runner.config.LIVE
+    monkeypatch.setattr(runner.crisis_service, "guard", lambda action: True)
+    monkeypatch.setattr(runner.selector, "decide_next_action", fake_decide)
+    monkeypatch.setattr(runner.generator, "make_reply", fake_make_reply)
+    monkeypatch.setattr(runner, "multiplexer", types.SimpleNamespace(publish=fake_publish))
+    monkeypatch.setattr(runner, "x_client", FakeXClient())
+    runner.config.LIVE = True
+
+    await runner.reply_mentions_job()
+
+    runner.config.LIVE = previous_live
+
+    # The reflex fires before generation: no draft, no publish, no tweet.
+    assert generated == []
+    assert published == []
+    with get_db_session() as session:
+        assert session.query(Tweet).count() == 0

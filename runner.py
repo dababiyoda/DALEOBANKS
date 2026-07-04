@@ -41,6 +41,11 @@ from services.ledger import get_kill_switch, get_ledger
 from services.simulator import ReceptionPredictor
 from services.thought_dsl import ThoughtPlan, ThoughtInterpreter
 from services.world_model import get_world_model
+from services.instinct import (
+    ALLOW, BLOCK, DM_INSTEAD, HUMAN_REVIEW, NEEDS_HUMAN, PROCEED_VERDICTS,
+    REWRITE, InstinctEngine, IdentityGate,
+)
+from services.operator_line import get_operator_line
 
 logger = get_logger(__name__)
 
@@ -76,6 +81,9 @@ heartbeat = Heartbeat(get_kill_switch(), get_ledger())
 constitution_guard = ConstitutionGuard(ledger=get_ledger(), kill_switch=get_kill_switch())
 consolidation_service = ConsolidationService(llm_adapter, ledger=get_ledger())
 reception_predictor = ReceptionPredictor()
+instinct_engine = InstinctEngine(persona_store)
+identity_gate = IdentityGate(persona_store)
+operator_line = get_operator_line()
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -255,6 +263,37 @@ async def _add_jobs():
         max_instances=1
     )
 
+async def _gate_draft(content: str, kind: str, context: Dict[str, Any], regenerate=None) -> Optional[str]:
+    """Run a draft through the Identity Gate. ``rewrite`` gets one
+    regeneration attempt; ``needs_human`` files an operator approval request;
+    ``block`` (or a failed rewrite) drops the draft. Returns the publishable
+    content or None."""
+    review = identity_gate.review(content, kind, context)
+    if review["outcome"] == REWRITE and regenerate is not None:
+        retry = await regenerate()
+        if retry and "error" not in retry:
+            content = retry["content"]
+            review = identity_gate.review(content, kind, context)
+    if review["outcome"] == ALLOW:
+        return content
+    if review["outcome"] == NEEDS_HUMAN:
+        try:
+            with get_db_session() as session:
+                operator_line.request_approval(
+                    session,
+                    kind="publish",
+                    summary=f"{kind} draft on '{context.get('topic', '')}' needs your call",
+                    payload={"content": content, "kind": kind, "topic": context.get("topic")},
+                    rationale=review["reason"],
+                )
+        except Exception as exc:
+            logger.error(f"Failed to file approval request: {exc}")
+        logger.info("Draft escalated to operator: %s", review["reason"])
+        return None
+    logger.info("Identity gate stopped %s draft: %s", kind, review["reason"])
+    return None
+
+
 async def post_proposal_job():
     """Generate and post a proposal tweet"""
     try:
@@ -268,14 +307,42 @@ async def post_proposal_job():
             logger.info("Selector chose different action, skipping proposal")
             return
 
-        # Generate proposal
         topic = action.get("topic", "general")
         intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
+
+        # Instinct reflex: is this opportunity worth the identity's time?
+        instinct = instinct_engine.assess({"kind": "proposal", "topic": topic})
+        if instinct["verdict"] == HUMAN_REVIEW:
+            with get_db_session() as session:
+                operator_line.request_approval(
+                    session,
+                    kind="instinct",
+                    summary=f"Proposal slot on '{topic}' flagged for review",
+                    payload={"topic": topic},
+                    rationale=instinct["reason"],
+                )
+            return
+        if instinct["verdict"] not in PROCEED_VERDICTS:
+            logger.info(
+                "Instinct %s on proposal topic '%s': %s",
+                instinct["verdict"], topic, instinct["reason"],
+            )
+            return
+
         result = await generator.make_proposal(topic, intensity)
 
         if "error" in result:
             logger.error(f"Proposal generation failed: {result['error']}")
             return
+
+        # Identity gate: does this draft sound like us and serve the mission?
+        content = await _gate_draft(
+            result["content"], "proposal", {"topic": topic},
+            regenerate=lambda: generator.make_proposal(topic, intensity),
+        )
+        if content is None:
+            return
+        result["content"] = content
 
         # Run the outbound content through the inspectable reasoning gate:
         # the plan (and the exact gate decision) lands in the decision ledger
@@ -429,13 +496,53 @@ async def reply_mentions_job():
                         "topics": list(rel.topics),
                     }
 
+                # Instinct reflex on the inbound mention before spending a reply.
+                instinct = instinct_engine.assess({
+                    "kind": "mention",
+                    "topic": topic,
+                    "text": mention.get("text", ""),
+                    "relationship": context.get("relationship"),
+                })
+                if instinct["verdict"] == HUMAN_REVIEW:
+                    with get_db_session() as session:
+                        operator_line.request_approval(
+                            session,
+                            kind="instinct",
+                            summary=f"Mention from @{mention.get('username', '?')} flagged for review",
+                            payload={"mention_id": mention["id"], "topic": topic},
+                            rationale=instinct["reason"],
+                        )
+                    continue
+                if instinct["verdict"] == DM_INSTEAD:
+                    logger.info(
+                        "Instinct: de-escalate @%s privately (value_dm owns that), skipping public reply",
+                        mention.get("username", "?"),
+                    )
+                    continue
+                if instinct["verdict"] not in PROCEED_VERDICTS:
+                    logger.info(
+                        "Instinct %s on mention from @%s: %s",
+                        instinct["verdict"], mention.get("username", "?"), instinct["reason"],
+                    )
+                    continue
+
                 intensity = action.get("intensity", config.MIN_INTENSITY_LEVEL)
                 result = await generator.make_reply(context, intensity)
-                
+
                 if "error" in result:
                     logger.warning(f"Reply generation failed: {result['error']}")
                     continue
-                
+
+                # Identity gate on the drafted reply.
+                gated = await _gate_draft(
+                    result["content"], "reply",
+                    {"topic": topic, "author": mention.get("username")},
+                    regenerate=lambda: generator.make_reply(context, intensity),
+                )
+                if gated is None:
+                    continue
+                result["content"] = gated
+
                 publish_result = await multiplexer.publish(
                     result["content"],
                     kind="reply",
