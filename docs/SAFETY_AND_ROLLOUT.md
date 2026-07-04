@@ -32,8 +32,8 @@ Events currently chained: `startup`, `publish_attempt` / `publish_gated` /
 `discovery_decision`, `okr_proposal` / `okr_decision`, `memory_consolidated` (dream
 consolidation), `reception_prediction` / `prediction_accuracy` (self-calibrating simulator),
 `admin_token_issued` (dashboard admin sessions),
-`operator_prompted` / `operator_command` (operator approval line),
-`instinct_verdict` / `identity_gate` (the reflex layer), and
+`operator_prompted` / `operator_command` / `operator_sms_rejected` (operator
+approval line), `instinct_verdict` / `identity_gate` (the reflex layer), and
 `constitution_hash` / `constitution_tampered` / `constitution_missing`.
 
 The app verifies the chain at startup (`app.py`); a broken chain disarms
@@ -81,15 +81,20 @@ arrive as a signed Twilio webhook (`POST /api/operator/sms`, signature- and
 sender-validated before anything is parsed) or from the dashboard
 (`POST /api/operator/command`, admin JWT):
 
-`YES [id]`, `NO [id]`, `EDIT [id] <text>`, `WHY [id]`, `HOLD [id]`,
-`FREEZE`, `NEWS`, `INTERVIEW`, `OPINION: <thought>`
+`YES <code>`, `NO [code]`, `EDIT [code] <text>`, `WHY [code]`,
+`HOLD [code]`, `FREEZE`, `NEWS`, `INTERVIEW`, `OPINION: <thought>`
 
-Three rules are load-bearing: **YES approves exactly one request** (bound to
-its id; a bare YES refuses to act when more than one request is pending) and
-never enables standing autonomy; **FREEZE disarms outbound action
-immediately** through the kill switch; **OPINION becomes a `SelfSignal`** —
-a signal the agent weighs, never automatic doctrine. Every prompt and
-command is ledgered (`operator_prompted` / `operator_command`).
+Three rules are load-bearing: **YES requires the request's 4-character
+approval code** (e.g. `YES A7K2`) unless exactly one P1 request is pending —
+a bare YES is rejected whenever it could be ambiguous, so the wrong action
+can never be approved by accident, and approval never enables standing
+autonomy; **FREEZE disarms outbound action immediately** through the kill
+switch; **OPINION becomes a `SelfSignal`** — a signal the agent weighs,
+never automatic doctrine. Every prompt and command is ledgered
+(`operator_prompted` / `operator_command`), and rejected webhook calls
+(bad signature or unknown sender) are ledgered as `operator_sms_rejected`.
+`operator_line.py` is the public facade; SMS transport and signature
+validation live in `services/operator_notifications.py`.
 
 ### Instinct Engine and Identity Gate (`services/instinct.py`)
 A deterministic reflex layer that runs on every posting path, before and
@@ -109,6 +114,42 @@ after generation:
 
 Both layers only narrow what the existing gates may see; they never publish.
 Every verdict is ledgered (`instinct_verdict` / `identity_gate`).
+
+### Prompt injection defense (`services/prompt_firewall.py`)
+Everything the agent reads from outside — mentions, DMs, timeline posts,
+trends, and its retrieved memories of them — can inform the agent but never
+command it. The firewall is where that constitution invariant becomes code:
+
+- **Sanitizer**: strips invisible/bidi control characters and neutralizes
+  role-play markers (`system:` at line start) in all inbound text.
+- **Scanner**: scores instruction-shaped content ("ignore previous
+  instructions", "reveal your prompt", ...); instinct blocks any opportunity
+  scoring ≥ 0.4, and DMs at that level are quarantined as `dm_flagged`
+  (`injection_suspect`) — they never become reply candidates.
+- **Fencing**: external text enters prompts only inside `[UNTRUSTED DATA]`
+  delimiters (collision-escaped, so content cannot close its own fence) —
+  applied to reply/quote originals and world-model context.
+- **Canary + output guard**: every system prompt carries a per-process
+  canary token; any draft that leaks it, echoes the untrusted fences, or
+  contains invisible characters is dropped before validation.
+- **Memory safety**: `is_doctrine_safe` keeps instruction-shaped text out of
+  lessons and self-signals; world-model observations are sanitized and
+  tagged with their injection risk.
+
+### Raw vault vs sanitized context (`services/raw_vault.py`)
+The sanitizer never destroys the source record. Raw external content is
+preserved verbatim in an append-only vault (`data/raw_vault.jsonl`,
+`RAW_VAULT_PATH`) with provenance for audit and replay; each ContextPacket
+carries its `vault_id`. Only sanitized, delimited, evidence-only context may
+enter prompts.
+
+### ContextPackets (`services/context_packet.py`)
+Every sensor distills what it sees into one structured shape before it can
+influence anything: sanitized text plus extracted claims, stakes,
+incentives, human cost, system failure, evidence needs, injection risk, and
+provenance. Mentions, DMs, timeline posts, trends, and operator self-signals
+all speak this language; the Instinct Engine consumes packets directly. Raw
+prompt sludge never travels between services.
 
 ### Inbound senses
 The `dm_ingest` job reads incoming DMs (read-only, safe in any LIVE state).

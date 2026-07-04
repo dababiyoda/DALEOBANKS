@@ -89,7 +89,9 @@ async def test_ledger_gets_metadata_but_never_private_text(dm_env, monkeypatch):
 
     entries = ledger.replay("dm_received")
     assert len(entries) == 1
-    assert entries[0]["payload"] == {"event_id": "e5", "sender_id": "u5", "flagged": False}
+    assert entries[0]["payload"] == {
+        "event_id": "e5", "sender_id": "u5", "flagged": False, "injection_risk": 0.0,
+    }
     assert "private message" not in str(entries[0])
 
 

@@ -19,6 +19,7 @@ from datetime import datetime, UTC
 from typing import Any, Dict, List, Optional
 
 from services.logging_utils import get_logger
+from services.prompt_firewall import get_firewall
 from services.semantic_index import SemanticIndex
 
 logger = get_logger(__name__)
@@ -48,11 +49,20 @@ class WorldModel:
         if not summary:
             return None
         try:
+            # Observations are external text: sanitize before storing so
+            # smuggled control characters never survive into recall, and tag
+            # the record with its injection risk for downstream consumers.
+            firewall = get_firewall()
+            scan = firewall.scan(summary)
+            summary = firewall.sanitize(summary).strip()
+            if not summary:
+                return None
             record_meta = {
                 "kind": kind,
                 "entity": entity,
                 "source": source,
                 "observed_at": datetime.now(UTC).isoformat(),
+                "injection_risk": scan["risk"],
                 **(meta or {}),
             }
             text = f"{entity}: {summary}" if entity else summary

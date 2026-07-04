@@ -675,7 +675,9 @@ async def list_operator_requests(status_filter: str = "pending", _: RequestConte
                 "requests": [
                     {
                         "id": r.id,
+                        "code": r.code,
                         "kind": r.kind,
+                        "priority": r.priority,
                         "summary": r.summary,
                         "rationale": r.rationale,
                         "payload": r.payload,
@@ -720,11 +722,13 @@ async def operator_sms_webhook(request: Request):
     signature = request.headers.get("X-Twilio-Signature", "")
     if not validate_twilio_signature(url, params, signature):
         logger.warning("Rejected SMS webhook: bad Twilio signature")
+        get_ledger().record("operator_sms_rejected", {"reason": "bad_signature"})
         raise HTTPException(status_code=403, detail="Invalid signature")
 
     operator_phone = os.getenv("OPERATOR_PHONE", "")
     if not operator_phone or params.get("From") != operator_phone:
         logger.warning("Rejected SMS webhook: sender is not the operator")
+        get_ledger().record("operator_sms_rejected", {"reason": "unknown_sender"})
         raise HTTPException(status_code=403, detail="Unknown sender")
 
     with get_db_session() as session:

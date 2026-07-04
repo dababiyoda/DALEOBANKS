@@ -189,6 +189,7 @@ class InstinctEngine(_PersonaMixin):
         verdict, reason = self._verdict(
             kind, scores, insulting=insulting, sentiment=sentiment,
             combined=combined, stakes=opportunity.get("stakes"),
+            injection_risk=float(opportunity.get("injection_risk") or 0.0),
         )
 
         result = {"verdict": verdict, "reason": reason, "scores": scores, "kind": kind}
@@ -201,7 +202,12 @@ class InstinctEngine(_PersonaMixin):
             logger.error(f"Failed to ledger instinct verdict: {exc}")
         return result
 
-    def _verdict(self, kind, scores, *, insulting, sentiment, combined, stakes):
+    def _verdict(self, kind, scores, *, insulting, sentiment, combined, stakes,
+                 injection_risk=0.0):
+        # Instruction-shaped content beats every other consideration: it is
+        # someone trying to steer the agent, and the answer is silence.
+        if injection_risk >= 0.4:
+            return BLOCK, "instruction-shaped content (possible prompt injection)"
         if scores["ragebait_risk"] >= 0.6:
             return BLOCK, "reads as ragebait; engaging feeds it"
         if insulting:

@@ -64,6 +64,11 @@ class Generator:
         from services.evidence_library import get_evidence_library
         self.evidence_library = get_evidence_library()
 
+        # Injection defense: canary-armed system prompts, fenced untrusted
+        # text, and an output guard on every draft.
+        from services.prompt_firewall import get_firewall
+        self.firewall = get_firewall()
+
         # Duplicate detection settings
         self.duplicate_check_days = 30
         self.similarity_threshold = 0.8
@@ -78,9 +83,9 @@ class Generator:
                 context = self.memory.get_context_for_generation(session, topic=topic)
 
                 # Build system prompt
-                system_prompt = self.persona_store.build_system_prompt(
+                system_prompt = self.firewall.protect_system(self.persona_store.build_system_prompt(
                     context["improvement_notes"]
-                )
+                ))
 
                 # Prepare user message
                 user_message = self._build_proposal_prompt(topic, context, intensity)
@@ -107,9 +112,9 @@ class Generator:
                 memory_context = self.memory.get_context_for_generation(session)
                 
                 # Build system prompt
-                system_prompt = self.persona_store.build_system_prompt(
+                system_prompt = self.firewall.protect_system(self.persona_store.build_system_prompt(
                     memory_context["improvement_notes"]
-                )
+                ))
                 
                 # Prepare user message
                 user_message = self._build_reply_prompt(context, memory_context, intensity)
@@ -136,9 +141,9 @@ class Generator:
                 memory_context = self.memory.get_context_for_generation(session)
                 
                 # Build system prompt
-                system_prompt = self.persona_store.build_system_prompt(
+                system_prompt = self.firewall.protect_system(self.persona_store.build_system_prompt(
                     memory_context["improvement_notes"]
-                )
+                ))
                 
                 # Prepare user message
                 user_message = self._build_quote_prompt(context, memory_context, intensity)
@@ -168,9 +173,9 @@ class Generator:
         try:
             with get_db_session() as session:
                 memory_context = self.memory.get_context_for_generation(session)
-                system_prompt = self.persona_store.build_system_prompt(
+                system_prompt = self.firewall.protect_system(self.persona_store.build_system_prompt(
                     memory_context["improvement_notes"]
-                )
+                ))
 
                 user_message = self._build_thread_prompt(
                     topic,
@@ -275,8 +280,8 @@ class Generator:
                     if skip_memory
                     else self.memory.get_context_for_generation(session)
                 )
-                system_prompt = self.persona_store.build_system_prompt(
-                    memory_context.get("improvement_notes", [])
+                system_prompt = self.firewall.protect_system(self.persona_store.build_system_prompt(
+                    memory_context.get("improvement_notes", []))
                 )
 
                 user_message = self._build_dm_prompt(
@@ -325,9 +330,12 @@ class Generator:
 
         observed = context.get("world_context") or []
         if observed:
-            lessons_block += "\nRecently observed in the environment:\n" + "\n".join(
-                f"- {item}" for item in observed
-            ) + "\n"
+            observed_lines = "\n".join(f"- {item}" for item in observed)
+            lessons_block += (
+                "\nRecently observed in the environment:\n"
+                + self.firewall.wrap_untrusted(observed_lines, source="world_model")
+                + "\n"
+            )
 
         receipts = self.evidence_library.recall(topic, k=3)
         if receipts:
@@ -378,7 +386,8 @@ Topic focus: {topic}"""
 
         prompt = f"""Generate a reply to this tweet:
 
-Original tweet: "{original_tweet}"
+Original tweet:
+{self.firewall.wrap_untrusted(original_tweet, source="tweet")}
 Author: {author_info.get("username", "unknown")} (followers: {author_info.get("followers", 0)})
 {relationship_block}
 Template to follow: {template}
@@ -486,7 +495,8 @@ Requirements:
 
         prompt = f"""Generate a quote tweet commenting on:
 
-Original tweet: "{original_tweet}"
+Original tweet:
+{self.firewall.wrap_untrusted(original_tweet, source="tweet")}
 
 Requirements:
 - Maximum 200 characters (leaving room for quoted tweet)
@@ -589,6 +599,13 @@ Requirements:
 
     async def _validate_and_refine(self, content: str, content_type: str, topic: str, session, intensity: int) -> Dict[str, Any]:
         """Validate content and refine if needed"""
+        # Output guard: a draft that leaks the canary or echoes untrusted
+        # fences means the model was steered by its inputs — drop it.
+        guard = self.firewall.output_guard(content)
+        if not guard["ok"]:
+            logger.warning(f"Content failed output guard: {guard['reasons']}")
+            return {"error": "Content failed output guard", "reasons": guard["reasons"]}
+
         # Ethics check
         ethics_result = self.ethics_guard.validate_text(content)
         if not ethics_result.approved:

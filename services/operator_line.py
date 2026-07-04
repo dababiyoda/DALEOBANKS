@@ -5,14 +5,20 @@ approvals, freezes, news briefings, interview questions, and opinion intake.
 Commands arrive by SMS (Twilio webhook) or the dashboard; both paths run
 through :meth:`OperatorLine.handle_command`.
 
-Command grammar (first word, case-insensitive; ``<id>`` is any unique prefix
-of a request id and may be omitted when exactly one request is pending):
+This module is the public facade: transport concerns (SMS sending, webhook
+signature validation) live in ``services/operator_notifications.py``; the
+briefing/interview/opinion logic is small enough to live here until it isn't.
 
-    YES [<id>]          approve exactly that request — never standing autonomy
-    NO [<id>]           reject the request
-    EDIT [<id>] <text>  approve with the operator's replacement text
-    WHY [<id>]          explain why the agent is asking
-    HOLD [<id>]         park the request for later (YES/NO still work on it)
+Command grammar (first word, case-insensitive; ``<code>`` is the request's
+4-character approval code, also accepted as a unique id prefix):
+
+    YES <code>          approve exactly that request — never standing autonomy
+                        (a bare YES works only when exactly one P1 request is
+                        pending; otherwise it is rejected)
+    NO [<code>]         reject the request
+    EDIT [<code>] <text> approve with the operator's replacement text
+    WHY [<code>]        explain why the agent is asking
+    HOLD [<code>]       park the request for later (YES/NO still work on it)
     FREEZE              immediately disarm all outbound action (kill switch)
     NEWS                a short briefing of what the agent has been sensing
     INTERVIEW           the question the agent most wants answered right now
@@ -24,24 +30,20 @@ Every prompt and command is ledgered (``operator_prompted`` /
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import os
-import urllib.parse
-import urllib.request
 from datetime import datetime, UTC
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from db.models import ApprovalRequest, DiscoveryProposal, GoalProposal, SelfSignal, SensedEvent
+from services import operator_notifications as notifications
 from services.ledger import DecisionLedger, KillSwitch, get_kill_switch, get_ledger
 from services.logging_utils import get_logger
+from services.operator_notifications import validate_twilio_signature  # re-export
 
 logger = get_logger(__name__)
 
 HELP_TEXT = (
-    "Commands: YES [id], NO [id], EDIT [id] <text>, WHY [id], HOLD [id], "
-    "FREEZE, NEWS, INTERVIEW, OPINION: <thought>"
+    "Commands: YES <code>, NO [code], EDIT [code] <text>, WHY [code], "
+    "HOLD [code], FREEZE, NEWS, INTERVIEW, OPINION: <thought>"
 )
 
 _DECIDABLE = ("pending", "held")
@@ -71,10 +73,7 @@ class OperatorLine:
     # ------------------------------------------------------------------ #
     @property
     def sms_configured(self) -> bool:
-        return all(
-            os.getenv(var)
-            for var in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM", "OPERATOR_PHONE")
-        )
+        return notifications.sms_configured()
 
     def request_approval(
         self,
@@ -83,50 +82,32 @@ class OperatorLine:
         summary: str,
         payload: Optional[Dict[str, Any]] = None,
         rationale: str = "",
+        priority: str = "P2",
     ) -> ApprovalRequest:
         """File an ApprovalRequest and prompt the operator (SMS if configured,
         dashboard inbox always)."""
         request = ApprovalRequest(
-            kind=kind, summary=summary, payload=payload or {}, rationale=rationale
+            kind=kind, summary=summary, payload=payload or {},
+            rationale=rationale, priority=priority,
         )
         session.add(request)
         session.commit()
 
-        short = request.id[:8]
         sms_sent = False
         if self.sms_configured:
-            sms_sent = self._send_sms(
-                f"[DaLeoBanks] {summary} — reply YES {short} / NO {short} / WHY {short}"
+            sms_sent = notifications.send_sms(
+                f"[DaLeoBanks {request.code}/{priority}] {summary} — reply "
+                f"YES {request.code} / NO {request.code} / WHY {request.code}"
             )
         self.ledger.record("operator_prompted", {
             "id": request.id,
+            "code": request.code,
             "kind": kind,
+            "priority": priority,
             "summary": summary[:120],
             "sms_sent": sms_sent,
         })
         return request
-
-    def _send_sms(self, body: str) -> bool:
-        sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        try:
-            data = urllib.parse.urlencode({
-                "To": os.getenv("OPERATOR_PHONE", ""),
-                "From": os.getenv("TWILIO_FROM", ""),
-                "Body": body[:1500],
-            }).encode()
-            req = urllib.request.Request(
-                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-                data=data,
-                method="POST",
-            )
-            auth = base64.b64encode(f"{sid}:{token}".encode()).decode()
-            req.add_header("Authorization", f"Basic {auth}")
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                return 200 <= resp.status < 300
-        except Exception as exc:
-            logger.error(f"Operator SMS send failed: {exc}")
-            return False
 
     # ------------------------------------------------------------------ #
     # Inbound: executing operator commands
@@ -158,7 +139,7 @@ class OperatorLine:
         return self._done(cmd, via, ok=False, reply=f"Unknown command. {HELP_TEXT}")
 
     def _decide(self, session: Any, cmd: str, arg: str, via: str) -> Dict[str, Any]:
-        request, error = self._resolve(session, arg)
+        request, error = self._resolve(session, arg, command=cmd)
         if request is None:
             return self._done(cmd, via, ok=False, reply=error)
 
@@ -167,17 +148,17 @@ class OperatorLine:
         request.decided_at = datetime.now(UTC)
         request.decided_via = via
         session.commit()
-        reply = f"{status.capitalize()}: {request.summary}"
+        reply = f"{status.capitalize()} [{request.code}]: {request.summary}"
         if cmd == "YES":
             reply += " (this approval covers only this request)"
         return self._done(cmd, via, ok=True, reply=reply, request_id=request.id)
 
     def _edit(self, session: Any, rest: str, via: str) -> Dict[str, Any]:
-        maybe_id, _, text = rest.partition(" ")
-        request, _ = self._resolve(session, maybe_id) if maybe_id else (None, None)
+        maybe_code, _, text = rest.partition(" ")
+        request, _ = self._resolve(session, maybe_code, command="EDIT") if maybe_code else (None, None)
         if request is None:
-            # No id prefix given — the whole rest is the replacement text.
-            request, error = self._resolve(session, "")
+            # No code given — the whole rest is the replacement text.
+            request, error = self._resolve(session, "", command="EDIT")
             text = rest
             if request is None:
                 return self._done("EDIT", via, ok=False, reply=error)
@@ -192,15 +173,15 @@ class OperatorLine:
         session.commit()
         return self._done(
             "EDIT", via, ok=True,
-            reply=f"Edited and approved with your text: {request.summary}",
+            reply=f"Edited and approved with your text [{request.code}]: {request.summary}",
             request_id=request.id,
         )
 
     def _why(self, session: Any, arg: str, via: str) -> Dict[str, Any]:
-        request, error = self._resolve(session, arg)
+        request, error = self._resolve(session, arg, command="WHY")
         if request is None:
             return self._done("WHY", via, ok=False, reply=error)
-        reply = f"[{request.kind}] {request.summary}"
+        reply = f"[{request.code}/{request.priority} {request.kind}] {request.summary}"
         if request.rationale:
             reply += f" — because: {request.rationale}"
         content = request.payload.get("content")
@@ -221,9 +202,17 @@ class OperatorLine:
             extra={"self_signal_id": signal.id},
         )
 
-    def _resolve(self, session: Any, arg: str):
-        """Find the request a command targets. Bare commands only work when
-        exactly one request is pending — YES can never be ambiguous."""
+    def _resolve(
+        self, session: Any, arg: str, command: str = "YES"
+    ) -> Tuple[Optional[ApprovalRequest], Optional[str]]:
+        """Find the request a command targets.
+
+        With an argument, match the approval code exactly or a unique id
+        prefix. Bare YES is honored only when exactly one P1 request is
+        pending — everything else must name its code, so the wrong action
+        can never be approved by accident. Bare NO/HOLD/WHY/EDIT work when
+        exactly one request is pending (rejecting or querying the only
+        request is not a spoofable act)."""
         arg = (arg or "").strip().lower()
         candidates: List[ApprovalRequest] = (
             session.query(ApprovalRequest)
@@ -232,20 +221,30 @@ class OperatorLine:
             .all()
         )
         if arg:
-            matches = [r for r in candidates if r.id.lower().startswith(arg)]
+            matches = [
+                r for r in candidates
+                if r.code.lower() == arg or r.id.lower().startswith(arg)
+            ]
             if len(matches) == 1:
                 return matches[0], None
             if not matches:
-                return None, f"No open request matches '{arg}'."
-            return None, f"'{arg}' is ambiguous ({len(matches)} matches) — use more characters."
+                return None, f"No open request matches '{arg.upper()}'."
+            return None, f"'{arg.upper()}' is ambiguous ({len(matches)} matches)."
 
         pending = [r for r in candidates if r.status == "pending"]
-        if len(pending) == 1:
-            return pending[0], None
         if not pending:
             return None, "No pending requests."
-        ids = ", ".join(r.id[:8] for r in pending[:5])
-        return None, f"{len(pending)} requests pending — specify one: {ids}"
+        if len(pending) > 1:
+            codes = ", ".join(f"{r.code}({r.priority})" for r in pending[:5])
+            return None, f"{len(pending)} requests pending — name one: {codes}"
+
+        only = pending[0]
+        if command == "YES" and only.priority != "P1":
+            return None, (
+                f"Include the code to approve: YES {only.code} "
+                f"({only.priority} requests always need their code)"
+            )
+        return only, None
 
     # ------------------------------------------------------------------ #
     # Briefings
@@ -277,7 +276,10 @@ class OperatorLine:
             .first()
         )
         if oldest:
-            return f"Decide this first: {oldest.summary} (YES {oldest.id[:8]} / NO {oldest.id[:8]})"
+            return (
+                f"Decide this first: {oldest.summary} "
+                f"(YES {oldest.code} / NO {oldest.code})"
+            )
         discoveries = session.query(DiscoveryProposal).filter(lambda p: p.status == "pending").all()
         goals = session.query(GoalProposal).filter(lambda p: p.status == "pending").all()
         if discoveries or goals:
@@ -311,18 +313,6 @@ class OperatorLine:
         return result
 
 
-def validate_twilio_signature(url: str, params: Dict[str, str], signature: str) -> bool:
-    """Validate Twilio's X-Twilio-Signature header (HMAC-SHA1 over the URL
-    plus sorted POST params, keyed by the auth token)."""
-    token = os.getenv("TWILIO_AUTH_TOKEN", "")
-    if not token or not signature:
-        return False
-    payload = url + "".join(key + params[key] for key in sorted(params))
-    digest = hmac.new(token.encode(), payload.encode("utf-8"), hashlib.sha1).digest()
-    expected = base64.b64encode(digest).decode()
-    return hmac.compare_digest(expected, signature)
-
-
 _SHARED_LINE: Optional[OperatorLine] = None
 
 
@@ -336,3 +326,9 @@ def get_operator_line() -> OperatorLine:
 def set_operator_line(line: Optional[OperatorLine]) -> None:
     global _SHARED_LINE
     _SHARED_LINE = line
+
+
+__all__ = [
+    "OperatorLine", "get_operator_line", "set_operator_line",
+    "validate_twilio_signature", "HELP_TEXT",
+]

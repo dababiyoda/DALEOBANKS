@@ -43,6 +43,12 @@ if "EVIDENCE_LIBRARY_PATH" not in os.environ:
         tempfile.mkdtemp(prefix="daleobanks-evidence-"), "evidence_library.jsonl"
     )
 
+# Same for the raw evidence vault (see services/raw_vault.py).
+if "RAW_VAULT_PATH" not in os.environ:
+    os.environ["RAW_VAULT_PATH"] = os.path.join(
+        tempfile.mkdtemp(prefix="daleobanks-rawvault-"), "raw_vault.jsonl"
+    )
+
 # Run the object store purely in memory so tests stay isolated (init_db()
 # gives every test a clean slate). Persistence has dedicated tests that
 # opt back in with a temp snapshot path.
