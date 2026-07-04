@@ -152,6 +152,8 @@ The architecture prioritizes modularity, safety, and autonomous operation while 
 - **Internal simulator**: advisory reception prediction (topic/hour history with shrinkage) ledgered as `reception_prediction` before each proposal publish; forecasts are stored on the Tweet (`predicted_j`), audited nightly (`prediction_accuracy`), and self-calibrate against past errors.
 - **Evidence library** (`data/evidence_library.jsonl`): trusted citations from validated content are banked once and recalled by topic into proposal prompts as pre-vetted sources.
 - **Relationship-aware replies**: reply prompts include the account's interaction history, sentiment trend, and topics from social memory.
+- **Operator approval line** (`services/operator_line.py`): the agent texts the operator (Twilio, optional) or files to a dashboard inbox when judgment is required; commands YES/NO/EDIT/WHY/HOLD/FREEZE/NEWS/INTERVIEW/OPINION. YES approves exactly one request; FREEZE disarms outbound instantly; OPINION becomes a self-signal, never doctrine.
+- **Instinct Engine + Identity Gate** (`services/instinct.py`): a deterministic reflex layer before and after generation — blocks ragebait/insults pre-generation, moves hostile threads to DMs, escalates high-stakes calls and unsourced claims to the operator, and rejects drafts that drift from the persona's voice or constitution.
 
 ### Testing
 - `python -m pytest` (172 tests) and `npm run check` must pass; `tests/stubs/` provides offline fallbacks for third-party packages.

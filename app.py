@@ -39,6 +39,7 @@ from services.optimizer import Optimizer
 from services.self_model import SelfModelService
 from services.reflection import ReflectionService
 from services.ledger import get_kill_switch, get_ledger
+from services.operator_line import get_operator_line, validate_twilio_signature
 from services.security import (
     RequestContext,
     get_request_context,
@@ -130,6 +131,9 @@ class DecisionRequest(BaseModel):
 
 class TokenRequest(BaseModel):
     admin_token: str
+
+class OperatorCommandRequest(BaseModel):
+    command: str
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
@@ -653,6 +657,84 @@ async def decide_goal_proposal(
     except Exception as e:
         logger.error(f"Goal proposal decision error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/operator/requests")
+async def list_operator_requests(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    """The operator's approval inbox (dashboard fallback for SMS)."""
+    try:
+        with get_db_session() as session:
+            requests = (
+                session.query(ApprovalRequest)
+                .filter(lambda r: r.status == status_filter)
+                .order_by(lambda r: r.created_at, descending=True)
+                .all()
+            )
+            return {
+                "count": len(requests),
+                "requests": [
+                    {
+                        "id": r.id,
+                        "kind": r.kind,
+                        "summary": r.summary,
+                        "rationale": r.rationale,
+                        "payload": r.payload,
+                        "status": r.status,
+                        "created_at": r.created_at.isoformat(),
+                    }
+                    for r in requests
+                ],
+            }
+    except Exception as e:
+        logger.error(f"Operator request list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/operator/command")
+async def operator_command(
+    request: OperatorCommandRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Run an operator command (YES/NO/EDIT/WHY/HOLD/FREEZE/NEWS/INTERVIEW/
+    OPINION) from the dashboard."""
+    try:
+        with get_db_session() as session:
+            result = get_operator_line().handle_command(session, request.command, via="dashboard")
+        return result
+    except Exception as e:
+        logger.error(f"Operator command error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/operator/sms")
+async def operator_sms_webhook(request: Request):
+    """Twilio inbound-SMS webhook. Only signed requests from the configured
+    operator phone are honored; everything else is rejected before parsing
+    reaches any agent logic."""
+    from urllib.parse import parse_qs
+
+    raw = (await request.body()).decode("utf-8", errors="replace")
+    params = {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
+
+    url = os.getenv("TWILIO_WEBHOOK_URL") or str(request.url)
+    signature = request.headers.get("X-Twilio-Signature", "")
+    if not validate_twilio_signature(url, params, signature):
+        logger.warning("Rejected SMS webhook: bad Twilio signature")
+        raise HTTPException(status_code=403, detail="Invalid signature")
+
+    operator_phone = os.getenv("OPERATOR_PHONE", "")
+    if not operator_phone or params.get("From") != operator_phone:
+        logger.warning("Rejected SMS webhook: sender is not the operator")
+        raise HTTPException(status_code=403, detail="Unknown sender")
+
+    with get_db_session() as session:
+        result = get_operator_line().handle_command(session, params.get("Body", ""), via="sms")
+
+    from fastapi.responses import Response as PlainResponse
+    from xml.sax.saxutils import escape
+
+    twiml = f"<?xml version='1.0' encoding='UTF-8'?><Response><Message>{escape(result['reply'])}</Message></Response>"
+    return PlainResponse(content=twiml, media_type="application/xml")
 
 
 @app.get("/r/{redirect_id}")

@@ -232,6 +232,37 @@ class GoalProposal:
 
 
 @dataclass
+class ApprovalRequest:
+    """A request for operator judgment, answered by SMS or the dashboard.
+
+    ``YES`` approves exactly this request (bound by id) — approval never
+    widens standing autonomy.
+    """
+
+    id: str = field(default_factory=_uuid)
+    kind: str = ""  # "publish" | "identity_gate" | "instinct" | ...
+    summary: str = ""
+    payload: Dict[str, Any] = field(default_factory=dict)
+    rationale: str = ""
+    status: str = "pending"  # pending | approved | rejected | edited | held | expired
+    created_at: datetime = field(default_factory=_utcnow)
+    decided_at: Optional[datetime] = None
+    decided_via: Optional[str] = None  # "sms" | "dashboard"
+
+
+@dataclass
+class SelfSignal:
+    """An operator-supplied thought (OPINION command). A signal to weigh,
+    never automatic doctrine."""
+
+    id: str = field(default_factory=_uuid)
+    text: str = ""
+    source: str = "operator_opinion"
+    topics: List[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
 class PersonaVersion:
     """Persona version history with audit trail."""
 
@@ -260,5 +291,7 @@ __all__ = [
     "Conversion",
     "DiscoveryProposal",
     "GoalProposal",
+    "ApprovalRequest",
+    "SelfSignal",
     "PersonaVersion",
 ]
