@@ -33,11 +33,13 @@ def test_request_approval_creates_pending_and_ledgers(tmp_path):
     assert prompts[-1]["payload"]["sms_sent"] is False  # no Twilio configured
 
 
-def test_yes_approves_the_single_pending_request(tmp_path):
+def test_bare_yes_approves_a_single_pending_p1(tmp_path):
     init_db()
     line = _line(tmp_path)
     with get_db_session() as session:
-        request = line.request_approval(session, kind="publish", summary="Ship it?")
+        request = line.request_approval(
+            session, kind="instinct", summary="Ship it?", priority="P1"
+        )
         result = line.handle_command(session, "YES", via="sms")
         assert result["ok"] is True
         assert result["request_id"] == request.id
@@ -45,6 +47,32 @@ def test_yes_approves_the_single_pending_request(tmp_path):
         # YES covers only that request — nothing remains approved-in-advance.
         again = line.handle_command(session, "YES", via="sms")
         assert again["ok"] is False
+
+
+def test_bare_yes_rejected_for_p2_code_required(tmp_path):
+    init_db()
+    line = _line(tmp_path)
+    with get_db_session() as session:
+        request = line.request_approval(session, kind="publish", summary="Ship it?")
+        assert request.priority == "P2"
+
+        bare = line.handle_command(session, "YES", via="sms")
+        assert bare["ok"] is False
+        assert request.code in bare["reply"]  # tells the operator the code
+        assert session.query(ApprovalRequest).first().status == "pending"
+
+        coded = line.handle_command(session, f"YES {request.code}", via="sms")
+        assert coded["ok"] is True
+        assert session.query(ApprovalRequest).first().status == "approved"
+
+
+def test_yes_by_code_is_case_insensitive(tmp_path):
+    init_db()
+    line = _line(tmp_path)
+    with get_db_session() as session:
+        request = line.request_approval(session, kind="publish", summary="Ship?")
+        result = line.handle_command(session, f"yes {request.code.lower()}")
+        assert result["ok"] is True
 
 
 def test_bare_yes_refuses_when_ambiguous(tmp_path):

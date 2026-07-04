@@ -12,6 +12,14 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+def _approval_code() -> str:
+    """Short human-friendly code the operator types back (no ambiguous chars)."""
+    import secrets
+
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(4))
+
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -232,15 +240,46 @@ class GoalProposal:
 
 
 @dataclass
-class ApprovalRequest:
-    """A request for operator judgment, answered by SMS or the dashboard.
+class ContextPacket:
+    """One sensed item distilled into a structured, sanitized decision packet.
 
-    ``YES`` approves exactly this request (bound by id) — approval never
-    widens standing autonomy.
+    Every sensor (mentions, DMs, timeline, trends, articles, self-signals)
+    speaks this one language before anything reaches the instinct engine,
+    selector, or generator — raw external text never travels as prompt sludge.
     """
 
     id: str = field(default_factory=_uuid)
+    source: str = ""  # mention | dm | timeline | trend | article | self_signal
+    raw_ref: str = ""  # id/url of the underlying item
+    actor: Optional[str] = None
+    topic: Optional[str] = None
+    text: str = ""  # sanitized content (firewall-cleaned)
+    claims: List[str] = field(default_factory=list)
+    stakes: str = "low"  # low | medium | high
+    incentives: Optional[str] = None
+    human_cost: Optional[str] = None
+    system_failure: Optional[str] = None
+    evidence_needed: bool = False
+    risk: float = 0.0  # injection/reputation risk in [0, 1]
+    recommended_action: Optional[str] = None
+    confidence: float = 1.0
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class ApprovalRequest:
+    """A request for operator judgment, answered by SMS or the dashboard.
+
+    ``YES <code>`` approves exactly this request — approval never widens
+    standing autonomy. A bare ``YES`` is honored only when exactly one P1
+    request is pending; otherwise the code is mandatory.
+    """
+
+    id: str = field(default_factory=_uuid)
+    code: str = field(default_factory=_approval_code)
     kind: str = ""  # "publish" | "identity_gate" | "instinct" | ...
+    priority: str = "P2"  # P1 (urgent, bare-YES eligible) | P2 (code required)
     summary: str = ""
     payload: Dict[str, Any] = field(default_factory=dict)
     rationale: str = ""
@@ -293,5 +332,6 @@ __all__ = [
     "GoalProposal",
     "ApprovalRequest",
     "SelfSignal",
+    "ContextPacket",
     "PersonaVersion",
 ]

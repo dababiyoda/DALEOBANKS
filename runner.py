@@ -46,6 +46,7 @@ from services.instinct import (
     REWRITE, InstinctEngine, IdentityGate,
 )
 from services.operator_line import get_operator_line
+from services import context_packet
 
 logger = get_logger(__name__)
 
@@ -320,6 +321,7 @@ async def post_proposal_job():
                     summary=f"Proposal slot on '{topic}' flagged for review",
                     payload={"topic": topic},
                     rationale=instinct["reason"],
+                    priority="P1",
                 )
             return
         if instinct["verdict"] not in PROCEED_VERDICTS:
@@ -476,8 +478,13 @@ async def reply_mentions_job():
 
                 cta_variant = action.get("cta_variant") or arm_metadata.get("cta_variant") or "reply_default"
 
+                # Distill the mention into a structured packet: sanitized
+                # text, claims, stakes, and injection risk. Raw text is
+                # preserved in the vault; only the sanitized form travels.
+                packet = context_packet.from_mention(mention, topic=topic)
+
                 context = {
-                    "original_tweet": mention["text"],
+                    "original_tweet": packet.text,
                     "author_info": {"username": mention.get("username", "unknown")},
                     "topic": topic
                 }
@@ -497,12 +504,9 @@ async def reply_mentions_job():
                     }
 
                 # Instinct reflex on the inbound mention before spending a reply.
-                instinct = instinct_engine.assess({
-                    "kind": "mention",
-                    "topic": topic,
-                    "text": mention.get("text", ""),
-                    "relationship": context.get("relationship"),
-                })
+                instinct = instinct_engine.assess(context_packet.as_opportunity(
+                    packet, kind="mention", relationship=context.get("relationship"),
+                ))
                 if instinct["verdict"] == HUMAN_REVIEW:
                     with get_db_session() as session:
                         operator_line.request_approval(
@@ -511,6 +515,7 @@ async def reply_mentions_job():
                             summary=f"Mention from @{mention.get('username', '?')} flagged for review",
                             payload={"mention_id": mention["id"], "topic": topic},
                             rationale=instinct["reason"],
+                            priority="P1",
                         )
                     continue
                 if instinct["verdict"] == DM_INSTEAD:
@@ -884,25 +889,34 @@ async def dm_ingest_job():
                 if x_client.self_id and sender_id == x_client.self_id:
                     continue
 
-                verdict = ethics_guard.validate_text(text)
-                kind = "dm_received" if verdict.approved else "dm_flagged"
+                # Distill through the firewall: raw text is vaulted for
+                # audit; only sanitized text is stored/used; instruction-
+                # shaped content is quarantined like a harmful message.
+                packet = context_packet.from_dm(event)
+                verdict = ethics_guard.validate_text(packet.text)
+                flag_reasons = [] if verdict.approved else list(verdict.reasons)
+                if packet.risk >= 0.4:
+                    flag_reasons.append("injection_suspect")
+                kind = "dm_received" if not flag_reasons else "dm_flagged"
                 session.add(Action(kind=kind, meta_json={
                     "dm_event_id": event_id,
                     "sender_id": sender_id,
-                    "text": text,
+                    "text": packet.text,
+                    "vault_id": packet.provenance.get("vault_id"),
                     "created_at": event.get("created_at"),
-                    "flag_reasons": [] if verdict.approved else list(verdict.reasons),
+                    "flag_reasons": flag_reasons,
                 }))
                 ledger.record("dm_received", {
                     "event_id": event_id,
                     "sender_id": sender_id,
-                    "flagged": not verdict.approved,
+                    "flagged": bool(flag_reasons),
+                    "injection_risk": packet.risk,
                 })
                 memory_service.record_interaction(
                     session,
                     user_id=sender_id or "unknown",
                     kind="dm",
-                    text=text if verdict.approved else None,
+                    text=packet.text if not flag_reasons else None,
                 )
                 new_count += 1
             session.commit()
