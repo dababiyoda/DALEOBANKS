@@ -1,11 +1,16 @@
 """Durable associative memory: a lightweight, offline-safe semantic index.
 
-Lessons and other memories are embedded as hashed bag-of-words vectors and
-persisted to an append-only JSONL file, so the agent's associative recall
-survives restarts and database note pruning. Deliberately dependency-free:
-no network calls, no embedding API, deterministic across environments. The
-representation can be upgraded to learned embeddings later without changing
-the interface (``add`` / ``search``).
+Memories are embedded through the provider layer in
+``services/embeddings.py`` (hash bag-of-words by default; optionally OpenAI
+embeddings with per-call hash fallback) and persisted to an append-only
+JSONL file, so the agent's associative recall survives restarts and database
+note pruning. The ``add`` / ``search`` interface is synchronous and
+unchanged regardless of provider.
+
+Every record carries an embedding tag (provider/model/dim); cosine
+similarity is only computed within matching tags. A hash vector is always
+kept alongside provider vectors, so recall keeps working even if a provider
+disappears (key removed, offline) after records were written with it.
 """
 
 from __future__ import annotations
@@ -20,6 +25,10 @@ import uuid
 from datetime import datetime, UTC
 from typing import Any, Dict, List, Optional, Tuple
 
+from services.embeddings import (
+    EmbeddingService, HASH_DIMENSIONS, Tag, Vector, get_embedding_service,
+    hash_tag, tag_key,
+)
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -43,7 +52,10 @@ def _tokenize(text: str) -> List[str]:
 
 
 def _embed(text: str, dimensions: int) -> Dict[int, float]:
-    """Sparse hashed term-frequency vector, L2-normalized."""
+    """Sparse hashed term-frequency vector, L2-normalized.
+
+    The bedrock representation: deterministic, offline, dependency-free.
+    Also used directly by the consolidation service for clustering."""
 
     counts: Dict[int, float] = {}
     for token in _tokenize(text):
@@ -65,36 +77,67 @@ def _cosine(a: Dict[int, float], b: Dict[int, float]) -> float:
 class SemanticIndex:
     """Append-only persisted index with cosine-similarity search."""
 
-    def __init__(self, path: Optional[str] = None, dimensions: int = 4096) -> None:
+    def __init__(
+        self,
+        path: Optional[str] = None,
+        dimensions: int = HASH_DIMENSIONS,
+        embeddings: Optional[EmbeddingService] = None,
+    ) -> None:
         self.path = path or default_index_path()
         self.dimensions = dimensions
+        if embeddings is not None:
+            self.embeddings = embeddings
+        elif dimensions == HASH_DIMENSIONS:
+            self.embeddings = get_embedding_service()
+        else:
+            self.embeddings = EmbeddingService(dimensions=dimensions)
         self._lock = threading.Lock()
         self._records: List[Dict[str, Any]] = []
-        self._vectors: List[Dict[int, float]] = []
+        # Per record: {tag_key: vector}. The hash vector is always present;
+        # a provider vector is present when the record was written with one.
+        self._vectors: List[Dict[Tuple[str, Any], Vector]] = []
         self._load()
 
     def __len__(self) -> int:
         return len(self._records)
 
+    @property
+    def _hash_key(self) -> Tuple[str, Any]:
+        return tag_key(hash_tag(self.dimensions))
+
+    def _vector_map(self, text: str, vector: Optional[Vector], tag: Optional[Tag]) -> Dict[Tuple[str, Any], Vector]:
+        vmap: Dict[Tuple[str, Any], Vector] = {}
+        if vector is not None and tag is not None:
+            vmap[tag_key(tag)] = vector
+        if self._hash_key not in vmap:
+            vmap[self._hash_key] = _embed(text, self.dimensions)
+        return vmap
+
     def add(self, text: str, meta: Optional[Dict[str, Any]] = None,
             record_id: Optional[str] = None) -> str:
         """Index a memory and persist it. Returns the record id."""
 
+        vector, tag = self.embeddings.embed(text)
         record = {
             "id": record_id or uuid.uuid4().hex,
             "ts": datetime.now(UTC).isoformat(),
             "text": text,
             "meta": meta or {},
+            "emb": tag,
         }
-        vector = _embed(text, self.dimensions)
+        if tag.get("provider") != "hash":
+            # Provider vectors are expensive to recompute — persist them so
+            # reload never re-calls the API.
+            record["vec"] = [[i, round(v, 7)] for i, v in vector.items()]
         with self._lock:
             directory = os.path.dirname(self.path)
             if directory:
                 os.makedirs(directory, exist_ok=True)
             with open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, separators=(",", ":"), default=str) + "\n")
-            self._records.append(record)
-            self._vectors.append(vector)
+            stored = {k: v for k, v in record.items() if k != "vec"}
+            self._records.append(stored)
+            self._vectors.append(self._vector_map(text, vector, tag))
         return record["id"]
 
     def records(self) -> List[Dict[str, Any]]:
@@ -106,13 +149,20 @@ class SemanticIndex:
                min_score: float = 0.05) -> List[Dict[str, Any]]:
         """Top-k most similar memories, newest first among ties."""
 
-        query_vec = _embed(query, self.dimensions)
-        if not query_vec:
+        query_vec, query_tag = self.embeddings.embed(query)
+        queries: Dict[Tuple[str, Any], Vector] = {tag_key(query_tag): query_vec}
+        if self._hash_key not in queries:
+            queries[self._hash_key] = _embed(query, self.dimensions)
+        queries = {key: vec for key, vec in queries.items() if vec}
+        if not queries:
             return []
         with self._lock:
             scored: List[Tuple[float, int]] = []
-            for idx, vector in enumerate(self._vectors):
-                score = _cosine(query_vec, vector)
+            for idx, vmap in enumerate(self._vectors):
+                score = max(
+                    (_cosine(qvec, vmap[key]) for key, qvec in queries.items() if key in vmap),
+                    default=0.0,
+                )
                 if score >= min_score:
                     scored.append((score, idx))
         scored.sort(key=lambda pair: (pair[0], pair[1]), reverse=True)
@@ -137,8 +187,18 @@ class SemanticIndex:
                     except json.JSONDecodeError:
                         logger.warning("Skipping corrupt semantic index line")
                         continue
+                    vector: Optional[Vector] = None
+                    tag = record.get("emb")
+                    raw_vec = record.pop("vec", None)
+                    if raw_vec and tag and tag.get("provider") != "hash":
+                        try:
+                            vector = {int(i): float(v) for i, v in raw_vec}
+                        except (TypeError, ValueError):
+                            vector = None
                     self._records.append(record)
-                    self._vectors.append(_embed(record.get("text", ""), self.dimensions))
+                    self._vectors.append(
+                        self._vector_map(record.get("text", ""), vector, tag)
+                    )
             logger.info(f"Semantic index loaded with {len(self._records)} memories")
         except OSError as exc:
             logger.error(f"Failed to load semantic index: {exc}")
