@@ -302,6 +302,135 @@ class SelfSignal:
 
 
 @dataclass
+class Idea:
+    """A raw operator thought entering the idea refinery."""
+
+    id: str = field(default_factory=_uuid)
+    raw_text: str = ""
+    thesis: str = ""
+    audiences: List[Dict[str, Any]] = field(default_factory=list)
+    risk_flags: List[str] = field(default_factory=list)
+    status: str = "pending"  # pending | refined | archived
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class OpportunityPacket:
+    """A business signal distilled for venture evaluation (wire contract —
+    see services/venture_protocol.py)."""
+
+    id: str = field(default_factory=_uuid)
+    source: str = ""  # daleobanks sensor or "operator"
+    source_ref: str = ""  # idea id, mention id, url...
+    signal_type: str = "operator_thought"
+    observed_pain: str = ""
+    core_thesis: str = ""
+    audience: str = ""
+    cultural_context: str = ""
+    language: str = "en"
+    customer_segment: str = ""
+    buyer_type: str = ""
+    urgency: str = "medium"  # low | medium | high
+    evidence: List[str] = field(default_factory=list)
+    possible_offer: str = ""
+    monetization_paths: List[str] = field(default_factory=list)
+    risk_flags: List[str] = field(default_factory=list)
+    smallest_validation_action: str = ""
+    confidence: float = 0.5
+    created_at: datetime = field(default_factory=_utcnow)
+    status: str = "pending"  # pending | approved | rejected | sent | assessed
+
+
+@dataclass
+class VentureAssessment:
+    """WealthMachineIntelligence's verdict on an OpportunityPacket."""
+
+    id: str = field(default_factory=_uuid)
+    opportunity_packet_id: str = ""
+    go_no_go: str = "needs_more_evidence"  # go | defer | kill | needs_more_evidence
+    opportunity_score: float = 0.0
+    market_alignment: float = 0.0
+    expected_roi: str = ""
+    risk_level: str = "medium"  # low | medium | high
+    legal_readiness: str = "unreviewed"
+    product_hypothesis: str = ""
+    pricing_hypothesis: str = ""
+    validation_plan: List[str] = field(default_factory=list)
+    monetization_paths: List[str] = field(default_factory=list)
+    recommended_next_action: str = ""
+    requires_human_approval: bool = True
+    reasons: List[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class ValidationResult:
+    """What the world said when an approved validation action ran."""
+
+    id: str = field(default_factory=_uuid)
+    opportunity_packet_id: str = ""
+    venture_assessment_id: str = ""
+    validation_type: str = ""  # content_probe | landing_page | interviews | waitlist
+    signal_count: int = 0
+    reply_quality: str = ""
+    signup_count: int = 0
+    paid_count: int = 0
+    revenue_amount: float = 0.0
+    objections: List[str] = field(default_factory=list)
+    qualitative_notes: str = ""
+    next_recommendation: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class MediaAssetDraft:
+    """A draft piece of media. Drafts never publish themselves — they wait
+    in the approval queue like everything else with real-world consequences."""
+
+    id: str = field(default_factory=_uuid)
+    source_opportunity_packet_id: Optional[str] = None
+    source_thought: str = ""
+    account_lane: str = "main"
+    platform: str = "x"
+    language: str = "en"
+    cultural_context: str = ""
+    format: str = "post"  # post | thread | video_script | landing_page | interview_script | outreach_dm | newsletter
+    title: str = ""
+    draft_text: str = ""
+    script: str = ""
+    caption: str = ""
+    hook: str = ""
+    cta: str = ""
+    disclosure_needed: bool = False
+    risk_level: str = "low"  # low | medium | high
+    approval_status: str = "pending"  # pending | approved | rejected | edited
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AccountLane:
+    """A distinct, authentic publishing lane (brand/project/page). Never a
+    fake person — identity types are validated by services/venture_protocol.py."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    platform: str = "x"
+    identity_type: str = "brand_account"
+    purpose: str = ""
+    audience: str = ""
+    language: str = "en"
+    cultural_context: str = ""
+    allowed_topics: List[str] = field(default_factory=list)
+    forbidden_topics: List[str] = field(default_factory=list)
+    monetization_policy: str = "none"
+    disclosure_policy: str = "always_disclose_sponsorships"
+    posting_policy: str = "approval_required"
+    approval_required: bool = True
+    risk_level: str = "low"
+    active: bool = False
+
+
+@dataclass
 class PersonaVersion:
     """Persona version history with audit trail."""
 
@@ -333,5 +462,11 @@ __all__ = [
     "ApprovalRequest",
     "SelfSignal",
     "ContextPacket",
+    "Idea",
+    "OpportunityPacket",
+    "VentureAssessment",
+    "ValidationResult",
+    "MediaAssetDraft",
+    "AccountLane",
     "PersonaVersion",
 ]

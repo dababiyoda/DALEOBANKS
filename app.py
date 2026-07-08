@@ -40,6 +40,9 @@ from services.self_model import SelfModelService
 from services.reflection import ReflectionService
 from services.ledger import get_kill_switch, get_ledger
 from services.operator_line import get_operator_line, validate_twilio_signature
+from services.idea_refinery import IdeaRefinery
+from services.wealthmachine_client import get_wealthmachine_client
+from services.venture_protocol import validate_assessment_wire, validate_identity_type, LANE_POLICY
 from services.security import (
     RequestContext,
     get_request_context,
@@ -92,6 +95,7 @@ selector = Selector(persona_store)
 optimizer = Optimizer()
 self_model_service = SelfModelService(persona_store)
 reflection_service = ReflectionService()
+idea_refinery = IdeaRefinery(llm_adapter)
 
 # WebSocket connections for real-time updates
 websocket_connections: List[WebSocket] = []
@@ -134,6 +138,21 @@ class TokenRequest(BaseModel):
 
 class OperatorCommandRequest(BaseModel):
     command: str
+
+class IdeaIntakeRequest(BaseModel):
+    text: str
+    refine: bool = True
+
+class LaneRequest(BaseModel):
+    name: str
+    platform: str = "x"
+    identity_type: str = "brand_account"
+    purpose: str = ""
+    audience: str = ""
+    language: str = "en"
+    cultural_context: str = ""
+    allowed_topics: List[str] = []
+    forbidden_topics: List[str] = []
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
@@ -739,6 +758,263 @@ async def operator_sms_webhook(request: Request):
 
     twiml = f"<?xml version='1.0' encoding='UTF-8'?><Response><Message>{escape(result['reply'])}</Message></Response>"
     return PlainResponse(content=twiml, media_type="application/xml")
+
+
+# --------------------------------------------------------------------- #
+# Idea refinery + venture cockpit (drafts only; approvals gate the world)
+# --------------------------------------------------------------------- #
+@app.post("/api/ideas/intake")
+async def intake_idea(request: IdeaIntakeRequest, _: RequestContext = Depends(require_role("admin"))):
+    """Accept a raw operator thought; optionally refine it immediately."""
+    try:
+        with get_db_session() as session:
+            idea = idea_refinery.intake(session, request.text)
+            result: Dict[str, Any] = {"idea_id": idea.id, "risk_flags": idea.risk_flags}
+            if request.refine:
+                refined = await idea_refinery.refine(session, idea)
+                result.update({
+                    "thesis": refined["thesis"],
+                    "audiences": refined["audiences"],
+                    "draft_ids": [d.id for d in refined["drafts"]],
+                    "opportunity_id": refined["opportunity"].id if refined["opportunity"] else None,
+                })
+        return result
+    except Exception as e:
+        logger.error(f"Idea intake error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ideas")
+async def list_ideas(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        ideas = session.query(Idea).order_by(lambda i: i.created_at, descending=True).all()
+        return {"count": len(ideas), "ideas": [{
+            "id": i.id, "raw_text": i.raw_text, "thesis": i.thesis,
+            "audiences": i.audiences, "status": i.status,
+            "risk_flags": i.risk_flags, "created_at": i.created_at.isoformat(),
+        } for i in ideas]}
+
+
+@app.post("/api/ideas/{idea_id}/refine")
+async def refine_idea(idea_id: str, _: RequestContext = Depends(require_role("admin"))):
+    try:
+        with get_db_session() as session:
+            idea = session.query(Idea).filter(lambda i: i.id == idea_id).first()
+            if idea is None:
+                raise HTTPException(status_code=404, detail="Idea not found")
+            refined = await idea_refinery.refine(session, idea)
+        return {
+            "thesis": refined["thesis"],
+            "audiences": refined["audiences"],
+            "draft_ids": [d.id for d in refined["drafts"]],
+            "opportunity_id": refined["opportunity"].id if refined["opportunity"] else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Idea refine error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/opportunities")
+async def list_opportunities(status_filter: str = "", _: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        packets = (
+            session.query(OpportunityPacket)
+            .filter(lambda p: not status_filter or p.status == status_filter)
+            .order_by(lambda p: p.created_at, descending=True)
+            .all()
+        )
+        from services.venture_protocol import packet_to_wire
+        return {"count": len(packets), "opportunities": [packet_to_wire(p) for p in packets]}
+
+
+@app.post("/api/opportunities/{packet_id}/decision")
+async def decide_opportunity(
+    packet_id: str, request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve or reject an OpportunityPacket. Only approved packets may be
+    sent for venture evaluation."""
+    try:
+        with get_db_session() as session:
+            packet = session.query(OpportunityPacket).filter(lambda p: p.id == packet_id).first()
+            if packet is None:
+                raise HTTPException(status_code=404, detail="Opportunity not found")
+            if packet.status != "pending":
+                raise HTTPException(status_code=409, detail=f"Opportunity already {packet.status}")
+            packet.status = "approved" if request.approve else "rejected"
+            session.commit()
+        get_ledger().record("opportunity_decision", {"id": packet_id, "decision": packet.status})
+        return {"success": True, "status": packet.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Opportunity decision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/opportunities/{packet_id}/send-to-wealthmachine")
+async def send_to_wealthmachine(packet_id: str, _: RequestContext = Depends(require_role("admin"))):
+    """Send an APPROVED packet for evaluation; store the assessment and
+    convert it into reviewable drafts + an approval request."""
+    try:
+        with get_db_session() as session:
+            packet = session.query(OpportunityPacket).filter(lambda p: p.id == packet_id).first()
+            if packet is None:
+                raise HTTPException(status_code=404, detail="Opportunity not found")
+            if packet.status != "approved":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Opportunity is '{packet.status}' — approve it before sending",
+                )
+            client = get_wealthmachine_client()
+            assessment = client.evaluate(packet)
+            session.add(assessment)
+            packet.status = "assessed"
+            actions = client.assessment_to_actions(session, assessment, packet, get_operator_line())
+        from services.venture_protocol import assessment_to_wire
+        return {
+            "assessment": assessment_to_wire(assessment),
+            "mode": client.mode,
+            "draft_ids": [actions[k].id for k in ("landing_page", "interview_script", "outreach_draft")],
+            "approval_request_id": actions["approval_request"].id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"WealthMachine send error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/wealthmachine/assessments/receive")
+async def receive_assessment(
+    payload: Dict[str, Any],
+    _: RequestContext = Depends(require_any_role(["admin", "service"])),
+):
+    """Inbound VentureAssessment push (validated wire contract)."""
+    try:
+        validate_assessment_wire(payload)
+        with get_db_session() as session:
+            packet = session.query(OpportunityPacket).filter(
+                lambda p: p.id == payload["opportunity_packet_id"]
+            ).first()
+            if packet is None:
+                raise HTTPException(status_code=404, detail="Unknown opportunity_packet_id")
+            assessment = VentureAssessment(
+                opportunity_packet_id=payload["opportunity_packet_id"],
+                go_no_go=payload["go_no_go"],
+                opportunity_score=float(payload.get("opportunity_score") or 0.0),
+                risk_level=str(payload.get("risk_level") or "medium"),
+                legal_readiness=str(payload.get("legal_readiness") or "unreviewed"),
+                pricing_hypothesis=str(payload.get("pricing_hypothesis") or ""),
+                validation_plan=list(payload.get("validation_plan") or []),
+                recommended_next_action=str(payload.get("recommended_next_action") or ""),
+                requires_human_approval=True,
+                reasons=list(payload.get("reasons") or []),
+            )
+            session.add(assessment)
+            packet.status = "assessed"
+            actions = get_wealthmachine_client().assessment_to_actions(
+                session, assessment, packet, get_operator_line()
+            )
+        get_ledger().record("venture_assessment", {
+            "packet_id": packet.id, "go_no_go": assessment.go_no_go, "mode": "push",
+        })
+        return {"success": True, "assessment_id": assessment.id,
+                "approval_request_id": actions["approval_request"].id}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Assessment receive error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/media/drafts")
+async def list_media_drafts(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        drafts = (
+            session.query(MediaAssetDraft)
+            .filter(lambda d: d.approval_status == status_filter)
+            .order_by(lambda d: d.created_at, descending=True)
+            .all()
+        )
+        return {"count": len(drafts), "drafts": [{
+            "id": d.id, "format": d.format, "platform": d.platform,
+            "language": d.language, "account_lane": d.account_lane,
+            "cultural_context": d.cultural_context, "title": d.title,
+            "draft_text": d.draft_text, "script": d.script, "hook": d.hook,
+            "cta": d.cta, "disclosure_needed": d.disclosure_needed,
+            "risk_level": d.risk_level, "approval_status": d.approval_status,
+            "created_at": d.created_at.isoformat(),
+        } for d in drafts]}
+
+
+@app.post("/api/media/drafts/{draft_id}/decision")
+async def decide_media_draft(
+    draft_id: str, request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve/reject a draft. Approval marks it publishable — actual
+    publishing still runs through the existing gated pipelines."""
+    try:
+        with get_db_session() as session:
+            draft = session.query(MediaAssetDraft).filter(lambda d: d.id == draft_id).first()
+            if draft is None:
+                raise HTTPException(status_code=404, detail="Draft not found")
+            if draft.approval_status != "pending":
+                raise HTTPException(status_code=409, detail=f"Draft already {draft.approval_status}")
+            draft.approval_status = "approved" if request.approve else "rejected"
+            session.commit()
+        get_ledger().record("media_draft_decision", {"id": draft_id, "decision": draft.approval_status})
+        return {"success": True, "status": draft.approval_status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Media draft decision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/lanes")
+async def list_lanes(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        lanes = session.query(AccountLane).all()
+        return {"count": len(lanes), "policy": list(LANE_POLICY), "lanes": [{
+            "id": lane.id, "name": lane.name, "platform": lane.platform,
+            "identity_type": lane.identity_type, "purpose": lane.purpose,
+            "audience": lane.audience, "language": lane.language,
+            "cultural_context": lane.cultural_context,
+            "allowed_topics": lane.allowed_topics,
+            "forbidden_topics": lane.forbidden_topics,
+            "approval_required": lane.approval_required, "active": lane.active,
+        } for lane in lanes]}
+
+
+@app.post("/api/lanes")
+async def create_lane(request: LaneRequest, _: RequestContext = Depends(require_role("admin"))):
+    """Create an account lane. Fake people, impersonation, and engagement
+    manipulation identities are rejected — hard, not configurably."""
+    try:
+        validate_identity_type(request.identity_type)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    with get_db_session() as session:
+        lane = AccountLane(
+            name=request.name, platform=request.platform,
+            identity_type=request.identity_type, purpose=request.purpose,
+            audience=request.audience, language=request.language,
+            cultural_context=request.cultural_context,
+            allowed_topics=request.allowed_topics,
+            forbidden_topics=request.forbidden_topics,
+        )
+        session.add(lane)
+        session.commit()
+    get_ledger().record("lane_created", {
+        "id": lane.id, "name": lane.name, "identity_type": lane.identity_type,
+    })
+    return {"success": True, "id": lane.id}
 
 
 @app.get("/r/{redirect_id}")
