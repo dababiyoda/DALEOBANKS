@@ -68,10 +68,16 @@ class WealthMachineClient:
         return assessment
 
     def _evaluate_http(self, packet: OpportunityPacket) -> VentureAssessment:
+        headers = {"Content-Type": "application/json"}
+        token = os.getenv("WEALTHMACHINE_INTAKE_TOKEN", "")
+        if token:
+            # Shared-secret auth with the WealthMachine intake endpoint;
+            # optional so the bridge still runs credential-free locally.
+            headers["Authorization"] = f"Bearer {token}"
         request = urllib.request.Request(
             f"{self.url}/api/opportunities/intake",
             data=json.dumps(packet_to_wire(packet)).encode(),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         timeout = float(os.getenv("WEALTHMACHINE_TIMEOUT", "20"))
