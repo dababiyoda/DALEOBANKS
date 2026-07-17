@@ -932,6 +932,20 @@ async def receive_assessment(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/assessments")
+async def list_assessments(_: RequestContext = Depends(get_request_context)):
+    """VentureAssessments stored so far (mock or real engine — same contract)."""
+    with get_db_session() as session:
+        assessments = (
+            session.query(VentureAssessment)
+            .order_by(lambda a: a.created_at, descending=True)
+            .all()
+        )
+        from services.venture_protocol import assessment_to_wire
+        return {"count": len(assessments),
+                "assessments": [assessment_to_wire(a) for a in assessments]}
+
+
 @app.get("/api/media/drafts")
 async def list_media_drafts(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
     with get_db_session() as session:
