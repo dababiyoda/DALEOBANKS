@@ -1128,8 +1128,30 @@ async def handle_redirect(redirect_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"ok": True, "timestamp": datetime.now(UTC).isoformat()}
+    """Health check with the safe-runtime status an operator needs at a
+    glance: is the agent armed, is crisis pause active, is the decision
+    ledger chain intact. Reads only — this endpoint changes nothing."""
+    config = get_config()
+    try:
+        crisis_paused = bool(runner.crisis_service.is_paused())
+        crisis_reason = runner.crisis_service.reason
+    except Exception:
+        # If crisis state can't be read, report the uncertainty rather
+        # than a false "all clear".
+        crisis_paused, crisis_reason = None, "unavailable"
+    try:
+        ledger_ok, broken_at = get_ledger().verify_chain()
+    except Exception:
+        ledger_ok, broken_at = None, None
+    return {
+        "ok": True,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "live": bool(config.LIVE),
+        "crisis_paused": crisis_paused,
+        "crisis_reason": crisis_reason,
+        "ledger_ok": ledger_ok,
+        "ledger_broken_at": broken_at,
+    }
 
 # Reflection / learned-mind endpoints
 @app.get("/api/reflections")
