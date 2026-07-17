@@ -154,6 +154,25 @@ class LaneRequest(BaseModel):
     allowed_topics: List[str] = []
     forbidden_topics: List[str] = []
 
+class OpportunityCreateRequest(BaseModel):
+    signal_type: str = "operator_thought"
+    source: str = "operator"
+    source_ref: str = ""
+    observed_pain: str
+    core_thesis: str
+    audience: str = ""
+    cultural_context: str = ""
+    language: str = "en"
+    customer_segment: str = ""
+    buyer_type: str = ""
+    urgency: str = "medium"
+    evidence: List[str] = []
+    possible_offer: str = ""
+    monetization_paths: List[str] = []
+    risk_flags: List[str] = []
+    smallest_validation_action: str = ""
+    confidence: float = 0.5
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -814,6 +833,56 @@ async def refine_idea(idea_id: str, _: RequestContext = Depends(require_role("ad
     except Exception as e:
         logger.error(f"Idea refine error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/opportunities")
+async def create_opportunity(
+    request: OpportunityCreateRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Create an OpportunityPacket directly (operator-observed signals that
+    didn't come through the idea refinery). Packets start pending — nothing
+    is evaluated or sent anywhere without an explicit approve + send."""
+    from services.prompt_firewall import get_firewall
+    from services.venture_protocol import ALLOWED_SIGNAL_TYPES
+
+    if request.signal_type not in ALLOWED_SIGNAL_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"signal_type must be one of {sorted(ALLOWED_SIGNAL_TYPES)}",
+        )
+    if request.urgency not in ("low", "medium", "high"):
+        raise HTTPException(status_code=422, detail="urgency must be low|medium|high")
+    if not (0.0 <= request.confidence <= 1.0):
+        raise HTTPException(status_code=422, detail="confidence must be within [0, 1]")
+
+    firewall = get_firewall()
+    with get_db_session() as session:
+        packet = OpportunityPacket(
+            source=request.source,
+            source_ref=request.source_ref,
+            signal_type=request.signal_type,
+            observed_pain=firewall.sanitize(request.observed_pain).strip(),
+            core_thesis=firewall.sanitize(request.core_thesis).strip(),
+            audience=request.audience,
+            cultural_context=request.cultural_context,
+            language=request.language,
+            customer_segment=request.customer_segment,
+            buyer_type=request.buyer_type,
+            urgency=request.urgency,
+            evidence=[firewall.sanitize(e).strip() for e in request.evidence],
+            possible_offer=request.possible_offer,
+            monetization_paths=request.monetization_paths,
+            risk_flags=request.risk_flags,
+            smallest_validation_action=request.smallest_validation_action,
+            confidence=request.confidence,
+        )
+        session.add(packet)
+        session.commit()
+    get_ledger().record("opportunity_created", {
+        "id": packet.id, "signal_type": packet.signal_type, "via": "api",
+    })
+    return {"success": True, "id": packet.id, "status": packet.status}
 
 
 @app.get("/api/opportunities")
