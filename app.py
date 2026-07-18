@@ -1064,6 +1064,34 @@ async def list_assessments(_: RequestContext = Depends(get_request_context)):
                 "assessments": [assessment_to_wire(a) for a in assessments]}
 
 
+class WorkCheckRequest(BaseModel):
+    category: str
+    description: str = ""
+
+
+@app.post("/api/policy/work-check")
+async def check_work_policy(
+    request: WorkCheckRequest, _: RequestContext = Depends(get_request_context)
+):
+    """The anti-cathedral rule, executable: may this work proceed given the
+    state of the external-evidence window? Decisions are ledgered."""
+    from services.evidence_policy import evaluate_work
+    with get_db_session() as session:
+        return evaluate_work(session, request.category, description=request.description)
+
+
+@app.get("/api/metrics/institutional")
+async def get_institutional_metrics(
+    base_j: Optional[float] = None, _: RequestContext = Depends(get_request_context)
+):
+    """The numbers the institution grows by: constitutional health,
+    evidence window, loop closure, negative-result retention, founder
+    decision load — and Evidence-Weighted J when a base J is supplied."""
+    from services.evidence_policy import institutional_metrics
+    with get_db_session() as session:
+        return institutional_metrics(session, base_j=base_j)
+
+
 class CapabilityGrantRequest(BaseModel):
     approval_request_id: str
     action_type: str
