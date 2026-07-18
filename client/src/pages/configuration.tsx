@@ -17,7 +17,7 @@ export default function Configuration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [goalMode, setGoalMode] = useState("FAME");
-  const [liveMode, setLiveMode] = useState(true);
+  const [liveMode, setLiveMode] = useState(false);
 
   const { data: config, isLoading } = useQuery<DashboardResponse>({
     queryKey: ["/api/dashboard"],
@@ -27,7 +27,7 @@ export default function Configuration() {
   useEffect(() => {
     if (config) {
       setGoalMode(config.goal_mode || "FAME");
-      setLiveMode(config.system_status?.live_mode ?? true);
+      setLiveMode(config.system_status?.live_mode ?? false);
     }
   }, [config]);
 
@@ -217,20 +217,20 @@ export default function Configuration() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Twitter/X API</span>
-                    <Badge className="bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">
-                      Connected
+                    <Badge variant="secondary">
+                      {config?.system_status?.api_health === "healthy" ? "Runtime healthy" : "Not verified"}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">OpenAI API</span>
-                    <Badge className="bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">
-                      Connected
+                    <Badge variant="secondary">
+                      Verify server-side
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Rate Limits</span>
-                    <Badge className="bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
-                      Healthy
+                    <Badge variant="secondary">
+                      {config?.system_status?.rate_limits || "Not verified"}
                     </Badge>
                   </div>
                 </div>

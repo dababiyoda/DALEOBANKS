@@ -166,8 +166,8 @@ def _build_config() -> Config:
         X_API_SECRET=os.getenv("X_API_SECRET"),
         X_ACCESS_TOKEN=os.getenv("X_ACCESS_TOKEN"),
         X_ACCESS_SECRET=os.getenv("X_ACCESS_SECRET"),
-        ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", "choose-a-long-random-string"),
-        JWT_SECRET=os.getenv("JWT_SECRET", "change-me-please"),
+        ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", "change-me-admin-token-at-least-32-bytes"),
+        JWT_SECRET=os.getenv("JWT_SECRET", "change-me-jwt-secret-at-least-32-bytes"),
         JWT_ISSUER=os.getenv("JWT_ISSUER", None),
         JWT_AUDIENCE=os.getenv("JWT_AUDIENCE", None),
 
@@ -257,6 +257,46 @@ def _notify_listeners(changes: Dict[str, Any]) -> None:
         except Exception:
             # Listeners should not break config updates; ignore failures.
             continue
+
+
+def validate_production_security(cfg: Config) -> None:
+    """Reject production startup when identity or origin controls are unsafe.
+
+    Development may use local placeholders while LIVE remains off.  Production
+    must never silently inherit repository defaults.
+    """
+    if cfg.APP_ENV.lower() not in {"prod", "production"}:
+        return
+
+    errors: List[str] = []
+    placeholder_admin_tokens = {
+        "",
+        "choose-a-long-random-string",
+        "change-me-admin-token-at-least-32-bytes",
+        "change-me",
+        "changeme",
+    }
+    placeholder_jwt_secrets = {
+        "",
+        "change-me-please",
+        "change-me-jwt-secret-at-least-32-bytes",
+        "change-me",
+        "changeme",
+    }
+
+    if cfg.ADMIN_TOKEN.lower() in placeholder_admin_tokens or len(cfg.ADMIN_TOKEN) < 32:
+        errors.append("ADMIN_TOKEN must be a non-placeholder secret of at least 32 characters")
+    if cfg.JWT_SECRET.lower() in placeholder_jwt_secrets or len(cfg.JWT_SECRET) < 32:
+        errors.append("JWT_SECRET must be a non-placeholder secret of at least 32 characters")
+    if not cfg.JWT_ISSUER:
+        errors.append("JWT_ISSUER is required in production")
+    if not cfg.JWT_AUDIENCE:
+        errors.append("JWT_AUDIENCE is required in production")
+    if not cfg.ALLOWED_ORIGINS or "*" in cfg.ALLOWED_ORIGINS:
+        errors.append("ALLOWED_ORIGINS must be an explicit production allowlist")
+
+    if errors:
+        raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
 
 
 def get_config() -> Config:

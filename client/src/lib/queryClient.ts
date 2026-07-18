@@ -10,14 +10,14 @@ async function throwIfResNotOk(res: Response) {
 const ADMIN_JWT_KEY = "daleobanks-admin-jwt";
 
 export function getAdminJwt(): string | null {
-  return localStorage.getItem(ADMIN_JWT_KEY);
+  return sessionStorage.getItem(ADMIN_JWT_KEY);
 }
 
 export function setAdminJwt(token: string | null): void {
   if (token) {
-    localStorage.setItem(ADMIN_JWT_KEY, token);
+    sessionStorage.setItem(ADMIN_JWT_KEY, token);
   } else {
-    localStorage.removeItem(ADMIN_JWT_KEY);
+    sessionStorage.removeItem(ADMIN_JWT_KEY);
   }
 }
 
@@ -52,6 +52,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
+      headers: authHeaders(),
       credentials: "include",
     });
 

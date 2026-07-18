@@ -27,7 +27,7 @@ async def test_valid_admin_token_mints_admin_jwt(tmp_path):
         )
         assert claims["sub"] == "admin"
         assert claims["roles"] == ["admin"]
-        assert response["expires_in"] == 12 * 3600
+        assert response["expires_in"] == 3600
         assert ledger.replay("admin_token_issued")
     finally:
         reset_shared_instances()
@@ -45,5 +45,6 @@ async def test_wrong_admin_token_is_rejected(tmp_path):
             )
         assert exc_info.value.status_code == 401
         assert ledger.replay("admin_token_issued") == []
+        assert ledger.replay("admin_token_rejected")
     finally:
         reset_shared_instances()
