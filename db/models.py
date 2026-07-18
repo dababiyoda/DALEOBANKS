@@ -283,10 +283,51 @@ class ApprovalRequest:
     summary: str = ""
     payload: Dict[str, Any] = field(default_factory=dict)
     rationale: str = ""
+    strongest_objection: str = ""  # the best argument against approving
     status: str = "pending"  # pending | approved | rejected | edited | held | expired
     created_at: datetime = field(default_factory=_utcnow)
+    expires_at: Optional[datetime] = None  # stale requests close automatically
     decided_at: Optional[datetime] = None
     decided_via: Optional[str] = None  # "sms" | "dashboard"
+
+
+@dataclass
+class CapabilityGrant:
+    """The executable authorization artifact: a single-purpose, exactly
+    scoped, expiring, revocable permission minted from a human approval.
+    Approval never widens standing autonomy — a grant authorizes one exact
+    action against one exact resource, a bounded number of times, for a
+    bounded window. Everything about its lifecycle is ledgered."""
+
+    id: str = field(default_factory=_uuid)
+    requester_identity: str = ""  # organ/service that asked
+    approver_identity: str = ""  # human actor who said yes
+    approval_request_id: str = ""  # the ApprovalRequest it was minted from
+    action_type: str = ""  # e.g. "publish_post" | "send_dm" | "run_validation"
+    exact_action: str = ""  # human-readable exact act authorized
+    resource: str = ""  # exact resource id (draft id, packet id, lane id...)
+    account_lane_id: str = ""
+    named_targets: List[str] = field(default_factory=list)
+    max_cost: float = 0.0
+    currency: str = "USD"
+    max_frequency: str = ""  # e.g. "1/day"; informational bound
+    maximum_uses: int = 1
+    uses_consumed: int = 0
+    issued_at: datetime = field(default_factory=_utcnow)
+    not_before: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    evidence_refs: List[str] = field(default_factory=list)
+    policy_version: str = ""
+    constitution_hash: str = ""
+    risk_tier: str = "tier4"  # consequential by default
+    rollback_note: str = ""
+    revocation_status: str = "active"  # active | revoked
+    revoked_at: Optional[datetime] = None
+    revoked_by: str = ""
+    revocation_reason: str = ""
+    idempotency_key: str = field(default_factory=_uuid)
+    trace_id: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -487,6 +528,7 @@ __all__ = [
     "DiscoveryProposal",
     "GoalProposal",
     "ApprovalRequest",
+    "CapabilityGrant",
     "SelfSignal",
     "ContextPacket",
     "Idea",

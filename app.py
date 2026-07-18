@@ -725,17 +725,38 @@ async def decide_goal_proposal(
 
 @app.get("/api/operator/requests")
 async def list_operator_requests(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
-    """The operator's approval inbox (dashboard fallback for SMS)."""
+    """The operator's approval inbox: ranked (P1 first, then oldest),
+    capped so founder attention is a protected resource, expiring so
+    silence never becomes consent. Overflow is batched, never approved."""
     try:
+        max_active = int(os.getenv("MAX_ACTIVE_APPROVALS", "10"))
         with get_db_session() as session:
+            get_operator_line().sweep_expired(session)
             requests = (
                 session.query(ApprovalRequest)
                 .filter(lambda r: r.status == status_filter)
-                .order_by(lambda r: r.created_at, descending=True)
                 .all()
             )
+            # Rank: urgent first, then oldest waiting.
+            requests.sort(key=lambda r: (r.priority != "P1", r.created_at))
+            active = requests[:max_active] if status_filter == "pending" else requests
+            batched = len(requests) - len(active)
+
+            # Approval-fatigue metric: median decision latency (seconds).
+            decided = [
+                r for r in session.query(ApprovalRequest).all()
+                if r.decided_at is not None and r.decided_via != "expiry"
+            ]
+            latencies = sorted(
+                (r.decided_at - r.created_at).total_seconds() for r in decided
+            )
+            median_latency = latencies[len(latencies) // 2] if latencies else None
+
             return {
-                "count": len(requests),
+                "count": len(active),
+                "batched_count": batched,
+                "max_active": max_active,
+                "median_decision_latency_seconds": median_latency,
                 "requests": [
                     {
                         "id": r.id,
@@ -744,11 +765,13 @@ async def list_operator_requests(status_filter: str = "pending", _: RequestConte
                         "priority": r.priority,
                         "summary": r.summary,
                         "rationale": r.rationale,
+                        "strongest_objection": r.strongest_objection,
                         "payload": r.payload,
                         "status": r.status,
                         "created_at": r.created_at.isoformat(),
+                        "expires_at": r.expires_at.isoformat() if r.expires_at else None,
                     }
-                    for r in requests
+                    for r in active
                 ],
             }
     except Exception as e:
@@ -1039,6 +1062,113 @@ async def list_assessments(_: RequestContext = Depends(get_request_context)):
         from services.venture_protocol import assessment_to_wire
         return {"count": len(assessments),
                 "assessments": [assessment_to_wire(a) for a in assessments]}
+
+
+class CapabilityGrantRequest(BaseModel):
+    approval_request_id: str
+    action_type: str
+    exact_action: str
+    resource: str
+    account_lane_id: str = ""
+    named_targets: List[str] = []
+    max_cost: float = 0.0
+    maximum_uses: int = 1
+    ttl_hours: Optional[int] = None
+    evidence_refs: List[str] = []
+    rollback_note: str = ""
+    trace_id: str = ""
+
+class GrantRevokeRequest(BaseModel):
+    reason: str = ""
+
+
+def _grant_to_dict(g: CapabilityGrant) -> Dict[str, Any]:
+    return {
+        "id": g.id, "approval_request_id": g.approval_request_id,
+        "requester_identity": g.requester_identity,
+        "approver_identity": g.approver_identity,
+        "action_type": g.action_type, "exact_action": g.exact_action,
+        "resource": g.resource, "account_lane_id": g.account_lane_id,
+        "named_targets": g.named_targets, "max_cost": g.max_cost,
+        "currency": g.currency, "maximum_uses": g.maximum_uses,
+        "uses_consumed": g.uses_consumed,
+        "issued_at": g.issued_at.isoformat(),
+        "expires_at": g.expires_at.isoformat() if g.expires_at else None,
+        "risk_tier": g.risk_tier, "rollback_note": g.rollback_note,
+        "revocation_status": g.revocation_status,
+        "revoked_at": g.revoked_at.isoformat() if g.revoked_at else None,
+        "revocation_reason": g.revocation_reason,
+        "trace_id": g.trace_id,
+    }
+
+
+@app.post("/api/capability-grants")
+async def create_capability_grant(
+    request: CapabilityGrantRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Mint a single-purpose, expiring capability from an APPROVED request.
+    Grants never widen standing autonomy: exact action, exact resource,
+    bounded uses, bounded window. Everything is ledgered."""
+    from services.capability import CapabilityError, get_capability_service
+    try:
+        with get_db_session() as session:
+            grant = get_capability_service().mint_from_approval(
+                session,
+                request.approval_request_id,
+                request.action_type,
+                request.exact_action,
+                request.resource,
+                account_lane_id=request.account_lane_id,
+                named_targets=request.named_targets,
+                max_cost=request.max_cost,
+                maximum_uses=request.maximum_uses,
+                ttl_hours=request.ttl_hours,
+                evidence_refs=request.evidence_refs,
+                rollback_note=request.rollback_note,
+                trace_id=request.trace_id,
+            )
+        return {"success": True, "grant": _grant_to_dict(grant)}
+    except CapabilityError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.get("/api/capability-grants")
+async def list_capability_grants(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        grants = (
+            session.query(CapabilityGrant)
+            .order_by(lambda g: g.issued_at, descending=True)
+            .all()
+        )
+        return {"count": len(grants), "grants": [_grant_to_dict(g) for g in grants]}
+
+
+@app.get("/api/capability-grants/{grant_id}")
+async def get_capability_grant(grant_id: str, _: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        grant = session.query(CapabilityGrant).filter(lambda g: g.id == grant_id).first()
+        if grant is None:
+            raise HTTPException(status_code=404, detail="Grant not found")
+        return _grant_to_dict(grant)
+
+
+@app.post("/api/capability-grants/{grant_id}/revoke")
+async def revoke_capability_grant(
+    grant_id: str,
+    request: GrantRevokeRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Revocation is immediate. Revoked grants fail closed at execution."""
+    from services.capability import CapabilityError, get_capability_service
+    try:
+        with get_db_session() as session:
+            grant = get_capability_service().revoke(
+                session, grant_id, reason=request.reason,
+            )
+        return {"success": True, "grant": _grant_to_dict(grant)}
+    except CapabilityError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.post("/api/validation-results")
