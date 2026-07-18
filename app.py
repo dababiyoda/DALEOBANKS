@@ -1030,6 +1030,7 @@ async def receive_assessment(
                 recommended_next_action=str(payload.get("recommended_next_action") or ""),
                 requires_human_approval=True,
                 reasons=list(payload.get("reasons") or []),
+                cases=list(payload.get("cases") or []),
             )
             session.add(assessment)
             packet.status = "assessed"
