@@ -1128,16 +1128,23 @@ async def handle_redirect(redirect_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check with the safe-runtime status an operator needs at a
-    glance: is the agent armed, is crisis pause active, is the decision
-    ledger chain intact. Reads only — this endpoint changes nothing."""
+    """Unauthenticated liveness probe. Deliberately minimal: a public
+    health endpoint must never become a confirmation oracle for arming
+    state, crisis posture, or successful ledger tampering."""
+    return {"ok": True, "timestamp": datetime.now(UTC).isoformat()}
+
+
+@app.get("/api/health/safety")
+async def health_safety(_: RequestContext = Depends(require_role("admin"))):
+    """Authenticated safe-runtime status: is the agent armed, is crisis
+    pause active, is the decision ledger chain intact. Reads only. If a
+    state can't be read, report the uncertainty rather than a false
+    all-clear."""
     config = get_config()
     try:
         crisis_paused = bool(runner.crisis_service.is_paused())
         crisis_reason = runner.crisis_service.reason
     except Exception:
-        # If crisis state can't be read, report the uncertainty rather
-        # than a false "all clear".
         crisis_paused, crisis_reason = None, "unavailable"
     try:
         ledger_ok, broken_at = get_ledger().verify_chain()
