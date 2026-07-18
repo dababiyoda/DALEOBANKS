@@ -139,6 +139,31 @@ def test_broken_ledger_disarms_consumption(tmp_path):
         reset_shared_instances()
 
 
+def test_crisis_pause_suspends_grant_consumption(tmp_path, monkeypatch):
+    """Human approval is necessary but not sufficient: crisis pause blocks
+    execution of even a validly granted act."""
+    import runner
+
+    ledger, service, line = _setup(tmp_path)
+    try:
+        with get_db_session() as session:
+            approved = _approved_request(session, line)
+            grant = service.mint_from_approval(
+                session, approved.id, "publish_post", "publish draft-1", "draft-1",
+            )
+            monkeypatch.setattr(runner.crisis_service, "is_paused", lambda: True)
+            with pytest.raises(CapabilityError):
+                service.validate_and_consume(session, grant.id, "publish_post", "draft-1")
+            # Grant untouched: it can be used once the crisis clears.
+            assert grant.uses_consumed == 0
+            monkeypatch.setattr(runner.crisis_service, "is_paused", lambda: False)
+            service.validate_and_consume(session, grant.id, "publish_post", "draft-1")
+        assert any(e["payload"]["reason"] == "crisis_paused"
+                   for e in ledger.replay("capability_rejected"))
+    finally:
+        reset_shared_instances()
+
+
 def test_grants_never_widen_standing_autonomy(tmp_path):
     """A grant covers exactly one scope; approval elsewhere grants nothing
     here, and consuming a grant leaves LIVE untouched."""

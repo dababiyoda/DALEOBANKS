@@ -130,6 +130,23 @@ class CapabilityService:
             self._reject(grant_id, "ledger_chain_broken")
             raise CapabilityError("decision ledger chain is broken — failing closed")
 
+        # Human approval is necessary but not sufficient: crisis pause
+        # suspends consequential execution even for validly granted acts,
+        # and an unreadable crisis state fails closed, not open.
+        try:
+            import runner
+            crisis_paused = bool(runner.crisis_service.is_paused())
+        except Exception:
+            crisis_paused = None
+        if crisis_paused is not False:
+            reason = "crisis_paused" if crisis_paused else "crisis_state_unreadable"
+            self._reject(grant_id, reason)
+            raise CapabilityError(
+                "crisis pause active — consequential execution is suspended"
+                if crisis_paused else
+                "crisis state unreadable — failing closed"
+            )
+
         grant = session.query(CapabilityGrant).filter(lambda g: g.id == grant_id).first()
         if grant is None:
             self._reject(grant_id, "unknown_grant")
