@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ValidationError
 
-from config import get_config, update_config
+from config import get_config, update_config, validate_production_security
 from db.session import init_db, get_db_session
 from db.models import *
 from services.persona_store import PersonaStore
@@ -46,6 +46,8 @@ from services.venture_protocol import validate_assessment_wire, validate_identit
 from services.security import (
     RequestContext,
     get_request_context,
+    require_authenticated,
+    require_websocket_authenticated,
     require_role,
     require_any_role,
 )
@@ -76,7 +78,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.ALLOWED_ORIGINS or ["*"],
-    allow_credentials=True,
+    allow_credentials=bool(config.ALLOWED_ORIGINS) and "*" not in config.ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -175,7 +177,10 @@ class OpportunityCreateRequest(BaseModel):
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    _: RequestContext = Depends(require_websocket_authenticated),
+):
     await websocket.accept()
     websocket_connections.append(websocket)
     logger.info("WebSocket connection established")
@@ -254,7 +259,7 @@ async def broadcast_update(data: Dict[str, Any]):
 # Dashboard API endpoints
 @app.get("/api/dashboard")
 @app.get("/dashboard")  # Support both routes
-async def get_dashboard(_: RequestContext = Depends(get_request_context)):
+async def get_dashboard(_: RequestContext = Depends(require_authenticated)):
     """Get dashboard overview data"""
     try:
         with get_db_session() as session:
@@ -303,7 +308,10 @@ async def get_dashboard(_: RequestContext = Depends(get_request_context)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/crisis")
-async def set_crisis(request: CrisisRequest):
+async def set_crisis(
+    request: CrisisRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
     """Toggle crisis mode manually from the dashboard."""
     if request.active:
         runner.crisis_service.activate(reason=request.reason or "manual_toggle")
@@ -325,12 +333,16 @@ async def issue_admin_token(request: TokenRequest):
     """
     import jwt as pyjwt
 
+    if not admin_limiter.allow_request("admin_token_exchange"):
+        raise HTTPException(status_code=429, detail="Too many token requests")
+
     if not secrets.compare_digest(request.admin_token, config.ADMIN_TOKEN):
         logger.warning("Admin token exchange failed: invalid token")
+        get_ledger().record("admin_token_rejected", {"reason": "invalid_token"})
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
     now = datetime.now(UTC)
-    expires_hours = 12
+    expires_hours = 1
     claims: Dict[str, Any] = {
         "sub": "admin",
         "roles": ["admin"],
@@ -367,7 +379,10 @@ async def _arming_preflight() -> Dict[str, Any]:
 
 
 @app.post("/api/toggle")
-async def toggle_live_mode(request: ToggleRequest):
+async def toggle_live_mode(
+    request: ToggleRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
     """Toggle LIVE mode. Arming requires a preflight; disarming never does."""
     try:
         if request.live:
@@ -412,7 +427,10 @@ async def reset_heartbeat_breaker(_: RequestContext = Depends(require_role("admi
     }
 
 @app.post("/api/mode")
-async def set_goal_mode(request: ModeRequest):
+async def set_goal_mode(
+    request: ModeRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
     """Set goal mode (FAME/MONETIZE)"""
     try:
         if request.mode not in ["FAME", "MONETIZE"]:
@@ -428,12 +446,14 @@ async def set_goal_mode(request: ModeRequest):
         
         logger.info(f"Goal mode set to {config.GOAL_MODE}")
         return {"mode": config.GOAL_MODE}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Mode change error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/propose")
-async def trigger_proposal():
+async def trigger_proposal(_: RequestContext = Depends(require_role("admin"))):
     """Trigger immediate proposal generation"""
     try:
         if not config.LIVE:
@@ -452,12 +472,17 @@ async def trigger_proposal():
             return {"success": True, "proposal": result}
         else:
             return {"success": False, "reason": "Not appropriate time for proposal"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Proposal generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/note")
-async def add_note(request: NoteRequest):
+async def add_note(
+    request: NoteRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
     """Add improvement note"""
     try:
         with get_db_session() as session:
@@ -480,7 +505,10 @@ async def add_note(request: NoteRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/redirect")
-async def create_redirect(request: RedirectRequest):
+async def create_redirect(
+    request: RedirectRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
     """Create tracked redirect link"""
     try:
         with get_db_session() as session:
@@ -533,7 +561,7 @@ async def record_conversion(
 
 
 @app.get("/api/conversions")
-async def list_conversions(limit: int = 50, _: RequestContext = Depends(get_request_context)):
+async def list_conversions(limit: int = 50, _: RequestContext = Depends(require_authenticated)):
     """List recorded revenue events, newest first."""
     try:
         with get_db_session() as session:
@@ -563,7 +591,7 @@ async def list_conversions(limit: int = 50, _: RequestContext = Depends(get_requ
 
 
 @app.get("/api/discoveries")
-async def list_discoveries(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+async def list_discoveries(status_filter: str = "pending", _: RequestContext = Depends(require_authenticated)):
     """List discovery proposals (new voices/keywords) awaiting review."""
     try:
         with get_db_session() as session:
@@ -631,7 +659,7 @@ async def decide_discovery(
 
 
 @app.get("/api/goals/proposals")
-async def list_goal_proposals(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+async def list_goal_proposals(status_filter: str = "pending", _: RequestContext = Depends(require_authenticated)):
     """List proposed OKR changes awaiting human review."""
     try:
         with get_db_session() as session:
@@ -698,7 +726,7 @@ async def decide_goal_proposal(
 
 
 @app.get("/api/operator/requests")
-async def list_operator_requests(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+async def list_operator_requests(status_filter: str = "pending", _: RequestContext = Depends(require_authenticated)):
     """The operator's approval inbox (dashboard fallback for SMS)."""
     try:
         with get_db_session() as session:
@@ -804,7 +832,7 @@ async def intake_idea(request: IdeaIntakeRequest, _: RequestContext = Depends(re
 
 
 @app.get("/api/ideas")
-async def list_ideas(_: RequestContext = Depends(get_request_context)):
+async def list_ideas(_: RequestContext = Depends(require_authenticated)):
     with get_db_session() as session:
         ideas = session.query(Idea).order_by(lambda i: i.created_at, descending=True).all()
         return {"count": len(ideas), "ideas": [{
@@ -886,7 +914,7 @@ async def create_opportunity(
 
 
 @app.get("/api/opportunities")
-async def list_opportunities(status_filter: str = "", _: RequestContext = Depends(get_request_context)):
+async def list_opportunities(status_filter: str = "", _: RequestContext = Depends(require_authenticated)):
     with get_db_session() as session:
         packets = (
             session.query(OpportunityPacket)
@@ -1002,7 +1030,7 @@ async def receive_assessment(
 
 
 @app.get("/api/assessments")
-async def list_assessments(_: RequestContext = Depends(get_request_context)):
+async def list_assessments(_: RequestContext = Depends(require_authenticated)):
     """VentureAssessments stored so far (mock or real engine — same contract)."""
     with get_db_session() as session:
         assessments = (
@@ -1016,7 +1044,7 @@ async def list_assessments(_: RequestContext = Depends(get_request_context)):
 
 
 @app.get("/api/media/drafts")
-async def list_media_drafts(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+async def list_media_drafts(status_filter: str = "pending", _: RequestContext = Depends(require_authenticated)):
     with get_db_session() as session:
         drafts = (
             session.query(MediaAssetDraft)
@@ -1061,7 +1089,7 @@ async def decide_media_draft(
 
 
 @app.get("/api/lanes")
-async def list_lanes(_: RequestContext = Depends(get_request_context)):
+async def list_lanes(_: RequestContext = Depends(require_authenticated)):
     with get_db_session() as session:
         lanes = session.query(AccountLane).all()
         return {"count": len(lanes), "policy": list(LANE_POLICY), "lanes": [{
@@ -1133,7 +1161,7 @@ async def health_check():
 
 # Reflection / learned-mind endpoints
 @app.get("/api/reflections")
-async def get_reflections(limit: int = 20, _: RequestContext = Depends(get_request_context)):
+async def get_reflections(limit: int = 20, _: RequestContext = Depends(require_authenticated)):
     """Return the agent's most recent learned lessons (its evolving 'mind')."""
     try:
         with get_db_session() as session:
@@ -1157,7 +1185,7 @@ async def trigger_reflection(_: RequestContext = Depends(require_role("admin")))
 
 # Persona management endpoints
 @app.get("/api/persona")
-async def get_persona():
+async def get_persona(_: RequestContext = Depends(require_authenticated)):
     """Get current persona"""
     try:
         return persona_store.get_current_persona()
@@ -1166,7 +1194,7 @@ async def get_persona():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/persona/versions")
-async def get_persona_versions():
+async def get_persona_versions(_: RequestContext = Depends(require_authenticated)):
     """Get persona version history"""
     try:
         with get_db_session() as session:
@@ -1252,7 +1280,7 @@ async def rollback_persona(version: int, _: RequestContext = Depends(require_rol
 
 @app.get("/api/analytics")
 @app.get("/analytics")  # Support both routes
-async def get_analytics(_: RequestContext = Depends(get_request_context)):
+async def get_analytics(_: RequestContext = Depends(require_authenticated)):
     """Get analytics data"""
     try:
         with get_db_session() as session:
@@ -1271,6 +1299,11 @@ async def startup_event():
     """Initialize application on startup"""
     try:
         logger.info("Starting DaLeoBanks AI Agent...")
+
+        # Refuse production startup with placeholder credentials or wildcard
+        # credentialed origins.  This check is deterministic and outside the
+        # model/agent layer.
+        validate_production_security(config)
 
         # Initialize database
         init_db()

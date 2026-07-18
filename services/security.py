@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketException, status
 
 from config import get_config
 from services.logging_utils import get_logger
@@ -114,6 +114,69 @@ def require_role(required_role: str):
         return context
 
     return dependency
+
+
+def require_authenticated(context: RequestContext = Depends(get_request_context)) -> RequestContext:
+    """Reject anonymous access while allowing any validated JWT role.
+
+    Read-only operator data is still sensitive: it can contain venture theses,
+    revenue, drafts, decisions, and persona history.  Callers must therefore
+    present a valid token even when no elevated role is required.
+    """
+    if context.subject == "anonymous" or "anonymous" in context.roles:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
+    dominant_role = context.roles[0] if context.roles else "user"
+    limiter_key = f"{dominant_role}:{context.client_ip or context.subject}"
+    if not role_limiter.allow(dominant_role, limiter_key):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded for role",
+        )
+    return context
+
+
+def require_websocket_authenticated(websocket: WebSocket) -> RequestContext:
+    """Authenticate WebSocket upgrades without putting bearer tokens in URLs."""
+    config = get_config()
+    auth_header = websocket.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        raise WebSocketException(code=1008, reason="Authentication required")
+
+    token = auth_header.split(" ", 1)[1]
+    try:
+        claims = jwt.decode(
+            token,
+            config.JWT_SECRET,
+            algorithms=["HS256"],
+            audience=config.JWT_AUDIENCE,
+            issuer=config.JWT_ISSUER or None,
+            options={"verify_aud": bool(config.JWT_AUDIENCE)},
+        )
+    except Exception as exc:
+        logger.warning("WebSocket JWT validation failed", extra_data={"error": str(exc)})
+        raise WebSocketException(code=1008, reason="Invalid token") from exc
+
+    subject = str(claims.get("sub", "")).strip()
+    if not subject:
+        raise WebSocketException(code=1008, reason="Token subject is required")
+
+    roles = _parse_roles(claims)
+    dominant_role = roles[0] if roles else "user"
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    limiter_key = f"websocket:{dominant_role}:{client_ip or subject}"
+    if not role_limiter.allow(dominant_role, limiter_key):
+        raise WebSocketException(code=1008, reason="Rate limit exceeded")
+
+    return RequestContext(
+        request_id=str(uuid4()),
+        subject=subject,
+        roles=roles,
+        client_ip=client_ip,
+    )
 
 
 def require_any_role(roles: List[str]):

@@ -32,9 +32,20 @@ class LLMAdapter:
     
     def __init__(self):
         self.config = get_config()
-        self.client = openai.AsyncOpenAI(api_key=self.config.OPENAI_API_KEY)
+        # Constructing the SDK client can inspect proxy configuration and fail
+        # before the application has decided to use the model. Keep startup,
+        # dry-run operation, and template fallback independent of an external
+        # provider; create the client only for an authorized model call.
+        self.client: Optional[openai.AsyncOpenAI] = None
         self.budget = LLMBudget()
         self.template_fallback_enabled = True
+
+    def _get_client(self) -> openai.AsyncOpenAI:
+        if self.client is None:
+            if not self.config.OPENAI_API_KEY:
+                raise RuntimeError("OPENAI_API_KEY is not configured")
+            self.client = openai.AsyncOpenAI(api_key=self.config.OPENAI_API_KEY)
+        return self.client
         
     def _check_budget(self) -> bool:
         """Check if we're within budget limits"""
@@ -97,6 +108,10 @@ class LLMAdapter:
                 return self._template_fallback(system, messages)
             else:
                 raise Exception("LLM budget exceeded and template fallback disabled")
+
+        if not self.config.OPENAI_API_KEY and self.template_fallback_enabled:
+            logger.info("OpenAI is not configured, using template fallback")
+            return self._template_fallback(system, messages)
         
         try:
             # Prepare messages
@@ -105,7 +120,7 @@ class LLMAdapter:
             
             # Make API call
             start_time = time.time()
-            response = await self.client.chat.completions.create(
+            response = await self._get_client().chat.completions.create(
                 model="gpt-4o-mini",
                 messages=chat_messages,
                 temperature=temperature,

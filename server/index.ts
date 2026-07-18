@@ -35,6 +35,18 @@ pythonProcess.on("exit", (code) => {
 const app = express();
 const server = createServer(app);
 
+app.disable("x-powered-by");
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (isProduction) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
 // Proxy API and WebSocket requests to Python backend.
 // Express strips the mount path from req.url before the proxy sees it, so
 // each proxy must re-add its prefix or the backend receives the wrong path.

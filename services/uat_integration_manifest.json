@@ -1,0 +1,50 @@
+{
+  "manifest_version": "1.0.0",
+  "service": "daleobanks",
+  "classification": "separate_sibling_service",
+  "counterparty": "dababiyoda/WealthMachineIntelligence",
+  "protocol": {
+    "schema_version": "1.0",
+    "outbound_type": "OpportunityPacket",
+    "outbound_endpoint": "/api/opportunities/intake",
+    "inbound_type": "VentureAssessment",
+    "inbound_endpoint": "/api/wealthmachine/assessments/receive",
+    "requires_human_approval": true
+  },
+  "website_boundary": {
+    "allowed": [
+      "record_activation_intent",
+      "display_contract_status",
+      "display_missing_activation_gates"
+    ],
+    "prohibited": [
+      "store_service_secret",
+      "call_daleobanks_directly",
+      "claim_live_connection_from_intent",
+      "claim_execution_from_assessment"
+    ]
+  },
+  "runtime": {
+    "status": "not_configured",
+    "execution_authority": "none",
+    "live_mode_required": false,
+    "current_auth_compatibility": "static_bearer_compatibility_uat_production_requires_token",
+    "production_auth_target": "scoped_rotated_or_short_lived_workload_identity"
+  },
+  "live_player": {
+    "classification": "uat_agent_context_not_connector",
+    "included_in_protocol": false,
+    "authority": "none"
+  },
+  "required_activation_evidence": [
+    "approved_service_owners_and_endpoints",
+    "authenticated_mutations_and_private_reads",
+    "production_identity_and_origin_configuration",
+    "durable_outbox_inbox_and_idempotency",
+    "replay_retry_timeout_and_schema_drift_tests",
+    "bidirectional_reconciliation",
+    "independent_human_approval",
+    "incident_recovery_and_contract_rollback",
+    "independent_security_privacy_legal_review"
+  ]
+}
