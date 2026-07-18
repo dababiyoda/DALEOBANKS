@@ -365,12 +365,39 @@ class VentureAssessment:
 
 @dataclass
 class ValidationResult:
-    """What the world said when an approved validation action ran."""
+    """What the world said when an approved validation action ran.
+
+    The terminal object of the institutional loop. Negative, mixed, and
+    inconclusive results are first-class records — zero response is still
+    a completed observation, not an absence."""
 
     id: str = field(default_factory=_uuid)
+    schema_version: str = "1.1"
     opportunity_packet_id: str = ""
     venture_assessment_id: str = ""
+    experiment_ref: str = ""
+    capability_grant_id: str = ""
+    account_lane_id: str = ""
     validation_type: str = ""  # content_probe | landing_page | interviews | waitlist
+    hypothesis: str = ""
+    intervention: str = ""
+    observation_window_start: str = ""  # ISO timestamp
+    observation_window_end: str = ""  # ISO timestamp
+    success_threshold: str = ""
+    failure_threshold: str = ""
+    measured_outcomes: Dict[str, Any] = field(default_factory=dict)
+    raw_evidence_refs: List[str] = field(default_factory=list)
+    evidence_tier: str = "observation"  # payment|commitment|conversation|engagement|observation
+    evidence_quality: float = 0.0  # [0, 1]
+    confounders: List[str] = field(default_factory=list)
+    result_classification: str = "inconclusive"  # success|failure|mixed|inconclusive|negative
+    causal_note: str = ""
+    economic_result: str = ""
+    trust_result: str = ""
+    next_decision: str = ""
+    recorded_by: str = ""
+    trace_id: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
     signal_count: int = 0
     reply_quality: str = ""
     signup_count: int = 0

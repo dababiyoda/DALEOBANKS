@@ -34,6 +34,18 @@ ALLOWED_SIGNAL_TYPES = frozenset({
 
 ALLOWED_GO_NO_GO = frozenset({"go", "defer", "kill", "needs_more_evidence"})
 
+# ValidationResult contract: outcomes the world can hand back. Negative
+# (no response) is a legitimate, recorded outcome — never an absence.
+ALLOWED_RESULT_CLASSIFICATIONS = frozenset({
+    "success", "failure", "mixed", "inconclusive", "negative",
+})
+
+# Evidence tiers, strongest first. Payment outranks commitment outranks
+# conversation outranks engagement outranks passive observation.
+ALLOWED_EVIDENCE_TIERS = frozenset({
+    "payment", "commitment", "conversation", "engagement", "observation",
+})
+
 ALLOWED_IDENTITY_TYPES = frozenset({
     "main_identity",
     "brand_account",
@@ -115,6 +127,7 @@ def validate_identity_type(identity_type: str) -> str:
 
 __all__ = [
     "SCHEMA_VERSION", "ALLOWED_SIGNAL_TYPES", "ALLOWED_GO_NO_GO",
+    "ALLOWED_RESULT_CLASSIFICATIONS", "ALLOWED_EVIDENCE_TIERS",
     "ALLOWED_IDENTITY_TYPES", "FORBIDDEN_IDENTITY_TYPES", "LANE_POLICY",
     "packet_to_wire", "assessment_to_wire", "validate_assessment_wire",
     "validate_identity_type",
