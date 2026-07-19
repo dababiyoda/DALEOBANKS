@@ -74,7 +74,7 @@ def get_request_context(request: Request) -> RequestContext:
     client_ip = _client_ip(request)
 
     if config.ALLOWED_IPS and client_ip not in config.ALLOWED_IPS:
-        logger.warning("Blocked request from disallowed IP", extra_data={"client_ip": client_ip, "path": request.url.path})
+        logger.warning("Blocked request from disallowed IP", extra={"extra_data": {"client_ip": client_ip, "path": request.url.path}})
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed")
 
     auth_header = request.headers.get("authorization")
@@ -95,7 +95,7 @@ def get_request_context(request: Request) -> RequestContext:
             subject = str(claims.get("sub", subject))
             roles = _parse_roles(claims)
         except Exception as exc:
-            logger.warning("JWT validation failed", extra_data={"error": str(exc)})
+            logger.warning("JWT validation failed", extra={"extra_data": {"error": str(exc)}})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     context = RequestContext(request_id=req_id, subject=subject, roles=roles, client_ip=client_ip)

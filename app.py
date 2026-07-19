@@ -215,7 +215,10 @@ async def request_context_middleware(request: Request, call_next):
     except HTTPException as exc:
         response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "request_id": request_id})
     except Exception as exc:
-        logger.error("Unhandled application error", extra_data={"error": str(exc), "path": request.url.path})
+        logger.error(
+            "Unhandled application error",
+            extra={"extra_data": {"error": str(exc), "path": request.url.path}},
+        )
         response = JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error", "request_id": request_id})
 
     duration = elapsed(start)
@@ -1128,8 +1131,55 @@ async def handle_redirect(redirect_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Unauthenticated liveness probe. Deliberately minimal: a public
+    health endpoint must never become a confirmation oracle for arming
+    state, crisis posture, or successful ledger tampering."""
     return {"ok": True, "timestamp": datetime.now(UTC).isoformat()}
+
+
+@app.get("/api/health/safety")
+async def health_safety(_: RequestContext = Depends(require_role("admin"))):
+    """Authenticated safe-runtime status: is the agent armed, is crisis
+    pause active, is the decision ledger chain intact. Reads only. If a
+    state can't be read, report the uncertainty rather than a false
+    all-clear.
+
+    ``ok`` means only "this endpoint answered". ``safe_to_operate`` is the
+    derived control-plane verdict: true when every safety state is readable
+    and the ledger chain is intact; false when the ledger is broken; null
+    when any state is unknown. Crisis pause does NOT make the system
+    unsafe — a working pause is protection functioning — so it is reported
+    alongside, never folded into the verdict silently."""
+    config = get_config()
+    try:
+        crisis_paused = bool(runner.crisis_service.is_paused())
+        crisis_reason = runner.crisis_service.reason
+    except Exception as exc:
+        logger.warning(f"health_safety: crisis state unreadable: {exc}")
+        crisis_paused, crisis_reason = None, "unavailable"
+    try:
+        ledger_ok, broken_at = get_ledger().verify_chain()
+    except Exception as exc:
+        logger.warning(f"health_safety: ledger state unreadable: {exc}")
+        ledger_ok, broken_at = None, None
+
+    if crisis_paused is None or ledger_ok is None:
+        safe_to_operate = None  # unknown is reported as unknown
+    elif ledger_ok is False:
+        safe_to_operate = False  # untrustworthy control plane
+    else:
+        safe_to_operate = True
+
+    return {
+        "ok": True,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "safe_to_operate": safe_to_operate,
+        "live": bool(config.LIVE),
+        "crisis_paused": crisis_paused,
+        "crisis_reason": crisis_reason,
+        "ledger_ok": ledger_ok,
+        "ledger_broken_at": broken_at,
+    }
 
 # Reflection / learned-mind endpoints
 @app.get("/api/reflections")
