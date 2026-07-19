@@ -1,8 +1,14 @@
-"""Tests for the inherited publish gate in BaseSocialClient."""
+"""Tests for the inherited publish gate in BaseSocialClient.
+
+Authority posture (since the ConsequenceGate adoption): a live publish
+requires a valid capability grant for (platform, kind). Tests mint that
+grant in the fixture; one test pins the no-grant rejection path.
+"""
 
 import pytest
 
 from config import get_config, update_config
+from services import gate as gate_service
 from services.ledger import (
     DecisionLedger,
     KillSwitch,
@@ -30,7 +36,8 @@ class RecordingClient(BaseSocialClient):
 
 @pytest.fixture
 def gate(tmp_path):
-    """Isolated ledger/kill-switch/governor wired into the shared gate."""
+    """Isolated ledger/kill-switch/governor wired into the shared gate,
+    plus a configured ConsequenceGate with a testnet publish grant."""
     ledger = DecisionLedger(path=str(tmp_path / "ledger.jsonl"))
     governor = RateGovernor(max_actions=2, window_seconds=3600)
     set_shared_instances(
@@ -38,9 +45,14 @@ def gate(tmp_path):
         kill_switch=KillSwitch(ledger=ledger),
         governor=governor,
     )
+    gate_service.configure(approval_verifier=lambda request_id: True)
+    gate_service.mint_publish_grant(
+        platform="testnet", approval_request_id="a1", maximum_uses=100,
+    )
     previous_live = get_config().LIVE
     yield ledger
     update_config(LIVE=previous_live)
+    gate_service.reset_gate()
     reset_shared_instances()
 
 
@@ -70,6 +82,21 @@ async def test_armed_switch_delegates_to_impl(gate):
 
     results = gate.replay("publish_result")
     assert results[-1]["payload"]["dry_run"] is False
+
+
+async def test_armed_switch_without_grant_fails_to_dry_run(gate):
+    update_config(LIVE=True)
+    gate_service.reset_gate()  # unconfigured: deny-all, never unmediated
+    client = RecordingClient()
+
+    result = await client.publish(content="hello", kind="post")
+
+    assert result.dry_run is True
+    assert client.impl_calls == 0
+
+    events = [e["event"] for e in gate.replay()]
+    assert "consequence.requested" in events
+    assert "consequence.rejected" in events
 
 
 async def test_rate_governor_gates_excess_publishes(gate):
