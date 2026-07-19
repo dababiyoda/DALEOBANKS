@@ -23,18 +23,38 @@ import urllib.request
 from typing import Any, Dict, Optional
 
 from db.models import ApprovalRequest, MediaAssetDraft, OpportunityPacket, VentureAssessment
+from services.bridge_security import (
+    BridgeSecurityError,
+    NonceCache,
+    build_headers,
+    signing_key,
+    verify_headers,
+)
 from services.ledger import DecisionLedger, get_ledger
 from services.logging_utils import get_logger
-from services.venture_protocol import packet_to_wire, validate_assessment_wire
+from services.venture_protocol import SCHEMA_VERSION, packet_to_wire, validate_assessment_wire
 
 logger = get_logger(__name__)
 
 _LEGAL_RISK_FLAGS = {"legal_risk", "regulated_product", "licensing_required"}
 
 
+class CircuitOpenError(ConnectionError):
+    """Too many consecutive bridge failures — failing closed for a cooldown."""
+
+
 class WealthMachineClient:
+    # Circuit breaker: after this many consecutive transport failures the
+    # bridge opens and fails closed for a cooldown instead of hammering a
+    # degraded remote.
+    FAILURE_THRESHOLD = 3
+    COOLDOWN_SECONDS = 300
+
     def __init__(self, ledger: Optional[DecisionLedger] = None) -> None:
         self._ledger = ledger
+        self._consecutive_failures = 0
+        self._circuit_open_until = 0.0
+        self._response_nonces = NonceCache()
 
     @property
     def ledger(self) -> DecisionLedger:
@@ -68,22 +88,50 @@ class WealthMachineClient:
         return assessment
 
     def _evaluate_http(self, packet: OpportunityPacket) -> VentureAssessment:
+        import time as _time
+
+        if _time.time() < self._circuit_open_until:
+            raise CircuitOpenError(
+                "bridge circuit is open after repeated failures — failing closed"
+            )
+
+        body = json.dumps(packet_to_wire(packet)).encode()
         headers = {"Content-Type": "application/json"}
         token = os.getenv("WEALTHMACHINE_INTAKE_TOKEN", "")
         if token:
             # Shared-secret auth with the WealthMachine intake endpoint;
             # optional so the bridge still runs credential-free locally.
             headers["Authorization"] = f"Bearer {token}"
+        # Signed transport: identity, timestamp, nonce, idempotency key.
+        # The packet id doubles as the idempotency key — resending the same
+        # packet must not run the engine twice.
+        headers.update(build_headers(
+            body, identity="daleobanks", schema_version=SCHEMA_VERSION,
+            idempotency_key=packet.id, trace_id=packet.id,
+        ))
         request = urllib.request.Request(
             f"{self.url}/api/opportunities/intake",
-            data=json.dumps(packet_to_wire(packet)).encode(),
-            headers=headers,
-            method="POST",
+            data=body, headers=headers, method="POST",
         )
         timeout = float(os.getenv("WEALTHMACHINE_TIMEOUT", "20"))
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = json.load(response)
-        validate_assessment_wire(payload)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read()
+                response_headers = dict(response.headers.items())
+        except Exception:
+            self._record_failure()
+            raise
+        try:
+            if signing_key():
+                # Response authenticity: same key, same canonical form.
+                verify_headers(response_headers, raw,
+                               nonce_cache=self._response_nonces)
+            payload = json.loads(raw)
+            validate_assessment_wire(payload)
+        except (BridgeSecurityError, ValueError):
+            self._record_failure()
+            raise
+        self._consecutive_failures = 0
         return VentureAssessment(
             opportunity_packet_id=payload["opportunity_packet_id"],
             go_no_go=payload["go_no_go"],
@@ -101,6 +149,21 @@ class WealthMachineClient:
             reasons=list(payload.get("reasons") or []),
             cases=list(payload.get("cases") or []),
         )
+
+    def _record_failure(self) -> None:
+        import time as _time
+
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self.FAILURE_THRESHOLD:
+            self._circuit_open_until = _time.time() + self.COOLDOWN_SECONDS
+            logger.warning(
+                f"WealthMachine bridge circuit opened for {self.COOLDOWN_SECONDS}s "
+                f"after {self._consecutive_failures} consecutive failures"
+            )
+            self.ledger.record("bridge_circuit_opened", {
+                "failures": self._consecutive_failures,
+                "cooldown_seconds": self.COOLDOWN_SECONDS,
+            })
 
     def _evaluate_mock(self, packet: OpportunityPacket) -> VentureAssessment:
         """Deterministic local scoring with the same shape as the real engine."""

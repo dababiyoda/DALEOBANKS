@@ -55,10 +55,14 @@ def test_http_mode_passes_cases_through(tmp_path, monkeypatch):
 
     class _FakeResponse:
         def __init__(self, payload):
-            self._body = io.BytesIO(json.dumps(payload).encode())
+            self._raw = json.dumps(payload).encode()
+            self.headers = {}
+
+        def read(self):
+            return self._raw
 
         def __enter__(self):
-            return self._body
+            return self
 
         def __exit__(self, *exc):
             return False

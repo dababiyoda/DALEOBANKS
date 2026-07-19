@@ -15,10 +15,14 @@ from services.wealthmachine_client import WealthMachineClient
 
 class _FakeResponse:
     def __init__(self, payload):
-        self._body = io.BytesIO(json.dumps(payload).encode())
+        self._raw = json.dumps(payload).encode()
+        self.headers = {}  # unsigned local mode: no transport headers
+
+    def read(self):
+        return self._raw
 
     def __enter__(self):
-        return self._body
+        return self
 
     def __exit__(self, *exc):
         return False
@@ -77,7 +81,8 @@ def test_http_mode_posts_to_intake_with_token(tmp_path, monkeypatch):
     assert seen["url"] == "http://wealthmachine.local/api/opportunities/intake"
     assert seen["auth"] == "Bearer sekrit"
     assert seen["body"]["id"] == packet.id  # packet wire payload round-trips
-    assert seen["body"]["schema_version"] == "1.0"
+    from services.venture_protocol import SCHEMA_VERSION
+    assert seen["body"]["schema_version"] == SCHEMA_VERSION
     assert assessment.go_no_go == "go"
     assert assessment.opportunity_packet_id == packet.id
 
