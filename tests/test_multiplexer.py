@@ -8,6 +8,7 @@ sys.modules.setdefault("tweepy", types.SimpleNamespace(TooManyRequests=Exception
 import pytest
 
 from config import get_config
+from services import gate as gate_service
 from services.multiplexer import SocialMultiplexer
 from services.linkedin_client import LinkedInClient
 from services.mastodon_client import MastodonClient
@@ -71,6 +72,10 @@ async def test_multiplexer_uploads_media_before_post(monkeypatch):
     previous_live = config.LIVE
     config.LIVE = True
 
+    # ConsequenceGate posture: the live path requires a publish grant.
+    gate_service.configure(approval_verifier=lambda request_id: True)
+    gate_service.mint_publish_grant(platform="x", approval_request_id="a1")
+
     x_client = MediaStubXClient()
 
     multiplexer = SocialMultiplexer(
@@ -90,6 +95,7 @@ async def test_multiplexer_uploads_media_before_post(monkeypatch):
     )
 
     config.LIVE = previous_live
+    gate_service.reset_gate()
 
     assert x_client.uploads == [("sample.png", "image")]
     assert x_client.tweets[0]["media_ids"] == ["media123"]

@@ -1,10 +1,14 @@
 """Common utilities for multi-platform social clients.
 
 ``BaseSocialClient.publish`` is a template method: it runs the safety gate
-(ledger record, kill switch, rate governor) and then delegates to the
-subclass's ``_publish_impl``. Any new platform adapter is therefore logged,
-kill-switched, and rate-governed the moment it inherits the base class —
-safety is inherited, never re-implemented.
+(ledger record, kill switch, rate governor) and then delegates the live
+path to the ConsequenceGate (``services.gate.publish_post``), which
+executes the subclass's ``_publish_impl`` exactly once per authorized
+action fingerprint. Any new platform adapter is therefore logged,
+kill-switched, rate-governed, authority-checked, witnessed, and receipted
+the moment it inherits the base class — safety is inherited, never
+re-implemented. A live publish without a valid capability grant fails
+toward silence (dry run); there is no unmediated live path.
 """
 
 from __future__ import annotations
@@ -60,7 +64,7 @@ class BaseSocialClient:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> SocialPostResult:
         """Gated publish: ledger every attempt, honor the kill switch and
-        rate governor, then delegate to the platform's ``_publish_impl``."""
+        rate governor, then cross the ConsequenceGate for the live path."""
 
         ledger = get_ledger()
         ledger.record(
@@ -86,12 +90,22 @@ class BaseSocialClient:
             logger.warning("Rate governor blocked live %s on %s", kind, self.platform)
             result = await self._dry_run(kind=kind, metadata=metadata)
         else:
-            result = await self._publish_impl(
-                content=content,
+            from services.gate import publish_post
+
+            result = await publish_post(
+                platform=self.platform,
                 kind=kind,
-                in_reply_to=in_reply_to,
-                quote_to=quote_to,
-                intensity=intensity,
+                content=content,
+                impl=self._publish_impl,
+                impl_kwargs={
+                    "content": content,
+                    "kind": kind,
+                    "in_reply_to": in_reply_to,
+                    "quote_to": quote_to,
+                    "intensity": intensity,
+                    "metadata": metadata,
+                },
+                dry_run=self._dry_run,
                 metadata=metadata,
             )
 
