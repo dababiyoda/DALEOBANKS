@@ -401,6 +401,7 @@ class VentureAssessment:
     recommended_next_action: str = ""
     requires_human_approval: bool = True
     reasons: List[str] = field(default_factory=list)
+    cases: List[Dict[str, Any]] = field(default_factory=list)  # adversarial cases
     created_at: datetime = field(default_factory=_utcnow)
 
 

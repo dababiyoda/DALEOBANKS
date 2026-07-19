@@ -99,10 +99,13 @@ class WealthMachineClient:
             recommended_next_action=str(payload.get("recommended_next_action") or ""),
             requires_human_approval=True,  # non-negotiable on this side
             reasons=list(payload.get("reasons") or []),
+            cases=list(payload.get("cases") or []),
         )
 
     def _evaluate_mock(self, packet: OpportunityPacket) -> VentureAssessment:
         """Deterministic local scoring with the same shape as the real engine."""
+        from services.adversarial_cases import build_cases, severe_unresolved
+
         score = 0.2
         score += 0.1 * min(len(packet.evidence), 3)
         score += {"high": 0.2, "medium": 0.1}.get(packet.urgency, 0.0)
@@ -114,6 +117,10 @@ class WealthMachineClient:
 
         legal_flags = _LEGAL_RISK_FLAGS & set(packet.risk_flags)
         finance = "finance_education_only" in packet.risk_flags
+
+        # Same adversarial committee as the real engine (mirrored module).
+        cases = build_cases(packet_to_wire(packet), score, round(min(0.9, score + 0.1), 3))
+        severe = severe_unresolved(cases)
 
         reasons = []
         if legal_flags:
@@ -129,6 +136,13 @@ class WealthMachineClient:
             go_no_go = "go"
             risk_level = "medium" if finance else "low"
             reasons.append(f"score {score} with offer and monetization paths")
+        if severe and go_no_go == "go":
+            # A high score may not erase a severe unresolved risk.
+            go_no_go = "needs_more_evidence"
+            reasons.append(f"severe unresolved adversarial case(s) cap the verdict: {severe}")
+        for case in cases:
+            if case["stance"] == "against" and case["severity"] != "low":
+                reasons.append(f"[{case['case']}] {case['argument']}")
         if finance:
             reasons.append("finance content must remain educational; no personalized advice")
 
@@ -153,6 +167,7 @@ class WealthMachineClient:
             recommended_next_action=validation_plan[0] if validation_plan else "gather evidence",
             requires_human_approval=True,
             reasons=reasons,
+            cases=cases,
         )
 
     # ------------------------------------------------------------------ #
