@@ -154,6 +154,32 @@ class LaneRequest(BaseModel):
     allowed_topics: List[str] = []
     forbidden_topics: List[str] = []
 
+class ValidationResultRequest(BaseModel):
+    opportunity_packet_id: str
+    venture_assessment_id: str = ""
+    experiment_ref: str = ""
+    capability_grant_id: str = ""
+    account_lane_id: str = ""
+    validation_type: str = "content_probe"
+    hypothesis: str = ""
+    intervention: str = ""
+    observation_window_start: str = ""
+    observation_window_end: str = ""
+    success_threshold: str = ""
+    failure_threshold: str = ""
+    measured_outcomes: Dict[str, Any] = {}
+    raw_evidence_refs: List[str] = []
+    evidence_tier: str = "observation"
+    evidence_quality: float = 0.0
+    confounders: List[str] = []
+    result_classification: str = "inconclusive"
+    causal_note: str = ""
+    economic_result: str = ""
+    trust_result: str = ""
+    next_decision: str = ""
+    trace_id: str = ""
+    metadata: Dict[str, Any] = {}
+
 class OpportunityCreateRequest(BaseModel):
     signal_type: str = "operator_thought"
     source: str = "operator"
@@ -1016,6 +1042,163 @@ async def list_assessments(_: RequestContext = Depends(get_request_context)):
         from services.venture_protocol import assessment_to_wire
         return {"count": len(assessments),
                 "assessments": [assessment_to_wire(a) for a in assessments]}
+
+
+@app.post("/api/validation-results")
+async def record_validation_result(
+    request: ValidationResultRequest,
+    context: RequestContext = Depends(require_role("admin")),
+):
+    """Record what the world said. The terminal object of the loop: only
+    externally observed outcomes become institutional truth, and they are
+    ledgered before anything treats them as such. Negative results are
+    first-class — zero response is a completed observation."""
+    from services.prompt_firewall import get_firewall
+    from services.venture_protocol import (
+        ALLOWED_EVIDENCE_TIERS, ALLOWED_RESULT_CLASSIFICATIONS,
+    )
+
+    if request.result_classification not in ALLOWED_RESULT_CLASSIFICATIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"result_classification must be one of {sorted(ALLOWED_RESULT_CLASSIFICATIONS)}",
+        )
+    if request.evidence_tier not in ALLOWED_EVIDENCE_TIERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"evidence_tier must be one of {sorted(ALLOWED_EVIDENCE_TIERS)}",
+        )
+    if not (0.0 <= request.evidence_quality <= 1.0):
+        raise HTTPException(status_code=422, detail="evidence_quality must be within [0, 1]")
+
+    firewall = get_firewall()
+    with get_db_session() as session:
+        packet = session.query(OpportunityPacket).filter(
+            lambda p: p.id == request.opportunity_packet_id
+        ).first()
+        if packet is None:
+            raise HTTPException(status_code=422, detail="Unknown opportunity_packet_id")
+        if request.venture_assessment_id:
+            assessment = session.query(VentureAssessment).filter(
+                lambda a: a.id == request.venture_assessment_id
+            ).first()
+            if assessment is None:
+                raise HTTPException(status_code=422, detail="Unknown venture_assessment_id")
+
+        result = ValidationResult(
+            opportunity_packet_id=request.opportunity_packet_id,
+            venture_assessment_id=request.venture_assessment_id,
+            experiment_ref=request.experiment_ref,
+            capability_grant_id=request.capability_grant_id,
+            account_lane_id=request.account_lane_id,
+            validation_type=request.validation_type,
+            hypothesis=firewall.sanitize(request.hypothesis).strip(),
+            intervention=firewall.sanitize(request.intervention).strip(),
+            observation_window_start=request.observation_window_start,
+            observation_window_end=request.observation_window_end,
+            success_threshold=request.success_threshold,
+            failure_threshold=request.failure_threshold,
+            measured_outcomes=request.measured_outcomes,
+            raw_evidence_refs=[firewall.sanitize(r).strip() for r in request.raw_evidence_refs],
+            evidence_tier=request.evidence_tier,
+            evidence_quality=request.evidence_quality,
+            confounders=[firewall.sanitize(c).strip() for c in request.confounders],
+            result_classification=request.result_classification,
+            causal_note=firewall.sanitize(request.causal_note).strip(),
+            economic_result=request.economic_result,
+            trust_result=request.trust_result,
+            next_decision=firewall.sanitize(request.next_decision).strip(),
+            recorded_by=getattr(context, "subject", "") or "admin",
+            trace_id=request.trace_id,
+            metadata=request.metadata,
+        )
+        session.add(result)
+        session.commit()
+    # Ledgered before it is treated as institutional truth.
+    get_ledger().record("validation_result_recorded", {
+        "id": result.id,
+        "opportunity_packet_id": result.opportunity_packet_id,
+        "result_classification": result.result_classification,
+        "evidence_tier": result.evidence_tier,
+        "evidence_quality": result.evidence_quality,
+    })
+    return {"success": True, "id": result.id,
+            "result_classification": result.result_classification}
+
+
+def _validation_result_to_dict(r: ValidationResult) -> Dict[str, Any]:
+    return {
+        "id": r.id, "schema_version": r.schema_version,
+        "opportunity_packet_id": r.opportunity_packet_id,
+        "venture_assessment_id": r.venture_assessment_id,
+        "experiment_ref": r.experiment_ref,
+        "capability_grant_id": r.capability_grant_id,
+        "account_lane_id": r.account_lane_id,
+        "validation_type": r.validation_type,
+        "hypothesis": r.hypothesis, "intervention": r.intervention,
+        "observation_window_start": r.observation_window_start,
+        "observation_window_end": r.observation_window_end,
+        "success_threshold": r.success_threshold,
+        "failure_threshold": r.failure_threshold,
+        "measured_outcomes": r.measured_outcomes,
+        "raw_evidence_refs": r.raw_evidence_refs,
+        "evidence_tier": r.evidence_tier,
+        "evidence_quality": r.evidence_quality,
+        "confounders": r.confounders,
+        "result_classification": r.result_classification,
+        "causal_note": r.causal_note,
+        "economic_result": r.economic_result,
+        "trust_result": r.trust_result,
+        "next_decision": r.next_decision,
+        "recorded_by": r.recorded_by, "trace_id": r.trace_id,
+        "created_at": r.created_at.isoformat(),
+    }
+
+
+@app.get("/api/validation-results")
+async def list_validation_results(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        results = (
+            session.query(ValidationResult)
+            .order_by(lambda r: r.created_at, descending=True)
+            .all()
+        )
+        return {"count": len(results),
+                "results": [_validation_result_to_dict(r) for r in results]}
+
+
+@app.get("/api/validation-results/{result_id}")
+async def get_validation_result(result_id: str, _: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        result = session.query(ValidationResult).filter(lambda r: r.id == result_id).first()
+        if result is None:
+            raise HTTPException(status_code=404, detail="ValidationResult not found")
+        return _validation_result_to_dict(result)
+
+
+@app.get("/api/decision-episodes")
+async def list_decision_episodes(_: RequestContext = Depends(get_request_context)):
+    """The decision corpus, episode by episode. Killed, deferred, and
+    negative-outcome episodes are included; missing stages are explicit."""
+    from services.decision_episode import list_episodes
+    with get_db_session() as session:
+        episodes = list_episodes(session)
+        closed = sum(1 for e in episodes if e["loop_closed"])
+        return {
+            "count": len(episodes), "closed": closed,
+            "loop_closure_rate": (closed / len(episodes)) if episodes else 0.0,
+            "episodes": episodes,
+        }
+
+
+@app.get("/api/decision-episodes/{episode_id}")
+async def get_decision_episode(episode_id: str, _: RequestContext = Depends(get_request_context)):
+    from services.decision_episode import build_episode
+    with get_db_session() as session:
+        episode = build_episode(session, episode_id)
+        if episode is None:
+            raise HTTPException(status_code=404, detail="Episode not found")
+        return episode
 
 
 @app.get("/api/media/drafts")
