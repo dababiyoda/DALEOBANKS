@@ -1,29 +1,35 @@
-"""Constitution guard: fixed values the agent cannot rewrite.
+"""Compatibility shim: constitution guard.
 
-The constitution file is loaded read-only. Its hash is recorded in the
-decision ledger at startup and re-verified while the agent runs; a runtime
-mismatch means the file changed underneath a live process (tampering or an
-unreviewed edit), and the guard fails toward silence by disarming live
-posting. Legitimate amendments arrive as human commits followed by a
-restart, which records the new hash as a ledgered constitution event.
+The implementation now lives in the UNIIMENTE kernel SDK
+(``uniimente_kernel.constitution_check``), extracted from this module in
+kernel Phase 2. The kernel guard watches several files and hashes them
+together; for a single watched file it records the file's plain sha256 —
+exactly what this organ's guard has always recorded for its one
+``constitution.md``. Load, verify, tamper-disarm, and ledger event shapes
+are unchanged. This class keeps the organ's single-file API
+(``path``, ``current_hash()``, ``text()``, ``startup_hash``) over the
+kernel machinery; when DALEOBANKS migrates to the kernel's UCL
+constitution directory, the overrides disappear.
 """
 
 from __future__ import annotations
 
-import hashlib
-import os
 from typing import Optional
 
 from services.ledger import DecisionLedger, KillSwitch
 from services.logging_utils import get_logger
+from uniimente_kernel.constitution_check import (
+    ConstitutionGuard as _KernelGuard,
+    _hash_file,
+)
 
 logger = get_logger(__name__)
 
 DEFAULT_CONSTITUTION_PATH = "constitution.md"
 
 
-class ConstitutionGuard:
-    """Hashes the constitution at startup and detects runtime drift."""
+class ConstitutionGuard(_KernelGuard):
+    """Single-file constitution guard on kernel multi-file machinery."""
 
     def __init__(
         self,
@@ -32,52 +38,22 @@ class ConstitutionGuard:
         ledger: Optional[DecisionLedger] = None,
         kill_switch: Optional[KillSwitch] = None,
     ) -> None:
+        super().__init__([path], ledger=ledger, kill_switch=kill_switch)
         self.path = path
-        self.ledger = ledger or DecisionLedger()
-        self.kill_switch = kill_switch or KillSwitch(ledger=self.ledger)
-        self.startup_hash: Optional[str] = None
+
+    @property
+    def startup_hash(self) -> Optional[str]:
+        return self.startup_hashes.get(self.path)
+
+    @startup_hash.setter
+    def startup_hash(self, value: Optional[str]) -> None:
+        self.startup_hashes = {} if value is None else {self.path: value}
 
     def current_hash(self) -> Optional[str]:
-        if not os.path.exists(self.path):
-            return None
-        with open(self.path, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+        return _hash_file(self.path)
 
     def text(self) -> str:
-        if not os.path.exists(self.path):
-            return ""
-        with open(self.path, "r", encoding="utf-8") as f:
-            return f.read()
-
-    def load_and_record(self) -> Optional[str]:
-        """Record the constitution hash at startup (the reference point)."""
-        self.startup_hash = self.current_hash()
-        if self.startup_hash is None:
-            logger.warning("Constitution file missing at %s", self.path)
-            self.ledger.record("constitution_missing", {"path": self.path})
-            return None
-        self.ledger.record("constitution_hash", {
-            "path": self.path,
-            "hash": self.startup_hash,
-        })
-        return self.startup_hash
-
-    def verify(self) -> bool:
-        """Re-verify at runtime; on drift, disarm and ledger the event."""
-        if self.startup_hash is None:
-            # Never recorded (missing file at startup): nothing to verify.
-            return True
-        current = self.current_hash()
-        if current == self.startup_hash:
-            return True
-        self.ledger.record("constitution_tampered", {
-            "path": self.path,
-            "expected": self.startup_hash,
-            "found": current,
-        })
-        self.kill_switch.set_armed(False, reason="constitution_tampered")
-        logger.critical("Constitution changed at runtime -> live posting disarmed")
-        return False
+        return super().text(self.path)
 
 
 __all__ = ["ConstitutionGuard", "DEFAULT_CONSTITUTION_PATH"]
