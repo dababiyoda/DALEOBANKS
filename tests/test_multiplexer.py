@@ -9,6 +9,13 @@ import pytest
 
 from config import get_config
 from services import gate as gate_service
+from services.ledger import (
+    DecisionLedger,
+    KillSwitch,
+    RateGovernor,
+    set_shared_instances,
+    reset_shared_instances,
+)
 from services.multiplexer import SocialMultiplexer
 from services.linkedin_client import LinkedInClient
 from services.mastodon_client import MastodonClient
@@ -67,10 +74,20 @@ class MediaStubXClient:
 
 
 @pytest.mark.asyncio
-async def test_multiplexer_uploads_media_before_post(monkeypatch):
+async def test_multiplexer_uploads_media_before_post(monkeypatch, tmp_path):
     config = get_config()
     previous_live = config.LIVE
     config.LIVE = True
+
+    # Isolate the shared safety state: the witness dedupes across restarts,
+    # so a test that commits to the on-disk default ledger would poison
+    # later runs of this same test.
+    ledger = DecisionLedger(path=str(tmp_path / "ledger.jsonl"))
+    set_shared_instances(
+        ledger=ledger,
+        kill_switch=KillSwitch(ledger=ledger),
+        governor=RateGovernor(max_actions=100, window_seconds=3600),
+    )
 
     # ConsequenceGate posture: the live path requires a publish grant.
     gate_service.configure(approval_verifier=lambda request_id: True)
@@ -96,6 +113,7 @@ async def test_multiplexer_uploads_media_before_post(monkeypatch):
 
     config.LIVE = previous_live
     gate_service.reset_gate()
+    reset_shared_instances()
 
     assert x_client.uploads == [("sample.png", "image")]
     assert x_client.tweets[0]["media_ids"] == ["media123"]
