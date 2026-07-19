@@ -16,7 +16,7 @@ websockets==15.0.1
 pytest==8.3.3
 PyJWT==2.10.1
 prometheus-client==0.21.1
-# UNIIMENTE kernel SDK: governance primitives extracted from this repo
-# (kernel Phase 2). Pinned to the Phase 2 stack tip until kernel PRs
-# #11-#16 merge; switch the ref to @main once the stack lands.
-uniimente-kernel @ git+https://github.com/dababiyoda/uniimente-kernel.git@phase2/sdk-package-absorption#subdirectory=sdk-python
+# UNIIMENTE kernel SDK: governance primitives + signal wire contracts,
+# extracted/unified from this repo (kernel Phases 2-3). Pinned to the
+# Phase 3 stack tip until kernel PRs #11-#17 merge; switch to @main then.
+uniimente-kernel @ git+https://github.com/dababiyoda/uniimente-kernel.git@phase3/signal-contracts#subdirectory=sdk-python
