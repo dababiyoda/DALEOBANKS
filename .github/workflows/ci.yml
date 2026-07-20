@@ -29,7 +29,6 @@ jobs:
         continue-on-error: true
         env:
           LIVE: "false"
-          WEALTHMACHINE_MODE: "mock"
         run: pytest -q > python-test.log 2>&1
 
       - name: Upload Python test log
