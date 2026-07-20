@@ -1,8 +1,9 @@
-"""Signed client for WealthMachine's proposal-only Foundry envelope endpoint.
+"""Signed clients for WealthMachine's Foundry endpoints.
 
-This client carries operator-supplied commercial foundation to the exact
-OpportunityPacket already assessed by WealthMachine. It receives underwriting
-data only. It cannot launch, spend, publish, contact, approve, or mint grants.
+The client carries operator-supplied commercial foundation to the exact
+OpportunityPacket already assessed by WealthMachine. It can request an
+underwriting envelope or submit an approval-bound envelope to the Kernel
+through WealthMachine. Neither operation grants execution authority.
 """
 from __future__ import annotations
 
@@ -84,6 +85,35 @@ def validate_foundry_envelope(payload: Dict[str, Any], packet_id: str) -> Dict[s
     return payload
 
 
+def validate_foundry_submission_receipt(
+    payload: Dict[str, Any],
+    approval_hash: str,
+) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise FoundryClientError("Foundry submission receipt must be an object")
+    if payload.get("requires_human_approval") is not True:
+        raise FoundryClientError("submission receipt must retain human approval")
+    if payload.get("execution_authority") != "none":
+        raise FoundryClientError("submission receipt must carry zero execution authority")
+    if payload.get("human_approval_record_hash") != approval_hash:
+        raise FoundryClientError("submission receipt approval hash mismatch")
+    kernel = payload.get("kernel_receipt")
+    if not isinstance(kernel, dict):
+        raise FoundryClientError("submission receipt is missing kernel_receipt")
+    if kernel.get("status") != "accepted_for_foundry_analysis":
+        raise FoundryClientError("Kernel did not accept the opportunity for analysis")
+    if kernel.get("requires_human_approval") is not True:
+        raise FoundryClientError("Kernel receipt must retain human approval")
+    if kernel.get("execution_authority") != "none":
+        raise FoundryClientError("Kernel receipt must carry zero execution authority")
+    if not str(kernel.get("opportunity_id") or "").strip():
+        raise FoundryClientError("Kernel receipt is missing opportunity_id")
+    _canonical_sha256(kernel.get("opportunity_digest"), "opportunity_digest")
+    if not isinstance(kernel.get("duplicate"), bool):
+        raise FoundryClientError("Kernel duplicate flag must be boolean")
+    return payload
+
+
 class FoundryEnvelopeClient:
     FAILURE_THRESHOLD = 3
     COOLDOWN_SECONDS = 300
@@ -103,16 +133,75 @@ class FoundryEnvelopeClient:
         return os.getenv("WEALTHMACHINE_URL", "").rstrip("/")
 
     def request(self, packet_id: str, foundation: Mapping[str, Any]) -> Dict[str, Any]:
+        if not isinstance(foundation, Mapping):
+            raise FoundryClientError("foundation must be an object")
+        payload = self._post(
+            packet_id,
+            endpoint="foundry-envelope",
+            body_payload=dict(foundation),
+            idempotency_prefix="foundry-envelope",
+        )
+        validate_foundry_envelope(payload, packet_id)
+        self.ledger.record("foundry_underwriting_envelope", {
+            "packet_id": packet_id,
+            "ready_for_foundry": payload["ready_for_foundry"],
+            "missing_fields": payload.get("missing_fields") or [],
+            "blocking_reasons": payload.get("blocking_reasons") or [],
+            "packet_digest": payload["packet_digest"],
+            "assessment_digest": payload["assessment_digest"],
+            "execution_authority": "none",
+        })
+        return payload
+
+    def submit(
+        self,
+        packet_id: str,
+        foundation: Mapping[str, Any],
+        human_approval_record_hash: str,
+    ) -> Dict[str, Any]:
+        if not isinstance(foundation, Mapping):
+            raise FoundryClientError("foundation must be an object")
+        approval_hash = _canonical_sha256(
+            human_approval_record_hash,
+            "human_approval_record_hash",
+        )
+        payload = self._post(
+            packet_id,
+            endpoint="submit-foundry",
+            body_payload={
+                "foundation": dict(foundation),
+                "human_approval_record_hash": approval_hash,
+            },
+            idempotency_prefix=f"foundry-submit:{approval_hash[-16:]}",
+        )
+        validate_foundry_submission_receipt(payload, approval_hash)
+        kernel = payload["kernel_receipt"]
+        self.ledger.record("foundry_kernel_submission", {
+            "packet_id": packet_id,
+            "human_approval_record_hash": approval_hash,
+            "kernel_opportunity_id": kernel["opportunity_id"],
+            "kernel_opportunity_digest": kernel["opportunity_digest"],
+            "duplicate": kernel["duplicate"],
+            "execution_authority": "none",
+        })
+        return payload
+
+    def _post(
+        self,
+        packet_id: str,
+        *,
+        endpoint: str,
+        body_payload: Mapping[str, Any],
+        idempotency_prefix: str,
+    ) -> Dict[str, Any]:
         if not packet_id:
             raise FoundryClientError("packet_id is required")
         if not self.url:
-            raise FoundryClientError("WEALTHMACHINE_URL is required for Foundry underwriting")
+            raise FoundryClientError("WEALTHMACHINE_URL is required for Foundry operations")
         if time.time() < self._circuit_open_until:
             raise FoundryCircuitOpenError("Foundry bridge circuit is open")
-        if not isinstance(foundation, Mapping):
-            raise FoundryClientError("foundation must be an object")
 
-        body = json.dumps(dict(foundation), sort_keys=True, default=str).encode()
+        body = json.dumps(dict(body_payload), sort_keys=True, separators=(",", ":"), default=str).encode()
         digest = sha256(body).hexdigest()
         headers = {"Content-Type": "application/json"}
         token = os.getenv("WEALTHMACHINE_INTAKE_TOKEN", "")
@@ -122,11 +211,11 @@ class FoundryEnvelopeClient:
             body,
             identity="daleobanks",
             schema_version=SCHEMA_VERSION,
-            idempotency_key=f"foundry:{packet_id}:{digest[:16]}",
+            idempotency_key=f"{idempotency_prefix}:{packet_id}:{digest[:16]}",
             trace_id=packet_id,
         ))
         request = urllib.request.Request(
-            f"{self.url}/api/ventures/{quote(packet_id, safe='')}/foundry-envelope",
+            f"{self.url}/api/ventures/{quote(packet_id, safe='')}/{endpoint}",
             data=body,
             headers=headers,
             method="POST",
@@ -137,27 +226,21 @@ class FoundryEnvelopeClient:
                 raw = response.read()
                 response_headers = dict(response.headers.items())
             if signing_key():
-                verify_headers(
+                transport = verify_headers(
                     response_headers,
                     raw,
                     nonce_cache=self._response_nonces,
                 )
+                if transport.get("identity") != "wealthmachine":
+                    raise BridgeSecurityError("unexpected Foundry response identity")
             payload = json.loads(raw)
-            validate_foundry_envelope(payload, packet_id)
+            if not isinstance(payload, dict):
+                raise FoundryClientError("Foundry response must be an object")
         except (BridgeSecurityError, ValueError, json.JSONDecodeError, OSError):
             self._record_failure()
             raise
 
         self._consecutive_failures = 0
-        self.ledger.record("foundry_underwriting_envelope", {
-            "packet_id": packet_id,
-            "ready_for_foundry": payload["ready_for_foundry"],
-            "missing_fields": payload.get("missing_fields") or [],
-            "blocking_reasons": payload.get("blocking_reasons") or [],
-            "packet_digest": payload["packet_digest"],
-            "assessment_digest": payload["assessment_digest"],
-            "execution_authority": "none",
-        })
         return payload
 
     def _record_failure(self) -> None:
@@ -176,4 +259,5 @@ __all__ = [
     "FoundryClientError",
     "FoundryEnvelopeClient",
     "validate_foundry_envelope",
+    "validate_foundry_submission_receipt",
 ]
