@@ -25,10 +25,26 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
       - name: Run Python tests
+        id: python_tests
+        continue-on-error: true
         env:
           LIVE: "false"
           WEALTHMACHINE_MODE: "mock"
-        run: pytest -q
+        run: pytest -q > python-test.log 2>&1
+
+      - name: Upload Python test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daleobanks-python-test-log
+          path: python-test.log
+          if-no-files-found: error
+
+      - name: Report Python test failure
+        if: steps.python_tests.outcome == 'failure'
+        run: |
+          tail -n 250 python-test.log
+          exit 1
 
   web:
     runs-on: ubuntu-latest
