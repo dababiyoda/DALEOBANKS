@@ -81,6 +81,7 @@ def client(tmp_path):
 def test_client_posts_foundation_to_packet_bound_endpoint(tmp_path, monkeypatch):
     monkeypatch.setenv("WEALTHMACHINE_URL", "http://wealthmachine.local")
     monkeypatch.setenv("WEALTHMACHINE_INTAKE_TOKEN", "secret")
+    monkeypatch.delenv("WEALTHMACHINE_SIGNING_KEY", raising=False)
     seen = {}
 
     def fake_urlopen(request, timeout=None):
@@ -127,13 +128,15 @@ def test_missing_url_fails_closed(tmp_path, monkeypatch):
 
 def test_success_is_recorded_without_execution_authority(tmp_path, monkeypatch):
     monkeypatch.setenv("WEALTHMACHINE_URL", "http://wealthmachine.local")
+    monkeypatch.delenv("WEALTHMACHINE_SIGNING_KEY", raising=False)
     monkeypatch.setattr(
         "urllib.request.urlopen",
         lambda request, timeout=None: FakeResponse(envelope()),
     )
     instance = client(tmp_path)
     instance.request("packet-1", foundation())
-    records = instance.ledger.records()
-    event = next(record for record in records if record["event"] == "foundry_underwriting_envelope")
-    assert event["data"]["execution_authority"] == "none"
-    assert event["data"]["ready_for_foundry"] is True
+    entries = instance.ledger.entries()
+    event = next(entry for entry in entries if entry["event"] == "foundry_underwriting_envelope")
+    assert event["payload"]["execution_authority"] == "none"
+    assert event["payload"]["ready_for_foundry"] is True
+    assert instance.ledger.verify_chain()[0] is True
