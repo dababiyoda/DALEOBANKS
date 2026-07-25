@@ -47,6 +47,7 @@ from services.instinct import (
 )
 from services.operator_line import get_operator_line
 from services import context_packet
+from services.digest import DigestService
 
 logger = get_logger(__name__)
 
@@ -85,6 +86,7 @@ reception_predictor = ReceptionPredictor()
 instinct_engine = InstinctEngine(persona_store)
 identity_gate = IdentityGate(persona_store)
 operator_line = get_operator_line()
+digest_service = DigestService(ledger=get_ledger())
 
 # Track pagination cursors for perception ingest to avoid refetching.
 _perception_state: Dict[str, Any] = {}
@@ -1285,10 +1287,22 @@ async def weekly_planning_job():
             plan = await planner_service.create_weekly_plan(session)
             await _log_action("weekly_planning", plan)
             logger.info("Weekly planning completed")
-            
+
+            # State-of-the-mind digest: is this mind actually improving?
+            digest = digest_service.build(session, reception_predictor)
+            await _log_action("weekly_digest", {
+                "calibration_pairs": digest["calibration"].get("pairs", 0),
+                "pending": digest["pending_human_decisions"],
+            })
+
+            # Propose (never apply) new bandit arms; approvals widen the
+            # action space, and only at the next cycle.
+            digest_service.propose_experiments(session, optimizer.experiments)
+            digest_service.apply_approved_experiments(session, optimizer.experiments)
+
             # Update self-model
             await self_model_service.update_self_model()
-            
+
     except Exception as e:
         logger.error(f"Weekly planning job failed: {e}")
 

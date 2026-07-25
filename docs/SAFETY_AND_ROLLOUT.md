@@ -33,7 +33,11 @@ Events currently chained: `startup`, `publish_attempt` / `publish_gated` /
 consolidation), `reception_prediction` / `prediction_accuracy` (self-calibrating simulator),
 `admin_token_issued` (dashboard admin sessions),
 `operator_prompted` / `operator_command` / `operator_sms_rejected` (operator
-approval line), `instinct_verdict` / `identity_gate` (the reflex layer), and
+approval line), `instinct_verdict` / `identity_gate` (the reflex layer),
+`weekly_digest`, `experiment_proposal` / `experiment_decision` /
+`experiment_applied` (gated bandit widening), `idea_intake` / `idea_refined`
+/ `opportunity_decision` / `venture_assessment` / `media_draft_decision` /
+`lane_created` (idea refinery), and
 `constitution_hash` / `constitution_tampered` / `constitution_missing`.
 
 The app verifies the chain at startup (`app.py`); a broken chain disarms
@@ -70,6 +74,12 @@ The mind widens itself only through gates a human holds:
 - **Goals**: the planner files OKR adjustments as ledgered `GoalProposal`s.
   The active OKR is the latest human-approved proposal (else the default),
   decided via `POST /api/goals/proposals/{id}/decision`.
+- **Experiments**: topics that repeatedly earn strong J-scores but sit
+  outside the bandit's arm space become `ExperimentProposal`s during the
+  weekly cycle. The arm space is untouched until approval via
+  `POST /api/experiments/proposals/{id}/decision`; approved values fold in at
+  the next cycle. The agent may notice what works — only a human lets it
+  chase it.
 
 ### Operator approval line (`services/operator_line.py`)
 When the agent needs judgment rather than rules, it files an
