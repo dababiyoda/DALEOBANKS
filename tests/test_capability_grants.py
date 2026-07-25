@@ -107,8 +107,13 @@ def test_expired_revoked_and_mismatched_grants_fail_closed(tmp_path):
             with pytest.raises(CapabilityError):  # wrong resource
                 service.validate_and_consume(session, wrong.id, "publish_post", "draft-999")
 
+            spend_approval = line.request_approval(
+                session, kind="spend", summary="Spend on one experiment",
+                payload={"resource": "exp-1", "max_cost": 25.0},
+            )
+            line.handle_command(session, f"YES {spend_approval.code}")
             budget = service.mint_from_approval(
-                session, approved.id, "spend", "spend on one experiment", "exp-1",
+                session, spend_approval.id, "spend", "spend on one experiment", "exp-1",
                 max_cost=25.0,
             )
             with pytest.raises(CapabilityError):  # over budget
@@ -160,6 +165,69 @@ def test_crisis_pause_suspends_grant_consumption(tmp_path, monkeypatch):
             service.validate_and_consume(session, grant.id, "publish_post", "draft-1")
         assert any(e["payload"]["reason"] == "crisis_paused"
                    for e in ledger.replay("capability_rejected"))
+    finally:
+        reset_shared_instances()
+
+
+def test_grant_may_only_narrow_the_approved_intent(tmp_path):
+    """The approved intent is immutable: a grant minted from it may cover
+    less than the human approved, never more."""
+    ledger, service, line = _setup(tmp_path)
+    try:
+        with get_db_session() as session:
+            approved = _approved_request(session, line)  # payload names draft-1 only
+
+            # The named resource mints.
+            service.mint_from_approval(
+                session, approved.id, "publish_post", "publish draft-1", "draft-1",
+            )
+            # A resource the human never saw does not.
+            with pytest.raises(CapabilityError):
+                service.mint_from_approval(
+                    session, approved.id, "publish_post", "publish draft-2", "draft-2",
+                )
+
+            typed = line.request_approval(
+                session, kind="spend", summary="One paid experiment",
+                payload={"resource": "exp-7", "action_type": "spend", "max_cost": 40.0},
+            )
+            line.handle_command(session, f"YES {typed.code}")
+
+            with pytest.raises(CapabilityError):  # different action than approved
+                service.mint_from_approval(
+                    session, typed.id, "send_dm", "dm about exp-7", "exp-7",
+                )
+            with pytest.raises(CapabilityError):  # richer budget than approved
+                service.mint_from_approval(
+                    session, typed.id, "spend", "spend on exp-7", "exp-7", max_cost=41.0,
+                )
+            # Narrower on every axis: same action, same resource, smaller ceiling.
+            narrowed = service.mint_from_approval(
+                session, typed.id, "spend", "spend on exp-7", "exp-7", max_cost=10.0,
+            )
+            assert narrowed.max_cost == 10.0
+
+        reasons = {e["payload"]["reason"] for e in ledger.replay("capability_rejected")}
+        assert {"resource_outside_approved_intent", "action_outside_approved_intent",
+                "cost_above_approved_intent"} <= reasons
+    finally:
+        reset_shared_instances()
+
+
+def test_approval_without_declared_scope_imposes_no_narrowing(tmp_path):
+    """Operator approvals that carry no payload scope stay usable: the
+    binding narrows what the human declared, it does not invent limits."""
+    ledger, service, line = _setup(tmp_path)
+    try:
+        with get_db_session() as session:
+            request = line.request_approval(
+                session, kind="publish", summary="Publish today's thread",
+            )
+            line.handle_command(session, f"YES {request.code}")
+            grant = service.mint_from_approval(
+                session, request.id, "publish_post", "publish thread-9", "thread-9",
+            )
+        assert grant.resource == "thread-9"
     finally:
         reset_shared_instances()
 

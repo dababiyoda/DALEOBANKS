@@ -31,6 +31,34 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+_SCOPE_RESOURCE_KEYS = (
+    "resource", "resources", "draft_id", "draft_ids",
+    "opportunity_packet_id", "venture_assessment_id", "target", "targets",
+)
+
+
+def _approved_scope(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """The narrowing scope an ApprovalRequest's payload declares."""
+    resources: set = set()
+    for key in _SCOPE_RESOURCE_KEYS:
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            resources.add(value)
+        elif isinstance(value, list):
+            resources.update(v for v in value if isinstance(v, str) and v)
+    max_cost = payload.get("max_cost")
+    try:
+        max_cost = float(max_cost) if max_cost is not None else None
+    except (TypeError, ValueError):
+        max_cost = None
+    action_type = payload.get("action_type")
+    return {
+        "resources": resources,
+        "max_cost": max_cost,
+        "action_type": action_type if isinstance(action_type, str) and action_type else None,
+    }
+
+
 def default_ttl_hours() -> int:
     try:
         return int(os.getenv("CAPABILITY_TTL_HOURS", "72"))
@@ -80,6 +108,29 @@ class CapabilityService:
             )
         if not action_type or not resource:
             raise CapabilityError("action_type and resource are required")
+
+        # A grant may NARROW the approved intent, never broaden it. When the
+        # approval's payload names resources, the grant must target one of
+        # them; a declared cost ceiling caps the grant; a declared action
+        # type must match. A payload with no scope fields imposes no
+        # narrowing (legacy operator approvals).
+        scope = _approved_scope(approval.payload or {})
+        if scope["resources"] and resource not in scope["resources"]:
+            self._reject("(unminted)", "resource_outside_approved_intent")
+            raise CapabilityError(
+                "grant must narrow the approved intent — resource "
+                f"'{resource}' was not named in the approval"
+            )
+        if scope["action_type"] and action_type != scope["action_type"]:
+            self._reject("(unminted)", "action_outside_approved_intent")
+            raise CapabilityError(
+                f"approved intent authorizes '{scope['action_type']}', not '{action_type}'"
+            )
+        if scope["max_cost"] is not None and float(max_cost) > scope["max_cost"]:
+            self._reject("(unminted)", "cost_above_approved_intent")
+            raise CapabilityError(
+                f"grant cost {max_cost} exceeds the approved ceiling {scope['max_cost']}"
+            )
 
         grant = CapabilityGrant(
             requester_identity=requester_identity,
