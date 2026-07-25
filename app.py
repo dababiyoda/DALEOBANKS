@@ -154,6 +154,51 @@ class LaneRequest(BaseModel):
     allowed_topics: List[str] = []
     forbidden_topics: List[str] = []
 
+class ValidationResultRequest(BaseModel):
+    opportunity_packet_id: str
+    venture_assessment_id: str = ""
+    experiment_ref: str = ""
+    capability_grant_id: str = ""
+    account_lane_id: str = ""
+    validation_type: str = "content_probe"
+    hypothesis: str = ""
+    intervention: str = ""
+    observation_window_start: str = ""
+    observation_window_end: str = ""
+    success_threshold: str = ""
+    failure_threshold: str = ""
+    measured_outcomes: Dict[str, Any] = {}
+    raw_evidence_refs: List[str] = []
+    evidence_tier: str = "observation"
+    evidence_quality: float = 0.0
+    confounders: List[str] = []
+    result_classification: str = "inconclusive"
+    causal_note: str = ""
+    economic_result: str = ""
+    trust_result: str = ""
+    next_decision: str = ""
+    trace_id: str = ""
+    metadata: Dict[str, Any] = {}
+
+class OpportunityCreateRequest(BaseModel):
+    signal_type: str = "operator_thought"
+    source: str = "operator"
+    source_ref: str = ""
+    observed_pain: str
+    core_thesis: str
+    audience: str = ""
+    cultural_context: str = ""
+    language: str = "en"
+    customer_segment: str = ""
+    buyer_type: str = ""
+    urgency: str = "medium"
+    evidence: List[str] = []
+    possible_offer: str = ""
+    monetization_paths: List[str] = []
+    risk_flags: List[str] = []
+    smallest_validation_action: str = ""
+    confidence: float = 0.5
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -196,7 +241,10 @@ async def request_context_middleware(request: Request, call_next):
     except HTTPException as exc:
         response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "request_id": request_id})
     except Exception as exc:
-        logger.error("Unhandled application error", extra_data={"error": str(exc), "path": request.url.path})
+        logger.error(
+            "Unhandled application error",
+            extra={"extra_data": {"error": str(exc), "path": request.url.path}},
+        )
         response = JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error", "request_id": request_id})
 
     duration = elapsed(start)
@@ -680,17 +728,38 @@ async def decide_goal_proposal(
 
 @app.get("/api/operator/requests")
 async def list_operator_requests(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
-    """The operator's approval inbox (dashboard fallback for SMS)."""
+    """The operator's approval inbox: ranked (P1 first, then oldest),
+    capped so founder attention is a protected resource, expiring so
+    silence never becomes consent. Overflow is batched, never approved."""
     try:
+        max_active = int(os.getenv("MAX_ACTIVE_APPROVALS", "10"))
         with get_db_session() as session:
+            get_operator_line().sweep_expired(session)
             requests = (
                 session.query(ApprovalRequest)
                 .filter(lambda r: r.status == status_filter)
-                .order_by(lambda r: r.created_at, descending=True)
                 .all()
             )
+            # Rank: urgent first, then oldest waiting.
+            requests.sort(key=lambda r: (r.priority != "P1", r.created_at))
+            active = requests[:max_active] if status_filter == "pending" else requests
+            batched = len(requests) - len(active)
+
+            # Approval-fatigue metric: median decision latency (seconds).
+            decided = [
+                r for r in session.query(ApprovalRequest).all()
+                if r.decided_at is not None and r.decided_via != "expiry"
+            ]
+            latencies = sorted(
+                (r.decided_at - r.created_at).total_seconds() for r in decided
+            )
+            median_latency = latencies[len(latencies) // 2] if latencies else None
+
             return {
-                "count": len(requests),
+                "count": len(active),
+                "batched_count": batched,
+                "max_active": max_active,
+                "median_decision_latency_seconds": median_latency,
                 "requests": [
                     {
                         "id": r.id,
@@ -699,11 +768,13 @@ async def list_operator_requests(status_filter: str = "pending", _: RequestConte
                         "priority": r.priority,
                         "summary": r.summary,
                         "rationale": r.rationale,
+                        "strongest_objection": r.strongest_objection,
                         "payload": r.payload,
                         "status": r.status,
                         "created_at": r.created_at.isoformat(),
+                        "expires_at": r.expires_at.isoformat() if r.expires_at else None,
                     }
-                    for r in requests
+                    for r in active
                 ],
             }
     except Exception as e:
@@ -877,6 +948,56 @@ async def refine_idea(idea_id: str, _: RequestContext = Depends(require_role("ad
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/opportunities")
+async def create_opportunity(
+    request: OpportunityCreateRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Create an OpportunityPacket directly (operator-observed signals that
+    didn't come through the idea refinery). Packets start pending — nothing
+    is evaluated or sent anywhere without an explicit approve + send."""
+    from services.prompt_firewall import get_firewall
+    from services.venture_protocol import ALLOWED_SIGNAL_TYPES
+
+    if request.signal_type not in ALLOWED_SIGNAL_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"signal_type must be one of {sorted(ALLOWED_SIGNAL_TYPES)}",
+        )
+    if request.urgency not in ("low", "medium", "high"):
+        raise HTTPException(status_code=422, detail="urgency must be low|medium|high")
+    if not (0.0 <= request.confidence <= 1.0):
+        raise HTTPException(status_code=422, detail="confidence must be within [0, 1]")
+
+    firewall = get_firewall()
+    with get_db_session() as session:
+        packet = OpportunityPacket(
+            source=request.source,
+            source_ref=request.source_ref,
+            signal_type=request.signal_type,
+            observed_pain=firewall.sanitize(request.observed_pain).strip(),
+            core_thesis=firewall.sanitize(request.core_thesis).strip(),
+            audience=request.audience,
+            cultural_context=request.cultural_context,
+            language=request.language,
+            customer_segment=request.customer_segment,
+            buyer_type=request.buyer_type,
+            urgency=request.urgency,
+            evidence=[firewall.sanitize(e).strip() for e in request.evidence],
+            possible_offer=request.possible_offer,
+            monetization_paths=request.monetization_paths,
+            risk_flags=request.risk_flags,
+            smallest_validation_action=request.smallest_validation_action,
+            confidence=request.confidence,
+        )
+        session.add(packet)
+        session.commit()
+    get_ledger().record("opportunity_created", {
+        "id": packet.id, "signal_type": packet.signal_type, "via": "api",
+    })
+    return {"success": True, "id": packet.id, "status": packet.status}
+
+
 @app.get("/api/opportunities")
 async def list_opportunities(status_filter: str = "", _: RequestContext = Depends(get_request_context)):
     with get_db_session() as session:
@@ -973,6 +1094,7 @@ async def receive_assessment(
                 recommended_next_action=str(payload.get("recommended_next_action") or ""),
                 requires_human_approval=True,
                 reasons=list(payload.get("reasons") or []),
+                cases=list(payload.get("cases") or []),
             )
             session.add(assessment)
             packet.status = "assessed"
@@ -991,6 +1113,312 @@ async def receive_assessment(
     except Exception as e:
         logger.error(f"Assessment receive error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/assessments")
+async def list_assessments(_: RequestContext = Depends(get_request_context)):
+    """VentureAssessments stored so far (mock or real engine — same contract)."""
+    with get_db_session() as session:
+        assessments = (
+            session.query(VentureAssessment)
+            .order_by(lambda a: a.created_at, descending=True)
+            .all()
+        )
+        from services.venture_protocol import assessment_to_wire
+        return {"count": len(assessments),
+                "assessments": [assessment_to_wire(a) for a in assessments]}
+
+
+class WorkCheckRequest(BaseModel):
+    category: str
+    description: str = ""
+
+
+@app.post("/api/policy/work-check")
+async def check_work_policy(
+    request: WorkCheckRequest, _: RequestContext = Depends(get_request_context)
+):
+    """The anti-cathedral rule, executable: may this work proceed given the
+    state of the external-evidence window? Decisions are ledgered."""
+    from services.evidence_policy import evaluate_work
+    with get_db_session() as session:
+        return evaluate_work(session, request.category, description=request.description)
+
+
+@app.get("/api/metrics/institutional")
+async def get_institutional_metrics(
+    base_j: Optional[float] = None, _: RequestContext = Depends(get_request_context)
+):
+    """The numbers the institution grows by: constitutional health,
+    evidence window, loop closure, negative-result retention, founder
+    decision load — and Evidence-Weighted J when a base J is supplied."""
+    from services.evidence_policy import institutional_metrics
+    with get_db_session() as session:
+        return institutional_metrics(session, base_j=base_j)
+
+
+class CapabilityGrantRequest(BaseModel):
+    approval_request_id: str
+    action_type: str
+    exact_action: str
+    resource: str
+    account_lane_id: str = ""
+    named_targets: List[str] = []
+    max_cost: float = 0.0
+    maximum_uses: int = 1
+    ttl_hours: Optional[int] = None
+    evidence_refs: List[str] = []
+    rollback_note: str = ""
+    trace_id: str = ""
+
+class GrantRevokeRequest(BaseModel):
+    reason: str = ""
+
+
+def _grant_to_dict(g: CapabilityGrant) -> Dict[str, Any]:
+    return {
+        "id": g.id, "approval_request_id": g.approval_request_id,
+        "requester_identity": g.requester_identity,
+        "approver_identity": g.approver_identity,
+        "action_type": g.action_type, "exact_action": g.exact_action,
+        "resource": g.resource, "account_lane_id": g.account_lane_id,
+        "named_targets": g.named_targets, "max_cost": g.max_cost,
+        "currency": g.currency, "maximum_uses": g.maximum_uses,
+        "uses_consumed": g.uses_consumed,
+        "issued_at": g.issued_at.isoformat(),
+        "expires_at": g.expires_at.isoformat() if g.expires_at else None,
+        "risk_tier": g.risk_tier, "rollback_note": g.rollback_note,
+        "revocation_status": g.revocation_status,
+        "revoked_at": g.revoked_at.isoformat() if g.revoked_at else None,
+        "revocation_reason": g.revocation_reason,
+        "trace_id": g.trace_id,
+    }
+
+
+@app.post("/api/capability-grants")
+async def create_capability_grant(
+    request: CapabilityGrantRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Mint a single-purpose, expiring capability from an APPROVED request.
+    Grants never widen standing autonomy: exact action, exact resource,
+    bounded uses, bounded window. Everything is ledgered."""
+    from services.capability import CapabilityError, get_capability_service
+    try:
+        with get_db_session() as session:
+            grant = get_capability_service().mint_from_approval(
+                session,
+                request.approval_request_id,
+                request.action_type,
+                request.exact_action,
+                request.resource,
+                account_lane_id=request.account_lane_id,
+                named_targets=request.named_targets,
+                max_cost=request.max_cost,
+                maximum_uses=request.maximum_uses,
+                ttl_hours=request.ttl_hours,
+                evidence_refs=request.evidence_refs,
+                rollback_note=request.rollback_note,
+                trace_id=request.trace_id,
+            )
+        return {"success": True, "grant": _grant_to_dict(grant)}
+    except CapabilityError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.get("/api/capability-grants")
+async def list_capability_grants(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        grants = (
+            session.query(CapabilityGrant)
+            .order_by(lambda g: g.issued_at, descending=True)
+            .all()
+        )
+        return {"count": len(grants), "grants": [_grant_to_dict(g) for g in grants]}
+
+
+@app.get("/api/capability-grants/{grant_id}")
+async def get_capability_grant(grant_id: str, _: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        grant = session.query(CapabilityGrant).filter(lambda g: g.id == grant_id).first()
+        if grant is None:
+            raise HTTPException(status_code=404, detail="Grant not found")
+        return _grant_to_dict(grant)
+
+
+@app.post("/api/capability-grants/{grant_id}/revoke")
+async def revoke_capability_grant(
+    grant_id: str,
+    request: GrantRevokeRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Revocation is immediate. Revoked grants fail closed at execution."""
+    from services.capability import CapabilityError, get_capability_service
+    try:
+        with get_db_session() as session:
+            grant = get_capability_service().revoke(
+                session, grant_id, reason=request.reason,
+            )
+        return {"success": True, "grant": _grant_to_dict(grant)}
+    except CapabilityError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/validation-results")
+async def record_validation_result(
+    request: ValidationResultRequest,
+    context: RequestContext = Depends(require_role("admin")),
+):
+    """Record what the world said. The terminal object of the loop: only
+    externally observed outcomes become institutional truth, and they are
+    ledgered before anything treats them as such. Negative results are
+    first-class — zero response is a completed observation."""
+    from services.prompt_firewall import get_firewall
+    from services.venture_protocol import (
+        ALLOWED_EVIDENCE_TIERS, ALLOWED_RESULT_CLASSIFICATIONS,
+    )
+
+    if request.result_classification not in ALLOWED_RESULT_CLASSIFICATIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"result_classification must be one of {sorted(ALLOWED_RESULT_CLASSIFICATIONS)}",
+        )
+    if request.evidence_tier not in ALLOWED_EVIDENCE_TIERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"evidence_tier must be one of {sorted(ALLOWED_EVIDENCE_TIERS)}",
+        )
+    if not (0.0 <= request.evidence_quality <= 1.0):
+        raise HTTPException(status_code=422, detail="evidence_quality must be within [0, 1]")
+
+    firewall = get_firewall()
+    with get_db_session() as session:
+        packet = session.query(OpportunityPacket).filter(
+            lambda p: p.id == request.opportunity_packet_id
+        ).first()
+        if packet is None:
+            raise HTTPException(status_code=422, detail="Unknown opportunity_packet_id")
+        if request.venture_assessment_id:
+            assessment = session.query(VentureAssessment).filter(
+                lambda a: a.id == request.venture_assessment_id
+            ).first()
+            if assessment is None:
+                raise HTTPException(status_code=422, detail="Unknown venture_assessment_id")
+
+        result = ValidationResult(
+            opportunity_packet_id=request.opportunity_packet_id,
+            venture_assessment_id=request.venture_assessment_id,
+            experiment_ref=request.experiment_ref,
+            capability_grant_id=request.capability_grant_id,
+            account_lane_id=request.account_lane_id,
+            validation_type=request.validation_type,
+            hypothesis=firewall.sanitize(request.hypothesis).strip(),
+            intervention=firewall.sanitize(request.intervention).strip(),
+            observation_window_start=request.observation_window_start,
+            observation_window_end=request.observation_window_end,
+            success_threshold=request.success_threshold,
+            failure_threshold=request.failure_threshold,
+            measured_outcomes=request.measured_outcomes,
+            raw_evidence_refs=[firewall.sanitize(r).strip() for r in request.raw_evidence_refs],
+            evidence_tier=request.evidence_tier,
+            evidence_quality=request.evidence_quality,
+            confounders=[firewall.sanitize(c).strip() for c in request.confounders],
+            result_classification=request.result_classification,
+            causal_note=firewall.sanitize(request.causal_note).strip(),
+            economic_result=request.economic_result,
+            trust_result=request.trust_result,
+            next_decision=firewall.sanitize(request.next_decision).strip(),
+            recorded_by=getattr(context, "subject", "") or "admin",
+            trace_id=request.trace_id,
+            metadata=request.metadata,
+        )
+        session.add(result)
+        session.commit()
+    # Ledgered before it is treated as institutional truth.
+    get_ledger().record("validation_result_recorded", {
+        "id": result.id,
+        "opportunity_packet_id": result.opportunity_packet_id,
+        "result_classification": result.result_classification,
+        "evidence_tier": result.evidence_tier,
+        "evidence_quality": result.evidence_quality,
+    })
+    return {"success": True, "id": result.id,
+            "result_classification": result.result_classification}
+
+
+def _validation_result_to_dict(r: ValidationResult) -> Dict[str, Any]:
+    return {
+        "id": r.id, "schema_version": r.schema_version,
+        "opportunity_packet_id": r.opportunity_packet_id,
+        "venture_assessment_id": r.venture_assessment_id,
+        "experiment_ref": r.experiment_ref,
+        "capability_grant_id": r.capability_grant_id,
+        "account_lane_id": r.account_lane_id,
+        "validation_type": r.validation_type,
+        "hypothesis": r.hypothesis, "intervention": r.intervention,
+        "observation_window_start": r.observation_window_start,
+        "observation_window_end": r.observation_window_end,
+        "success_threshold": r.success_threshold,
+        "failure_threshold": r.failure_threshold,
+        "measured_outcomes": r.measured_outcomes,
+        "raw_evidence_refs": r.raw_evidence_refs,
+        "evidence_tier": r.evidence_tier,
+        "evidence_quality": r.evidence_quality,
+        "confounders": r.confounders,
+        "result_classification": r.result_classification,
+        "causal_note": r.causal_note,
+        "economic_result": r.economic_result,
+        "trust_result": r.trust_result,
+        "next_decision": r.next_decision,
+        "recorded_by": r.recorded_by, "trace_id": r.trace_id,
+        "created_at": r.created_at.isoformat(),
+    }
+
+
+@app.get("/api/validation-results")
+async def list_validation_results(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        results = (
+            session.query(ValidationResult)
+            .order_by(lambda r: r.created_at, descending=True)
+            .all()
+        )
+        return {"count": len(results),
+                "results": [_validation_result_to_dict(r) for r in results]}
+
+
+@app.get("/api/validation-results/{result_id}")
+async def get_validation_result(result_id: str, _: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        result = session.query(ValidationResult).filter(lambda r: r.id == result_id).first()
+        if result is None:
+            raise HTTPException(status_code=404, detail="ValidationResult not found")
+        return _validation_result_to_dict(result)
+
+
+@app.get("/api/decision-episodes")
+async def list_decision_episodes(_: RequestContext = Depends(get_request_context)):
+    """The decision corpus, episode by episode. Killed, deferred, and
+    negative-outcome episodes are included; missing stages are explicit."""
+    from services.decision_episode import list_episodes
+    with get_db_session() as session:
+        episodes = list_episodes(session)
+        closed = sum(1 for e in episodes if e["loop_closed"])
+        return {
+            "count": len(episodes), "closed": closed,
+            "loop_closure_rate": (closed / len(episodes)) if episodes else 0.0,
+            "episodes": episodes,
+        }
+
+
+@app.get("/api/decision-episodes/{episode_id}")
+async def get_decision_episode(episode_id: str, _: RequestContext = Depends(get_request_context)):
+    from services.decision_episode import build_episode
+    with get_db_session() as session:
+        episode = build_episode(session, episode_id)
+        if episode is None:
+            raise HTTPException(status_code=404, detail="Episode not found")
+        return episode
 
 
 @app.get("/api/media/drafts")
@@ -1106,27 +1534,54 @@ async def handle_redirect(redirect_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Liveness plus safety posture: one glance tells the operator whether
-    the agent can currently touch the outside world."""
-    # Read the config fresh: the module-level reference can go stale after a
-    # reset, and a health endpoint that reports a stale arming state is worse
-    # than no health endpoint at all.
-    cfg = get_config()
-    chain_ok, _ = get_ledger().verify_chain()
-    credentials_configured = bool(
-        cfg.X_API_KEY and cfg.X_API_SECRET
-        and cfg.X_ACCESS_TOKEN and cfg.X_ACCESS_SECRET
-    )
+    """Unauthenticated liveness probe. Deliberately minimal: a public
+    health endpoint must never become a confirmation oracle for arming
+    state, crisis posture, or successful ledger tampering."""
+    return {"ok": True, "timestamp": datetime.now(UTC).isoformat()}
+
+
+@app.get("/api/health/safety")
+async def health_safety(_: RequestContext = Depends(require_role("admin"))):
+    """Authenticated safe-runtime status: is the agent armed, is crisis
+    pause active, is the decision ledger chain intact. Reads only. If a
+    state can't be read, report the uncertainty rather than a false
+    all-clear.
+
+    ``ok`` means only "this endpoint answered". ``safe_to_operate`` is the
+    derived control-plane verdict: true when every safety state is readable
+    and the ledger chain is intact; false when the ledger is broken; null
+    when any state is unknown. Crisis pause does NOT make the system
+    unsafe — a working pause is protection functioning — so it is reported
+    alongside, never folded into the verdict silently."""
+    config = get_config()
+    try:
+        crisis_paused = bool(runner.crisis_service.is_paused())
+        crisis_reason = runner.crisis_service.reason
+    except Exception as exc:
+        logger.warning(f"health_safety: crisis state unreadable: {exc}")
+        crisis_paused, crisis_reason = None, "unavailable"
+    try:
+        ledger_ok, broken_at = get_ledger().verify_chain()
+    except Exception as exc:
+        logger.warning(f"health_safety: ledger state unreadable: {exc}")
+        ledger_ok, broken_at = None, None
+
+    if crisis_paused is None or ledger_ok is None:
+        safe_to_operate = None  # unknown is reported as unknown
+    elif ledger_ok is False:
+        safe_to_operate = False  # untrustworthy control plane
+    else:
+        safe_to_operate = True
+
     return {
         "ok": True,
         "timestamp": datetime.now(UTC).isoformat(),
-        "live": cfg.LIVE,
-        "dry_run": not cfg.LIVE or not credentials_configured,
-        "x_credentials_configured": credentials_configured,
-        "crisis_state": "PAUSED" if runner.crisis_service.is_paused() else "NORMAL",
-        "breaker_tripped": runner.heartbeat.breaker_tripped,
-        "ledger_chain_ok": chain_ok,
-        "goal_mode": cfg.GOAL_MODE,
+        "safe_to_operate": safe_to_operate,
+        "live": bool(config.LIVE),
+        "crisis_paused": crisis_paused,
+        "crisis_reason": crisis_reason,
+        "ledger_ok": ledger_ok,
+        "ledger_broken_at": broken_at,
     }
 
 # Reflection / learned-mind endpoints

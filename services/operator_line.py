@@ -83,12 +83,33 @@ class OperatorLine:
         payload: Optional[Dict[str, Any]] = None,
         rationale: str = "",
         priority: str = "P2",
+        strongest_objection: str = "",
+        ttl_hours: Optional[int] = None,
     ) -> ApprovalRequest:
         """File an ApprovalRequest and prompt the operator (SMS if configured,
-        dashboard inbox always)."""
+        dashboard inbox always). Duplicate pending requests (same kind and
+        payload) collapse into the existing one — the queue must never
+        manufacture approval demand. Requests expire; silence is never
+        consent, and an expired request simply closes."""
+        payload = payload or {}
+        if payload:  # only a non-empty payload identifies the same act
+            for existing in session.query(ApprovalRequest).all():
+                if (existing.status == "pending" and existing.kind == kind
+                        and existing.payload == payload):
+                    return existing
+
+        import os as _os
+        from datetime import timedelta as _td
+        try:
+            ttl = int(ttl_hours if ttl_hours is not None
+                      else _os.getenv("APPROVAL_TTL_HOURS", "72"))
+        except ValueError:
+            ttl = 72
         request = ApprovalRequest(
-            kind=kind, summary=summary, payload=payload or {},
+            kind=kind, summary=summary, payload=payload,
             rationale=rationale, priority=priority,
+            strongest_objection=strongest_objection,
+            expires_at=datetime.now(UTC) + _td(hours=ttl),
         )
         session.add(request)
         session.commit()
@@ -109,10 +130,31 @@ class OperatorLine:
         })
         return request
 
+    def sweep_expired(self, session: Any) -> int:
+        """Close pending requests past their expiry. Queue overflow and
+        operator silence must never become implicit approval — an expired
+        request is simply closed, ledgered, and gone."""
+        expired = 0
+        now = datetime.now(UTC)
+        for request in session.query(ApprovalRequest).all():
+            if (request.status == "pending" and request.expires_at
+                    and now >= request.expires_at):
+                request.status = "expired"
+                request.decided_at = now
+                request.decided_via = "expiry"
+                expired += 1
+                self.ledger.record("approval_expired", {
+                    "id": request.id, "code": request.code, "kind": request.kind,
+                })
+        if expired:
+            session.commit()
+        return expired
+
     # ------------------------------------------------------------------ #
     # Inbound: executing operator commands
     # ------------------------------------------------------------------ #
     def handle_command(self, session: Any, text: str, via: str = "dashboard") -> Dict[str, Any]:
+        self.sweep_expired(session)
         raw = (text or "").strip()
         if not raw:
             return self._done("HELP", via, ok=False, reply=HELP_TEXT)

@@ -8,7 +8,19 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, KeyRound, LogOut, Compass, Target } from "lucide-react";
+import { Check, X, KeyRound, LogOut, Compass, Target, ShieldCheck, History } from "lucide-react";
+
+interface OperatorRequest {
+  id: string;
+  code: string;
+  kind: string;
+  priority: string;
+  summary: string;
+  rationale: string;
+  payload: Record<string, unknown>;
+  status: string;
+  created_at: string;
+}
 
 interface DiscoveryProposal {
   id: string;
@@ -94,6 +106,21 @@ export default function Approvals() {
     refetchInterval: 30000,
   });
 
+  const { data: operatorPending } = useQuery<{ count: number; requests: OperatorRequest[] }>({
+    queryKey: ["/api/operator/requests?status_filter=pending"],
+    refetchInterval: 30000,
+  });
+
+  const { data: operatorApproved } = useQuery<{ count: number; requests: OperatorRequest[] }>({
+    queryKey: ["/api/operator/requests?status_filter=approved"],
+    refetchInterval: 60000,
+  });
+
+  const { data: operatorRejected } = useQuery<{ count: number; requests: OperatorRequest[] }>({
+    queryKey: ["/api/operator/requests?status_filter=rejected"],
+    refetchInterval: 60000,
+  });
+
   const handleAuthFailure = () => {
     setAdminJwt(null);
     setUnlocked(false);
@@ -134,8 +161,38 @@ export default function Approvals() {
     onError: handleAuthFailure,
   });
 
+  const decideOperator = useMutation({
+    mutationFn: ({ code, approve }: { code: string; approve: boolean }) =>
+      api.post("/api/operator/command", {
+        command: `${approve ? "YES" : "NO"} ${code}`,
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/operator/requests?status_filter=pending"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/operator/requests?status_filter=approved"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/operator/requests?status_filter=rejected"],
+      });
+      toast({
+        title: variables.approve ? "Approved" : "Rejected",
+        description: variables.approve
+          ? "Exactly this request was authorized — approval never widens standing autonomy."
+          : "The request was declined.",
+      });
+    },
+    onError: handleAuthFailure,
+  });
+
   const pendingDiscoveries = discoveries?.proposals ?? [];
   const pendingGoals = goals?.proposals ?? [];
+  const pendingOperator = operatorPending?.requests ?? [];
+  const decidedOperator = [
+    ...(operatorApproved?.requests ?? []),
+    ...(operatorRejected?.requests ?? []),
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 20);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -161,6 +218,92 @@ export default function Approvals() {
       </div>
 
       {!unlocked && <AdminUnlock onUnlocked={() => setUnlocked(true)} />}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Risky actions awaiting your code
+            <Badge variant="secondary">{pendingOperator.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pendingOperator.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing pending. Public posting, outreach, paid offers, and
+              validation plans all queue here — each with a one-time approval
+              code, answerable here or by SMS.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {pendingOperator.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between p-3 border border-border rounded-lg"
+                >
+                  <div className="pr-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge>{r.kind}</Badge>
+                      <Badge variant="outline">{r.priority}</Badge>
+                      <Badge variant="secondary" className="font-mono">
+                        {r.code}
+                      </Badge>
+                      <span className="font-medium">{r.summary}</span>
+                    </div>
+                    {r.rationale && (
+                      <p className="text-xs text-muted-foreground mt-1">{r.rationale}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!unlocked || decideOperator.isPending}
+                      onClick={() => decideOperator.mutate({ code: r.code, approve: true })}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!unlocked || decideOperator.isPending}
+                      onClick={() => decideOperator.mutate({ code: r.code, approve: false })}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Decision history
+            <Badge variant="secondary">{decidedOperator.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {decidedOperator.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No decisions recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {decidedOperator.map((r) => (
+                <div key={r.id} className="flex items-center gap-2 text-sm">
+                  <Badge variant={r.status === "approved" ? "default" : "outline"}>
+                    {r.status}
+                  </Badge>
+                  <Badge variant="outline">{r.kind}</Badge>
+                  <span className="text-muted-foreground">{r.summary}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -9,13 +9,15 @@ import {
   Heart,
   Bot,
   Sparkles,
-  CheckSquare
+  CheckSquare,
+  Lightbulb
 } from "lucide-react";
 
 const navigation = [
   { name: "Overview", href: "/", icon: LayoutDashboard },
   { name: "Persona Editor", href: "/persona", icon: Brain },
   { name: "The Mind", href: "/mind", icon: Sparkles },
+  { name: "Idea Refinery", href: "/refinery", icon: Lightbulb },
   { name: "Approvals", href: "/approvals", icon: CheckSquare },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Configuration", href: "/config", icon: Settings },
