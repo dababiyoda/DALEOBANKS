@@ -831,6 +831,67 @@ async def operator_sms_webhook(request: Request):
     return PlainResponse(content=twiml, media_type="application/xml")
 
 
+@app.get("/api/self/digest")
+async def self_digest(_: RequestContext = Depends(get_request_context)):
+    """State-of-the-mind: calibration, memory growth, relationship depth,
+    measured revenue, safety history, and what awaits human decision."""
+    try:
+        with get_db_session() as session:
+            return runner.digest_service.build(session, runner.reception_predictor)
+    except Exception as e:
+        logger.error(f"Digest error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/experiments/proposals")
+async def list_experiment_proposals(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
+    """Proposed widenings of the bandit's action space, pending review."""
+    with get_db_session() as session:
+        proposals = (
+            session.query(ExperimentProposal)
+            .filter(lambda p: p.status == status_filter)
+            .order_by(lambda p: p.created_at, descending=True)
+            .all()
+        )
+        return {"count": len(proposals), "proposals": [{
+            "id": p.id, "dimension": p.dimension, "value": p.value,
+            "rationale": p.rationale, "evidence": p.evidence,
+            "status": p.status, "created_at": p.created_at.isoformat(),
+        } for p in proposals]}
+
+
+@app.post("/api/experiments/proposals/{proposal_id}/decision")
+async def decide_experiment_proposal(
+    proposal_id: str, request: DecisionRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Approve or reject a proposed arm. Only approvals widen what the
+    optimizer may explore, and only at the next planning cycle."""
+    try:
+        with get_db_session() as session:
+            proposal = session.query(ExperimentProposal).filter(
+                lambda p: p.id == proposal_id
+            ).first()
+            if proposal is None:
+                raise HTTPException(status_code=404, detail="Proposal not found")
+            if proposal.status != "pending":
+                raise HTTPException(status_code=409, detail=f"Proposal already {proposal.status}")
+            proposal.status = "approved" if request.approve else "rejected"
+            proposal.decided_at = datetime.now(UTC)
+            proposal.actor = "admin"
+            session.commit()
+        get_ledger().record("experiment_decision", {
+            "id": proposal_id, "dimension": proposal.dimension,
+            "value": proposal.value, "decision": proposal.status,
+        })
+        return {"success": True, "status": proposal.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Experiment decision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --------------------------------------------------------------------- #
 # Idea refinery + venture cockpit (drafts only; approvals gate the world)
 # --------------------------------------------------------------------- #

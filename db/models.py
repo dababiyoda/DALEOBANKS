@@ -500,6 +500,23 @@ class AccountLane:
 
 
 @dataclass
+class ExperimentProposal:
+    """A proposed widening of the bandit's action space (new arm values,
+    routing weights, intensity range), pending human review. Nothing the
+    planner proposes here reaches the optimizer until it is approved."""
+
+    id: str = field(default_factory=_uuid)
+    dimension: str = ""  # post_type | topic | cta_variant | intensity | platform_weight
+    value: str = ""
+    rationale: str = ""
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    status: str = "pending"  # pending | approved | rejected
+    created_at: datetime = field(default_factory=_utcnow)
+    decided_at: Optional[datetime] = None
+    actor: Optional[str] = None
+
+
+@dataclass
 class PersonaVersion:
     """Persona version history with audit trail."""
 
@@ -538,5 +555,6 @@ __all__ = [
     "ValidationResult",
     "MediaAssetDraft",
     "AccountLane",
+    "ExperimentProposal",
     "PersonaVersion",
 ]
