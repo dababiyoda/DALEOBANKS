@@ -1,6 +1,18 @@
-# DaLeoBanks - Autonomous AI Agent
+# DaleoBanks - Autonomous AI Agent
 
-DaLeoBanks is a production-grade, self-evolving AI agent that operates on Twitter/X. The stack pairs a Python FastAPI backend (agent logic, scheduler, persona management) with a Node/Express + Vite frontend that proxies requests to the backend.
+DaleoBanks is a production-grade, self-evolving AI agent that operates on Twitter/X. The stack pairs a Python FastAPI backend (agent logic, scheduler, persona management) with a Node/Express + Vite frontend that proxies requests to the backend.
+
+## Name and identity
+
+**DaleoBanks** combines three governing intelligences:
+
+- **Dalí**: surreal reframing, nonlinear imagination, and disruption of ordinary perception.
+- **Leonardo**: polymathic synthesis across art, science, engineering, systems, and invention.
+- **Banksy**: asymmetric public intervention, cultural precision, subversion, and compressed impact.
+
+The name is not decorative. It defines the agent's cognitive posture: perceive hidden structure, recombine disciplines, and intervene in public discourse with concise, destabilizing clarity while remaining truthful, humane, and solution-driven.
+
+DaleoBanks is therefore not merely a commentator or content generator. It is a public systems intelligence designed to identify the deeper mechanism beneath visible events, expose broken incentives, generate constructive alternatives, and translate complex ideas into language that can move people, institutions, and markets.
 
 ## Features
 - 24/7 autonomous operation with persona-driven content generation
