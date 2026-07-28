@@ -1,27 +1,31 @@
 name: Aperture shadow authority
 
-# DALEOBANKS had no CI. This is the minimum that proves something real:
-# the organ runs against a BUILT ARTIFACT from a pinned Kernel commit, not
-# against the Kernel source tree. A green run against source would prove
-# nothing about deployability, so APERTURE_REQUIRE_INSTALLED=1 makes a
-# source-path import a hard failure.
+# DALEOBANKS had no CI. This proves something real: the organ runs against a
+# BUILT ARTIFACT, not against the Kernel source tree. A green run against source
+# would prove nothing about deployability, so APERTURE_REQUIRE_INSTALLED=1 makes
+# a source-path import a hard failure.
+#
+# WHY THE WHEELS ARE VENDORED. The first version of this workflow checked out
+# dababiyoda/uniimente-kernel and built the distributions. That failed with
+# `git exit 128`: the default GITHUB_TOKEN is scoped to THIS repository and
+# cannot read another one. Fixing it properly needs a personal access token,
+# which is a founder credential decision and is deliberately not made here.
+#
+# Vendoring the exact wheels keeps the property that actually matters - the
+# organ installs an artifact, never the source tree - at the cost of binaries in
+# git that must be refreshed deliberately. This job verifies their SHA256
+# against vendor/aperture/PINNED_ARTIFACT.json, so a stale or tampered wheel
+# fails the run rather than passing quietly.
 
 on:
   pull_request:
   push:
     branches: [main, "claude/**", "agent/**"]
   workflow_dispatch:
-    inputs:
-      kernel_ref:
-        description: "uniimente-kernel ref to build the aperture from"
-        required: false
-        default: ""
 
 env:
-  # Pinned Kernel commit the aperture artifact is built from. Bump this
-  # deliberately; a floating ref would make the run unreproducible.
-  KERNEL_REF: "agent/canonical-authority-rc1"
   APERTURE_VERSION: "0.1.0"
+  VENDOR: vendor/aperture
 
 jobs:
   shadow:
@@ -30,53 +34,47 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: daleobanks
-
-      - name: Check out the Kernel at the pinned ref
-        uses: actions/checkout@v4
-        with:
-          repository: dababiyoda/uniimente-kernel
-          ref: ${{ github.event.inputs.kernel_ref || env.KERNEL_REF }}
-          path: kernel
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Record exact source commits
+      - name: Verify the pinned artifact hashes
         run: |
-          echo "daleobanks_commit=$(git -C daleobanks rev-parse HEAD)" >> $GITHUB_ENV
-          echo "kernel_commit=$(git -C kernel rev-parse HEAD)" >> $GITHUB_ENV
-          git -C daleobanks rev-parse HEAD
-          git -C kernel rev-parse HEAD
-
-      - name: Build the Reality Aperture distributions
-        run: |
-          python -m pip install --upgrade pip build
-          python kernel/packaging/build_aperture.py
-          ls -la kernel/dist
+          python - <<'PY'
+          import hashlib, json, pathlib, sys
+          v = pathlib.Path("vendor/aperture")
+          pin = json.loads((v / "PINNED_ARTIFACT.json").read_text())
+          bad = []
+          for name, expected in pin["sha256"].items():
+              actual = hashlib.sha256((v / name).read_bytes()).hexdigest()
+              status = "ok" if actual == expected else "MISMATCH"
+              print(f"  {status}  {name}  {actual}")
+              if actual != expected:
+                  bad.append(name)
+          if bad:
+              sys.exit(f"pinned artifact hash mismatch: {bad}")
+          print("built from kernel commit:", pin["built_from_kernel_commit"])
+          PY
 
       - name: Install DALEOBANKS declared dependencies
-        working-directory: daleobanks
         run: |
+          python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
 
-      # The organ installs the CLIENT. Not editable, not a path dependency.
+      # The organ installs the CLIENT only. Not editable, not a path dependency.
       - name: Install the aperture client artifact
-        run: pip install "kernel/dist/uniimente_aperture_client-${APERTURE_VERSION}-py3-none-any.whl"
+        run: pip install "${VENDOR}/uniimente_aperture_client-${APERTURE_VERSION}-py3-none-any.whl"
 
       # Proved BEFORE the issuer is installed for fixture minting: in a
-      # client-only environment the organ cannot reach issuer functionality
-      # or the superseded legacy engine.
+      # client-only environment the organ cannot reach issuer functionality or
+      # any legacy authorizer.
       - name: issuer-unreachable (client-only environment)
-        working-directory: daleobanks
         env:
           APERTURE_REQUIRE_INSTALLED: "1"
         run: |
           python - <<'PY'
-          import sys
           from governance.aperture_shadow import (aperture_origin,
                                                   assert_installed_artifact,
                                                   issuer_is_unreachable)
@@ -91,13 +89,12 @@ jobs:
                   raise SystemExit(f"legacy authorizer reachable: {mod}")
               except ImportError:
                   pass
-          print("client-only:", origin)
+          print("client-only origin:", origin)
           print("issuer unreachable: True")
           print("legacy authorizers unreachable: True")
           PY
 
       - name: Verify no production credentials are present
-        working-directory: daleobanks
         run: |
           python - <<'PY'
           from governance.aperture_shadow import (PRODUCTION_CREDENTIAL_VARS,
@@ -107,7 +104,6 @@ jobs:
           PY
 
       - name: Verify no production adapter can resolve
-        working-directory: daleobanks
         run: |
           python - <<'PY'
           from governance.aperture_shadow import (FakePlatform, resolve_adapter,
@@ -124,37 +120,29 @@ jobs:
 
       # Test-only. The organ RUNTIME never imports this; an AST test asserts so.
       - name: Install the issuer artifact (test-only, for minting fixtures)
-        run: pip install "kernel/dist/uniimente_aperture_issuer-${APERTURE_VERSION}-py3-none-any.whl"
+        run: pip install "${VENDOR}/uniimente_aperture_issuer-${APERTURE_VERSION}-py3-none-any.whl"
 
       - name: Run the shadow authority suite against the installed artifact
-        working-directory: daleobanks
         env:
           APERTURE_REQUIRE_INSTALLED: "1"
         run: python -m pytest tests/test_aperture_shadow.py -v
 
-      - name: Run the full DALEOBANKS suite
-        working-directory: daleobanks
-        continue-on-error: true
-        run: python -m pytest -q --timeout=300 || echo "pre-existing suite status recorded, not gating the shadow path"
-
       - name: Record dependency and commit metadata
-        working-directory: daleobanks
+        if: always()
         run: |
           mkdir -p verification
           pip freeze > verification/DEPENDENCY_ENVIRONMENT.txt
           python - <<'PY'
-          import json, os, hashlib, pathlib
+          import json, os, pathlib, sys
           from governance.aperture_shadow import aperture_origin
-          wheel = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "kernel" / "dist"
-          arts = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                  for p in wheel.glob("*.whl")}
+          pin = json.loads(pathlib.Path("vendor/aperture/PINNED_ARTIFACT.json").read_text())
           json.dump({
-              "daleobanks_commit": os.environ.get("daleobanks_commit"),
-              "kernel_commit": os.environ.get("kernel_commit"),
-              "aperture_version": os.environ.get("APERTURE_VERSION"),
+              "daleobanks_commit": os.environ.get("GITHUB_SHA"),
+              "kernel_commit": pin["built_from_kernel_commit"],
+              "aperture_version": pin["aperture_version"],
+              "artifact_hashes": pin["sha256"],
               "aperture_origin": aperture_origin(),
-              "artifact_hashes": arts,
-              "python": os.sys.version,
+              "python": sys.version,
               "run_id": os.environ.get("GITHUB_RUN_ID"),
           }, open("verification/RUN_METADATA.json", "w"), indent=2)
           PY
@@ -164,4 +152,4 @@ jobs:
         if: always()
         with:
           name: shadow-verification
-          path: daleobanks/verification/
+          path: verification/
