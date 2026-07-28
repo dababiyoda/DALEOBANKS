@@ -25,11 +25,15 @@ still runs as before. Nothing here can reach a real platform: the adapter
 registry contains exactly one entry, the fake, and `resolve_adapter` raises on
 anything else. No X credential is read, passed, or referenced on this path.
 
-PACKAGING GAP, stated rather than hidden: the aperture currently lives in the
-uniimente-kernel repository and is imported from a sibling checkout. That is a
-development convenience, not a distribution strategy. Until the Kernel publishes
-an installable client package this module is not deployable, and the tests skip
-rather than pretend.
+PACKAGING. The organ installs `uniimente-aperture-client`, a wheel built from a
+pinned Kernel commit that contains verification support and NOT the issuer. The
+issuer ships as a separate distribution and is never installed here, so an organ
+cannot import a signer even by accident - the bytes are not on the machine.
+
+A source-path fallback remains for local development and is refused outright
+when APERTURE_REQUIRE_INSTALLED=1, which CI sets. Without that guard a green CI
+run could be reading the Kernel source tree rather than the artifact, and would
+prove nothing about deployability.
 """
 from __future__ import annotations
 
@@ -39,17 +43,40 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-# --- aperture import (see PACKAGING GAP above) ---------------------------
-_KERNEL = os.environ.get(
-    "UNIIMENTE_KERNEL_PATH",
-    str(pathlib.Path(__file__).resolve().parents[2] / "uniimente-kernel"))
-if _KERNEL not in sys.path and pathlib.Path(_KERNEL).exists():
-    sys.path.insert(0, _KERNEL)
+# --- aperture client ------------------------------------------------------
+# PREFERRED: the installed `uniimente-aperture-client` wheel, built from a
+# pinned Kernel commit. The organ installs VERIFICATION support only; the
+# issuer ships as a separate distribution and is not on this machine.
+#
+# A source-path fallback exists for local development ONLY and is refused when
+# APERTURE_REQUIRE_INSTALLED=1, which CI sets. Without that guard a green CI
+# run could be reading the Kernel source tree instead of the artifact, which
+# would prove nothing about deployability.
+_REQUIRE_INSTALLED = os.environ.get("APERTURE_REQUIRE_INSTALLED") == "1"
+
+try:
+    import aperture as _ap
+    _APERTURE_ORIGIN = str(pathlib.Path(_ap.__file__).parent)
+    _FROM_INSTALL = "site-packages" in _APERTURE_ORIGIN
+except ImportError:
+    _ap = None
+    _APERTURE_ORIGIN = ""
+    _FROM_INSTALL = False
+
+if _ap is None and not _REQUIRE_INSTALLED:
+    _dev = os.environ.get(
+        "UNIIMENTE_KERNEL_PATH",
+        str(pathlib.Path(__file__).resolve().parents[2] / "uniimente-kernel"))
+    if pathlib.Path(_dev).exists() and _dev not in sys.path:
+        sys.path.insert(0, _dev)
 
 try:
     from aperture import (Aperture, CertificateError, LocalVeto, Presenter,
                           VerificationRegistry)
     from aperture.revocation import RevocationState
+    import aperture as _ap
+    _APERTURE_ORIGIN = str(pathlib.Path(_ap.__file__).parent)
+    _FROM_INSTALL = "site-packages" in _APERTURE_ORIGIN
     APERTURE_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised by the skip in tests
     APERTURE_AVAILABLE = False
@@ -58,6 +85,33 @@ except ImportError:  # pragma: no cover - exercised by the skip in tests
 
     class CertificateError(Exception):  # type: ignore
         pass
+
+
+def aperture_origin() -> str:
+    """Where the client was actually loaded from. CI asserts on this."""
+    return _APERTURE_ORIGIN
+
+
+def assert_installed_artifact() -> None:
+    """Refuse a source-path import when the environment demands an artifact."""
+    if _REQUIRE_INSTALLED and not _FROM_INSTALL:
+        raise ShadowConfigurationError(
+            "APERTURE_REQUIRE_INSTALLED=1 but the aperture client was loaded "
+            f"from {_APERTURE_ORIGIN!r}, which is not an installed artifact. A "
+            "green run against the Kernel source tree proves nothing about "
+            "deployability.")
+
+
+def issuer_is_unreachable() -> bool:
+    """The organ must not be able to import issuer functionality at all."""
+    for mod in ("aperture_issuer", "aperture_issuer.issuer",
+                "aperture_issuer.signing", "aperture.issuer"):
+        try:
+            __import__(mod)
+            return False
+        except ImportError:
+            continue
+    return True
 
 
 ORGAN_ID = "spiffe://uniimente.internal/organ/daleobanks"

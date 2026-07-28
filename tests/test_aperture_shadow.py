@@ -24,13 +24,24 @@ from governance.aperture_shadow import (APERTURE_AVAILABLE, FakePlatform,
 
 pytestmark = pytest.mark.skipif(
     not APERTURE_AVAILABLE,
-    reason="uniimente-kernel aperture not on the path; see PACKAGING GAP in "
-           "governance/aperture_shadow.py")
+    reason="uniimente-aperture-client is not installed")
 
+# The organ RUNTIME needs only the client. These tests additionally mint
+# certificates, which requires the issuer distribution - installed here as a
+# TEST-ONLY dependency so the fixtures can exist. That the organ's runtime
+# cannot reach the issuer is proved separately, in a client-only environment,
+# by the `issuer-unreachable` CI step and by wheel inspection in the Kernel.
+ISSUER_AVAILABLE = False
 if APERTURE_AVAILABLE:
-    from aperture import (AuthorityIssuer, BudgetOffice, Ed25519SigningProvider,
-                          Principal, Proposal, VerificationRegistry)
-    from aperture.revocation import RevocationAuthority, RevocationState
+    from aperture import VerificationRegistry
+    from aperture.revocation import RevocationState
+    try:
+        from aperture_issuer import (AuthorityIssuer, BudgetOffice,
+                                     Ed25519SigningProvider, Principal,
+                                     Proposal, RevocationAuthority)
+        ISSUER_AVAILABLE = True
+    except ImportError:
+        pass
 
 POLICY, CONSTITUTION = "policy-1.0", "const-1.0"
 ACTOR = ORGAN_ID + "/agent/publisher"
@@ -40,7 +51,9 @@ TEXT = "A governed shadow publication. No real platform was contacted."
 
 @pytest.fixture
 def kernel():
-    """The Kernel side. DALEOBANKS never holds this signer."""
+    """The Kernel side. DALEOBANKS never holds this signer in production."""
+    if not ISSUER_AVAILABLE:
+        pytest.skip("issuer distribution is a test-only dependency for minting")
     signer = Ed25519SigningProvider.generate("kernel-shadow-key-1")
     registry = VerificationRegistry()
     registry.register(signer.key_id, signer.public_key_hex())
@@ -170,6 +183,23 @@ def test_constitution_guard_drift_refuses(kernel):
     assert platform.readback() == []
 
 
+def test_the_organ_runtime_never_imports_issuer_functionality():
+    """AST proof over the runtime module, independent of what is installed."""
+    import ast
+    src = pathlib.Path("governance/aperture_shadow.py").read_text()
+    imports = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            imports.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module)
+    # `issuer_is_unreachable` probes these by name at runtime; the module must
+    # never import them at module scope.
+    for bad in ("aperture_issuer", "aperture_issuer.issuer",
+                "aperture_issuer.signing", "aperture.issuer"):
+        assert bad not in imports, f"runtime imports {bad}"
+
+
 def test_the_organ_cannot_authorize_its_own_publication(kernel):
     """DALEOBANKS may refuse. It may not manufacture permission."""
     from aperture import Aperture
@@ -273,3 +303,51 @@ def test_metrics_are_produced_and_report_zero_real_publications(kernel):
     assert m["legacy_path_disagreements"] == 1
     assert isinstance(m["false_refusals"], str)     # deliberately unclassified
     assert m["mean_validation_latency_ms"] is not None
+
+
+# --------------------------------------------------- artifact-mode (Gate D)
+
+def test_aperture_origin_is_reported():
+    """CI asserts on this, so it must be observable."""
+    from governance.aperture_shadow import aperture_origin
+    assert aperture_origin()
+
+
+def test_issuer_is_unreachable_from_the_organ():
+    """The decisive package-boundary property.
+
+    In CI this runs with only uniimente-aperture-client installed, so the
+    issuer bytes are not on the machine. Locally, with the Kernel source tree
+    on the path, this is expected to be reachable - which is exactly why CI
+    sets APERTURE_REQUIRE_INSTALLED=1 and asserts the strict form below.
+    """
+    from governance.aperture_shadow import issuer_is_unreachable, aperture_origin
+    if "site-packages" not in aperture_origin():
+        pytest.skip("source-path development mode; CI enforces the strict form")
+    if ISSUER_AVAILABLE:
+        pytest.skip(
+            "the issuer is installed here as a TEST-ONLY dependency so this "
+            "suite can mint certificates. Unreachability is proved in a "
+            "client-only environment by the `issuer-unreachable` CI step, "
+            "which installs the client wheel alone.")
+    assert issuer_is_unreachable() is True
+
+
+def test_strict_artifact_mode_refuses_source_path_imports():
+    from governance.aperture_shadow import (assert_installed_artifact,
+                                            aperture_origin, _REQUIRE_INSTALLED)
+    if not _REQUIRE_INSTALLED:
+        pytest.skip("APERTURE_REQUIRE_INSTALLED is not set")
+    assert_installed_artifact()
+    assert "site-packages" in aperture_origin()
+
+
+def test_legacy_gate_is_not_reachable_from_the_organ():
+    """The superseded engine must not ship in a deployable artifact."""
+    from governance.aperture_shadow import aperture_origin
+    if "site-packages" not in aperture_origin():
+        pytest.skip("source-path development mode")
+    for mod in ("policy.consequence_gate", "uniimente_kernel.gate",
+                "kernel.gate.pipeline"):
+        with pytest.raises(ImportError):
+            __import__(mod)
