@@ -3,10 +3,17 @@
   "built_from_kernel_commit": "8afd6ee7f38f75f220dc53c002eb647f6506c6b9",
   "built_from_kernel_branch": "agent/canonical-authority-rc1",
   "sha256": {
-    "uniimente_aperture_client-0.1.0-py3-none-any.whl": "7e82a271beb8cb9c1c01a8e3877fc60dad86ab7f878a31f35e97706b665ca663",
-    "uniimente_aperture_issuer-0.1.0-py3-none-any.whl": "28b3eff846fd6d1cffac667f7f6430328d949e6f22c38b0b3917d305cfdc69af"
+    "uniimente_aperture_client-0.1.0-py3-none-any.whl": "faccfd0b9b7a40ec6e9d8d7090390d3a0c0c61a89c62f10f6bfc7eb6ddbb3aa9",
+    "uniimente_aperture_issuer-0.1.0-py3-none-any.whl": "4d333f172f1d4fbe27e2dd19756a3af71078d2e4414df07fd253e712f7ad12ae"
   },
   "why_vendored": "DALEOBANKS CI cannot check out uniimente-kernel: the default GITHUB_TOKEN is scoped to this repository, and a cross-repository checkout returned git exit 128. Fixing that properly requires a personal access token, which is a founder credential decision and is deliberately not created here. Vendoring the exact wheels keeps the property that actually matters - the organ installs a BUILT ARTIFACT, never the Kernel source tree - while needing no credential.",
   "cost": "Binary artifacts in git, and they must be refreshed deliberately when the Kernel changes. CI verifies these hashes, so a stale or tampered wheel fails the run rather than passing quietly.",
-  "preferred_fix": "A read-only PAT for dababiyoda/uniimente-kernel stored as a DALEOBANKS actions secret, restoring the build-from-pinned-ref step. Founder decision."
+  "preferred_fix": "A read-only PAT for dababiyoda/uniimente-kernel stored as a DALEOBANKS actions secret, restoring the build-from-pinned-ref step. Founder decision.",
+  "content_hash": {
+    "client": "652a86c59d07209ecef48f68bc699645a6f0d4e5c9c7ec552bba071e6fbf251c",
+    "issuer": "8c576ae82dd51610938de1a2ecb7f9ce067288e8e4a4bee87f744fedc2e14003"
+  },
+  "deterministic": true,
+  "source_date_epoch": "1750000000",
+  "note_on_hashes": "sha256 is the archive hash and is now byte-reproducible because SOURCE_DATE_EPOCH is pinned. content_hash is the identity of what the wheel CONTAINS, independent of archive metadata. A same-version different-content_hash artifact must be refused even where byte reproducibility is unavailable."
 }
