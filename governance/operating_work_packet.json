@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-08-08T23:00:00Z",
+  "repository": "dababiyoda/DALEOBANKS",
+  "branch": "agent/daleobanks-phase0-operating-substrate",
+  "head": "5b41fa63a0b4e5cbe4f6a39f2c30327daf8ff5ae",
+  "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
+  "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
+  "current_phase": "Phase 0 - truth, convergence, and controlled media substrate",
+  "next_action": "Validate machine-readable governance and the complete test suite, commit through a connector-backed GitHub branch, then open a separate draft implementation PR without merge or deployment.",
+  "active_sbm": {
+    "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
+    "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
+    "baseline": "0/1",
+    "target": "1/1",
+    "guardrail": "This metric retires after Phase 0 and cannot be counted as audience advancement, commercial proof, or external publication."
+  },
+  "authority_state": {
+    "root_authority": "External UNIIMENTE/Golden Kernel boundary; not implemented or expanded here",
+    "account_registry": "Executable prerequisite registry; no records seeded",
+    "live_publication": "NOT_AUTHORIZED_BY_THIS_CHANGE",
+    "money_movement": "NOT_AUTHORIZED",
+    "sensitive_outreach": "UNCHANGED_AND_NOT_AUTHORIZED_BY_THIS_CHANGE",
+    "deployment": "NOT_AUTHORIZED"
+  },
+  "publishing_state": {
+    "mode": "SHADOW_ONLY",
+    "official_accounts_registered": 0,
+    "languages_active": 0,
+    "platforms_active": 0,
+    "shadow_platform_interfaces": ["x", "linkedin", "mastodon"],
+    "publication_receipts": "Model and API implemented; no repository fixture presented as a real receipt"
+  },
+  "major_metrics": {
+    "qualified_owned_audience": 0,
+    "verified_advancement_action_rate_30d": null,
+    "reconciled_revenue": 0,
+    "free_cash_flow_available_to_uniimente": 0,
+    "verified_aspiration_gates_cleared": 0,
+    "deception_events": 0,
+    "unauthorized_external_effects": 0,
+    "fabricated_evidence_events": 0,
+    "disclosure_violations": 0
+  },
+  "pipeline_state": {
+    "source": "IMPLEMENTED_AND_TESTED",
+    "content_knowledge": "IMPLEMENTED_AND_TESTED",
+    "localization_structural_parity": "IMPLEMENTED_AND_TESTED",
+    "semantic_localization_review": "NOT_IMPLEMENTED",
+    "shadow_publication": "IMPLEMENTED_AND_TESTED",
+    "authorized_live_publication": "NOT_IMPLEMENTED_IN_THIS_PHASE",
+    "analytics": "EXPERIMENT_PREDECLARATION_IMPLEMENTED; REAL_OUTCOME_INGESTION_EXISTED_HISTORICALLY; NO_PHASE0_REAL_OUTCOME",
+    "daily_news_contract": "IMPLEMENTED_AND_TESTED; SCHEDULER_NOT_ACTIVATED",
+    "owned_audience": "NOT_IMPLEMENTED",
+    "community": "NOT_IMPLEMENTED",
+    "commerce": "HISTORICAL_CONVERSION_LEDGER_ONLY; NO_REVENUE_PROOF"
+  },
+  "wmi_integration_state": {
+    "idea_refinery": "PRESERVED",
+    "opportunity_packet": "PRESERVED_V1_1",
+    "http_path": "IMPLEMENTED_HISTORICALLY_AND_PROVENANCE_LABELED",
+    "actual_wmi_runtime_verified": false,
+    "mock_bypass_status": "BLOCKED_FROM_REALITY_CLAIM_BY_PERMANENT_SIMULATION_LABELS",
+    "inbound_push_status": "EXTERNAL_UNVERIFIED_UNTIL_RUNTIME_IDENTITY_ATTESTATION_EXISTS"
+  },
+  "pumpstation_handoff": {
+    "state": "NOT_IMPLEMENTED",
+    "reason": "No consent, eligibility, disclosure, or external PumpStation contract is available inside this repository."
+  },
+  "aspiration_campaign_state": {
+    "registry": "FOUNDER_INTENT_PRESERVED; EXECUTABLE ASPIRATION REGISTRY DEFERRED",
+    "active_aspiration": "Build one controlled DALEOBANKS media transaction",
+    "active_gate": "Canonical identity, provenance, shadow receipt, and validation evidence",
+    "backcast": "G=controlled attributable loop; P=registry+evidence+localization+shadow receipt; S=one repeatable shadow test",
+    "shared_primitive": "Evidence-bound account and content identity",
+    "external_campaign": "NOT_STARTED"
+  },
+  "known_blockers": [
+    "No founder-declared official account, handle, credential reference, or production mandate may be inferred.",
+    "No canonical timezone is declared for the 8:00 PM daily edition.",
+    "Actual WMI and Kernel runtimes are outside the authorized repository scope.",
+    "No real owned-audience offer, buyer, participant advancement action, or payment exists.",
+    "PR #66 publication-authority ownership is unresolved while it remains a separate draft."
+  ],
+  "falsifications": [
+    "The earlier claim that implementation was blocked by the absence of GitHub CLI is false in this environment because the repository can be cloned and the connected GitHub write path can create branch objects and a draft PR.",
+    "A local WealthMachineClient result is not evidence that WMI participated.",
+    "A dry-run receipt is not a publication, audience outcome, advancement action, or commercial result.",
+    "Repository documentation does not prove runtime implementation."
+  ],
+  "tests": {
+    "targeted": "40 passed",
+    "full_python": "322 passed, 10 warnings",
+    "governance_intent": "15 records valid",
+    "governance_deliberation": "five required roles and exactly two passes valid",
+    "node": "NOT_RUN_NO_FRONTEND_CHANGE",
+    "external_effects_exercised": 0
+  },
+  "ci": "PENDING_UNTIL_DRAFT_PR",
+  "strongest_counterargument": "This Phase 0 substrate may become a sophisticated internal cathedral unless the next authorized step tests a real owned relationship, participant advancement, or buyer outcome.",
+  "next_smallest_implementation": "After CI, select one founder-declared SHADOW account and one real source packet; run the loop without external publication. Then request only the exact authority needed for the cheapest real owned-audience evidence test.",
+  "founder_intent_preserved": true
+}
