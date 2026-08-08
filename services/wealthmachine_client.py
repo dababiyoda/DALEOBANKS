@@ -37,6 +37,10 @@ from services.venture_protocol import SCHEMA_VERSION, packet_to_wire, validate_a
 logger = get_logger(__name__)
 
 _LEGAL_RISK_FLAGS = {"legal_risk", "regulated_product", "licensing_required"}
+MOCK_ASSESSMENT_LABEL = "SIMULATION | MOCK | NON_EXTERNAL | NON_WMI_EXECUTION"
+UNVERIFIED_ASSESSMENT_LABEL = (
+    "EXTERNAL | UNVERIFIED_RUNTIME_IDENTITY | NON_AUTHORITATIVE"
+)
 
 
 class CircuitOpenError(ConnectionError):
@@ -84,6 +88,9 @@ class WealthMachineClient:
             "go_no_go": assessment.go_no_go,
             "score": assessment.opportunity_score,
             "mode": self.mode,
+            "execution_class": assessment.execution_class,
+            "evidence_class": assessment.evidence_class,
+            "external_execution": assessment.external_execution,
         })
         return assessment
 
@@ -132,6 +139,7 @@ class WealthMachineClient:
             self._record_failure()
             raise
         self._consecutive_failures = 0
+        authenticated_runtime = bool(token or signing_key())
         return VentureAssessment(
             opportunity_packet_id=payload["opportunity_packet_id"],
             go_no_go=payload["go_no_go"],
@@ -148,6 +156,14 @@ class WealthMachineClient:
             requires_human_approval=True,  # non-negotiable on this side
             reasons=list(payload.get("reasons") or []),
             cases=list(payload.get("cases") or []),
+            execution_class=(
+                "EXTERNAL_WMI_HTTP_AUTHENTICATED"
+                if authenticated_runtime else "EXTERNAL_HTTP_UNVERIFIED"
+            ),
+            evidence_class=(
+                "EXTERNAL_ASSESSMENT" if authenticated_runtime else "EXTERNAL_UNVERIFIED"
+            ),
+            external_execution=True,
         )
 
     def _record_failure(self) -> None:
@@ -185,7 +201,7 @@ class WealthMachineClient:
         cases = build_cases(packet_to_wire(packet), score, round(min(0.9, score + 0.1), 3))
         severe = severe_unresolved(cases)
 
-        reasons = []
+        reasons = [MOCK_ASSESSMENT_LABEL]
         if legal_flags:
             go_no_go, risk_level = "kill", "high"
             reasons.append(f"legal risk flags present: {sorted(legal_flags)}")
@@ -231,6 +247,9 @@ class WealthMachineClient:
             requires_human_approval=True,
             reasons=reasons,
             cases=cases,
+            execution_class="SIMULATION",
+            evidence_class="MOCK",
+            external_execution=False,
         )
 
     # ------------------------------------------------------------------ #
@@ -245,6 +264,18 @@ class WealthMachineClient:
     ) -> Dict[str, Any]:
         finance = "finance_education_only" in packet.risk_flags
         disclosure = "\n\nEducational only — not financial advice." if finance else ""
+        simulated = assessment.execution_class == "SIMULATION"
+        authoritative_external = (
+            assessment.external_execution
+            and assessment.evidence_class == "EXTERNAL_ASSESSMENT"
+        )
+        planning_label = (
+            MOCK_ASSESSMENT_LABEL
+            if simulated
+            else (UNVERIFIED_ASSESSMENT_LABEL if not authoritative_external else "")
+        )
+        simulation_prefix = f"[{planning_label}] " if planning_label else ""
+        simulation_banner = f"{planning_label}\n\n" if planning_label else ""
 
         landing = MediaAssetDraft(
             source_opportunity_packet_id=packet.id,
@@ -252,8 +283,9 @@ class WealthMachineClient:
             account_lane="main",
             platform="web",
             format="landing_page",
-            title=f"{packet.possible_offer or 'Offer'} — waitlist",
+            title=f"{simulation_prefix}{packet.possible_offer or 'Offer'} — waitlist",
             draft_text=(
+                simulation_banner +
                 f"# {packet.core_thesis}\n\n"
                 f"We're building {packet.possible_offer or 'a resource'} for "
                 f"{packet.audience}.\n\nWhat you'll learn: the mechanisms, the "
@@ -268,8 +300,12 @@ class WealthMachineClient:
             source_opportunity_packet_id=packet.id,
             source_thought=packet.core_thesis,
             format="interview_script",
-            title=f"Buyer interviews: {packet.possible_offer or packet.core_thesis[:40]}",
+            title=(
+                f"{simulation_prefix}Buyer interviews: "
+                f"{packet.possible_offer or packet.core_thesis[:40]}"
+            ),
             script="\n".join([
+                *([MOCK_ASSESSMENT_LABEL] if simulated else []),
                 "1. Walk me through the last time you felt this pain. What did you do?",
                 "2. What have you already tried? What did it cost you?",
                 "3. If this problem vanished tomorrow, what changes for you?",
@@ -282,8 +318,9 @@ class WealthMachineClient:
             source_opportunity_packet_id=packet.id,
             source_thought=packet.core_thesis,
             format="outreach_dm",
-            title="Interview invitation (engaged repliers only)",
+            title=f"{simulation_prefix}Interview invitation (engaged repliers only)",
             draft_text=(
+                simulation_banner +
                 "Thanks for the thoughtful reply on this topic. I'm researching "
                 "the problem seriously — would you be open to a 15-minute chat "
                 "about your experience? No pitch, just learning."
@@ -297,16 +334,21 @@ class WealthMachineClient:
             session,
             kind="validation_plan",
             summary=(
-                f"Run validation for '{(packet.possible_offer or packet.core_thesis)[:60]}' "
+                f"{simulation_prefix}Run validation for "
+                f"'{(packet.possible_offer or packet.core_thesis)[:60]}' "
                 f"({assessment.go_no_go}, score {assessment.opportunity_score})"
             ),
             payload={
                 "opportunity_packet_id": packet.id,
                 "venture_assessment_id": assessment.id,
+                "assessment_execution_class": assessment.execution_class,
+                "assessment_evidence_class": assessment.evidence_class,
+                "external_wmi_execution": assessment.external_execution,
+                "authoritative_wmi_assessment": authoritative_external,
                 "validation_plan": assessment.validation_plan,
                 "draft_ids": [landing.id, interview.id, outreach.id],
             },
-            rationale="; ".join(assessment.reasons)[:300],
+            rationale="; ".join(assessment.reasons)[:500],
         )
         session.commit()
         return {
@@ -332,4 +374,7 @@ def set_wealthmachine_client(client: Optional[WealthMachineClient]) -> None:
     _SHARED_CLIENT = client
 
 
-__all__ = ["WealthMachineClient", "get_wealthmachine_client", "set_wealthmachine_client"]
+__all__ = [
+    "MOCK_ASSESSMENT_LABEL", "UNVERIFIED_ASSESSMENT_LABEL", "WealthMachineClient",
+    "get_wealthmachine_client", "set_wealthmachine_client",
+]

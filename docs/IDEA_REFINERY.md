@@ -46,6 +46,15 @@ responds. The system learns.**
 - `services/wealthmachine_client.py`: evaluate (mock/http) +
   `assessment_to_actions` (validation plan, landing-page copy, buyer
   interview script, outreach draft, ApprovalRequest).
+
+The local scorer is permanently classified as
+`SIMULATION | MOCK | NON_EXTERNAL | NON_WMI_EXECUTION`. That label travels
+with the stored assessment, wire serialization, ledger event, approval
+payload, and generated planning drafts. A mock result can test local contract
+and planning behavior; it is not evidence that WealthMachineIntelligence ran.
+An HTTP response without a configured bearer or signing key is separately
+classified `EXTERNAL_HTTP_UNVERIFIED` / `EXTERNAL_UNVERIFIED`; network contact
+alone does not prove the remote runtime's identity.
 - Endpoints: `/api/ideas/intake`, `/api/ideas`, `/api/ideas/{id}/refine`,
   `/api/opportunities` (+ `/decision`, `/send-to-wealthmachine`),
   `/api/wealthmachine/assessments/receive`, `/api/media/drafts`

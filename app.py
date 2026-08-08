@@ -42,7 +42,12 @@ from services.ledger import get_kill_switch, get_ledger
 from services.operator_line import get_operator_line, validate_twilio_signature
 from services.idea_refinery import IdeaRefinery
 from services.wealthmachine_client import get_wealthmachine_client
-from services.venture_protocol import validate_assessment_wire, validate_identity_type, LANE_POLICY
+from services.venture_protocol import validate_assessment_wire, LANE_POLICY
+from services.account_registry import AccountRegistry, AccountRegistryError
+from services.media_operating_system import (
+    MediaOperatingSystem,
+    MediaOperatingSystemError,
+)
 from services.security import (
     RequestContext,
     get_request_context,
@@ -96,6 +101,8 @@ optimizer = Optimizer()
 self_model_service = SelfModelService(persona_store)
 reflection_service = ReflectionService()
 idea_refinery = IdeaRefinery(llm_adapter)
+account_registry = AccountRegistry()
+media_operating_system = MediaOperatingSystem(accounts=account_registry)
 
 # WebSocket connections for real-time updates
 websocket_connections: List[WebSocket] = []
@@ -153,6 +160,112 @@ class LaneRequest(BaseModel):
     cultural_context: str = ""
     allowed_topics: List[str] = []
     forbidden_topics: List[str] = []
+    handle: str = ""
+    region: str = "global"
+    topic_lane: str = "general"
+    public_brand_name: str = "DALEOBANKS"
+    parent_identity: str = "DALEOBANKS"
+    legal_principal: str = ""
+    credential_ref: str = ""
+    current_authorization: str = "SHADOW_ONLY"
+    authorization_ref: str = ""
+    posting_limits: Dict[str, Any] = {}
+    risk_class: str = "tier1"
+    commercial_disclosure_requirements: List[str] = []
+    status: str = "SHADOW"
+    last_verified: Optional[datetime] = None
+
+
+class LaneStatusRequest(BaseModel):
+    status: str
+    actor: str = "admin"
+    authorization_ref: str = ""
+    current_authorization: Optional[str] = None
+    handle: Optional[str] = None
+    legal_principal: Optional[str] = None
+    credential_ref: Optional[str] = None
+    posting_limits: Optional[Dict[str, Any]] = None
+    last_verified: Optional[datetime] = None
+
+
+class SourceIntakeRequest(BaseModel):
+    title: str
+    url: str
+    source_class: str
+    topic: str
+    source_text: str
+    publisher: str = ""
+    discovery_source: str = "direct"
+    primary_source_url: str = ""
+    published_at: Optional[datetime] = None
+    evidence_status: str = "DISCOVERED"
+    contradiction_search_status: str = "NOT_RUN"
+    risk_class: str = "tier1"
+    metadata: Dict[str, Any] = {}
+
+
+class ClaimCreateRequest(BaseModel):
+    statement: str
+    source_ids: List[str]
+    evidence_class: str
+    evidence_status: str = "SUPPORTED"
+    confidence: float
+    contradiction_notes: List[str] = []
+    uncertainty: str = ""
+    risk_class: Optional[str] = None
+
+
+class ContentCreateRequest(BaseModel):
+    content_type: str = "explainer"
+    topic: str
+    thesis: str
+    claim_ids: List[str]
+    source_ids: List[str]
+    counterargument: str
+    daleobanks_position: str
+    uncertainty: str
+    audiences: List[str]
+    formats: List[str]
+    funnel_destination: str = ""
+    metadata: Dict[str, Any] = {}
+
+
+class LocalizationCreateRequest(BaseModel):
+    language: str
+    region: str = "global"
+    platform: str = "x"
+    text: str
+    claim_ids: List[str]
+    source_ids: List[str]
+    disclosure: str = ""
+    cultural_notes: str = ""
+
+
+class ContentExperimentRequest(BaseModel):
+    hypothesis: str
+    audience: str
+    channel: str
+    expected_outcome: str
+    metric: str
+    duration: str
+    baseline: str
+    budget: float = 0.0
+    currency: str = "USD"
+
+
+class ShadowPublicationRequest(BaseModel):
+    localized_artifact_id: str
+    account_id: str
+
+
+class DailyNewsRequest(BaseModel):
+    topic: str
+    sections: Dict[str, str]
+    claim_ids: List[str]
+    source_ids: List[str]
+    counterargument: str
+    uncertainty: str
+    audiences: List[str]
 
 class ValidationResultRequest(BaseModel):
     opportunity_packet_id: str
@@ -1053,12 +1166,19 @@ async def send_to_wealthmachine(packet_id: str, _: RequestContext = Depends(requ
             client = get_wealthmachine_client()
             assessment = client.evaluate(packet)
             session.add(assessment)
-            packet.status = "assessed"
+            if assessment.execution_class == "SIMULATION":
+                packet.status = "simulated"
+            elif assessment.evidence_class == "EXTERNAL_ASSESSMENT":
+                packet.status = "assessed"
+            else:
+                packet.status = "assessment_received_unverified"
             actions = client.assessment_to_actions(session, assessment, packet, get_operator_line())
         from services.venture_protocol import assessment_to_wire
         return {
             "assessment": assessment_to_wire(assessment),
             "mode": client.mode,
+            "execution_class": assessment.execution_class,
+            "external_wmi_execution": assessment.external_execution,
             "draft_ids": [actions[k].id for k in ("landing_page", "interview_script", "outreach_draft")],
             "approval_request_id": actions["approval_request"].id,
         }
@@ -1095,14 +1215,23 @@ async def receive_assessment(
                 requires_human_approval=True,
                 reasons=list(payload.get("reasons") or []),
                 cases=list(payload.get("cases") or []),
+                # This push route validates the contract and caller role but
+                # does not yet prove the remote runtime identity.  Keep it
+                # visibly unverified until signed WMI attestation exists.
+                execution_class="INBOUND_CONTRACT",
+                evidence_class="EXTERNAL_UNVERIFIED",
+                external_execution=False,
             )
             session.add(assessment)
-            packet.status = "assessed"
+            packet.status = "assessment_received_unverified"
             actions = get_wealthmachine_client().assessment_to_actions(
                 session, assessment, packet, get_operator_line()
             )
         get_ledger().record("venture_assessment", {
             "packet_id": packet.id, "go_no_go": assessment.go_no_go, "mode": "push",
+            "execution_class": assessment.execution_class,
+            "evidence_class": assessment.evidence_class,
+            "external_execution": assessment.external_execution,
         })
         return {"success": True, "assessment_id": assessment.id,
                 "approval_request_id": actions["approval_request"].id}
@@ -1117,7 +1246,7 @@ async def receive_assessment(
 
 @app.get("/api/assessments")
 async def list_assessments(_: RequestContext = Depends(get_request_context)):
-    """VentureAssessments stored so far (mock or real engine — same contract)."""
+    """Assessments with permanent execution/evidence provenance labels."""
     with get_db_session() as session:
         assessments = (
             session.query(VentureAssessment)
@@ -1421,6 +1550,275 @@ async def get_decision_episode(episode_id: str, _: RequestContext = Depends(get_
         return episode
 
 
+# --------------------------------------------------------------------- #
+# Phase 0 media operating substrate (source -> shadow receipt)
+# --------------------------------------------------------------------- #
+@app.post("/api/media/sources")
+async def create_media_source(
+    request: SourceIntakeRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    try:
+        with get_db_session() as session:
+            source = media_operating_system.ingest_source(
+                session,
+                title=request.title,
+                url=request.url,
+                source_class=request.source_class,
+                topic=request.topic,
+                source_text=request.source_text,
+                publisher=request.publisher,
+                discovery_source=request.discovery_source,
+                primary_source_url=request.primary_source_url,
+                published_at=request.published_at,
+                evidence_status=request.evidence_status,
+                contradiction_search_status=request.contradiction_search_status,
+                risk_class=request.risk_class,
+                metadata=request.metadata,
+            )
+        return {
+            "success": True,
+            "source_id": source.id,
+            "content_hash": source.content_hash,
+            "evidence_status": source.evidence_status,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/media/sources")
+async def list_media_sources(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        sources = session.query(SourceRecord).order_by(
+            lambda row: row.retrieved_at, descending=True
+        ).all()
+        return {"count": len(sources), "sources": [{
+            "id": source.id,
+            "title": source.title,
+            "url": source.url,
+            "source_class": source.source_class,
+            "discovery_source": source.discovery_source,
+            "primary_source_url": source.primary_source_url,
+            "topic": source.topic,
+            "publisher": source.publisher,
+            "content_hash": source.content_hash,
+            "evidence_status": source.evidence_status,
+            "contradiction_search_status": source.contradiction_search_status,
+            "risk_class": source.risk_class,
+            "retrieved_at": source.retrieved_at.isoformat(),
+        } for source in sources]}
+
+
+@app.post("/api/media/claims")
+async def create_media_claim(
+    request: ClaimCreateRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    try:
+        with get_db_session() as session:
+            claim = media_operating_system.create_claim(
+                session,
+                statement=request.statement,
+                source_ids=request.source_ids,
+                evidence_class=request.evidence_class,
+                evidence_status=request.evidence_status,
+                confidence=request.confidence,
+                contradiction_notes=request.contradiction_notes,
+                uncertainty=request.uncertainty,
+                risk_class=request.risk_class,
+            )
+        return {
+            "success": True,
+            "claim_id": claim.id,
+            "evidence_class": claim.evidence_class,
+            "risk_class": claim.risk_class,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/media/content")
+async def create_media_content(
+    request: ContentCreateRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    try:
+        with get_db_session() as session:
+            content = media_operating_system.create_content(
+                session,
+                content_type=request.content_type,
+                topic=request.topic,
+                thesis=request.thesis,
+                claim_ids=request.claim_ids,
+                source_ids=request.source_ids,
+                counterargument=request.counterargument,
+                daleobanks_position=request.daleobanks_position,
+                uncertainty=request.uncertainty,
+                audiences=request.audiences,
+                formats=request.formats,
+                funnel_destination=request.funnel_destination,
+                metadata=request.metadata,
+            )
+        return {
+            "success": True,
+            "content_id": content.id,
+            "evidence_status": content.evidence_status,
+            "risk_class": content.risk_class,
+            "status": content.status,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/media/daily-news")
+async def create_daily_news(
+    request: DailyNewsRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    try:
+        with get_db_session() as session:
+            content = media_operating_system.create_daily_news(
+                session,
+                topic=request.topic,
+                sections=request.sections,
+                claim_ids=request.claim_ids,
+                source_ids=request.source_ids,
+                counterargument=request.counterargument,
+                uncertainty=request.uncertainty,
+                audiences=request.audiences,
+            )
+        return {
+            "success": True,
+            "content_id": content.id,
+            "content_type": content.content_type,
+            "schedule_local_time": content.metadata["editorial_schedule_local_time"],
+            "status": content.status,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/media/content/{content_id}/localizations")
+async def create_media_localization(
+    content_id: str,
+    request: LocalizationCreateRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    try:
+        with get_db_session() as session:
+            artifact = media_operating_system.localize(
+                session,
+                content_id=content_id,
+                language=request.language,
+                region=request.region,
+                platform=request.platform,
+                text=request.text,
+                claim_ids=request.claim_ids,
+                source_ids=request.source_ids,
+                disclosure=request.disclosure,
+                cultural_notes=request.cultural_notes,
+            )
+        return {
+            "success": True,
+            "localized_artifact_id": artifact.id,
+            "material_facts_hash": artifact.material_facts_hash,
+            "status": artifact.status,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/media/content/{content_id}/experiments")
+async def predeclare_media_experiment(
+    content_id: str,
+    request: ContentExperimentRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    try:
+        with get_db_session() as session:
+            experiment = media_operating_system.predeclare_experiment(
+                session,
+                content_id=content_id,
+                hypothesis=request.hypothesis,
+                audience=request.audience,
+                channel=request.channel,
+                expected_outcome=request.expected_outcome,
+                metric=request.metric,
+                duration=request.duration,
+                baseline=request.baseline,
+                budget=request.budget,
+                currency=request.currency,
+            )
+        return {
+            "success": True,
+            "experiment_id": experiment.id,
+            "status": experiment.status,
+            "evidence_class": experiment.evidence_class,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/media/content/{content_id}/shadow")
+async def shadow_media_content(
+    content_id: str,
+    request: ShadowPublicationRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Run the registered adapter in shadow mode; live adapters are refused."""
+    try:
+        with get_db_session() as session:
+            artifact = session.query(LocalizedArtifact).filter(
+                lambda row: row.id == request.localized_artifact_id
+            ).first()
+            if artifact is None:
+                raise MediaOperatingSystemError("localized artifact is not registered")
+            adapter = multiplexer.clients.get(artifact.platform)
+            if adapter is None:
+                raise MediaOperatingSystemError("platform adapter is not registered")
+            receipt = await media_operating_system.shadow_publish(
+                session,
+                content_id=content_id,
+                localized_artifact_id=request.localized_artifact_id,
+                account_id=request.account_id,
+                adapter=adapter,
+            )
+        return {
+            "success": True,
+            "receipt_id": receipt.id,
+            "status": receipt.status,
+            "external_effect": receipt.external_effect,
+            "analytics_status": receipt.analytics_status,
+        }
+    except MediaOperatingSystemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/media/receipts")
+async def list_publication_receipts(_: RequestContext = Depends(get_request_context)):
+    with get_db_session() as session:
+        receipts = session.query(PublicationReceipt).order_by(
+            lambda row: row.created_at, descending=True
+        ).all()
+        return {"count": len(receipts), "receipts": [{
+            "id": receipt.id,
+            "content_id": receipt.content_id,
+            "localized_artifact_id": receipt.localized_artifact_id,
+            "account_id": receipt.account_id,
+            "platform": receipt.platform,
+            "mode": receipt.mode,
+            "status": receipt.status,
+            "external_effect": receipt.external_effect,
+            "post_id": receipt.post_id,
+            "content_hash": receipt.content_hash,
+            "source_ids": receipt.source_ids,
+            "claim_ids": receipt.claim_ids,
+            "authority_ref": receipt.authority_ref,
+            "analytics_status": receipt.analytics_status,
+            "created_at": receipt.created_at.isoformat(),
+        } for receipt in receipts]}
+
+
 @app.get("/api/media/drafts")
 async def list_media_drafts(status_filter: str = "pending", _: RequestContext = Depends(get_request_context)):
     with get_db_session() as session:
@@ -1470,15 +1868,21 @@ async def decide_media_draft(
 async def list_lanes(_: RequestContext = Depends(get_request_context)):
     with get_db_session() as session:
         lanes = session.query(AccountLane).all()
-        return {"count": len(lanes), "policy": list(LANE_POLICY), "lanes": [{
-            "id": lane.id, "name": lane.name, "platform": lane.platform,
-            "identity_type": lane.identity_type, "purpose": lane.purpose,
-            "audience": lane.audience, "language": lane.language,
-            "cultural_context": lane.cultural_context,
-            "allowed_topics": lane.allowed_topics,
-            "forbidden_topics": lane.forbidden_topics,
-            "approval_required": lane.approval_required, "active": lane.active,
-        } for lane in lanes]}
+        records = []
+        for lane in lanes:
+            record = account_registry.public_record(lane)
+            record.update({
+                "name": lane.name,
+                "identity_type": lane.identity_type,
+                "purpose": lane.purpose,
+                "audience": lane.audience,
+                "cultural_context": lane.cultural_context,
+                "allowed_topics": lane.allowed_topics,
+                "forbidden_topics": lane.forbidden_topics,
+                "approval_required": lane.approval_required,
+            })
+            records.append(record)
+        return {"count": len(lanes), "policy": list(LANE_POLICY), "lanes": records}
 
 
 @app.post("/api/lanes")
@@ -1486,24 +1890,74 @@ async def create_lane(request: LaneRequest, _: RequestContext = Depends(require_
     """Create an account lane. Fake people, impersonation, and engagement
     manipulation identities are rejected — hard, not configurably."""
     try:
-        validate_identity_type(request.identity_type)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    with get_db_session() as session:
-        lane = AccountLane(
-            name=request.name, platform=request.platform,
-            identity_type=request.identity_type, purpose=request.purpose,
-            audience=request.audience, language=request.language,
-            cultural_context=request.cultural_context,
-            allowed_topics=request.allowed_topics,
-            forbidden_topics=request.forbidden_topics,
-        )
-        session.add(lane)
-        session.commit()
+        with get_db_session() as session:
+            lane = account_registry.register(
+                session,
+                name=request.name,
+                platform=request.platform,
+                identity_type=request.identity_type,
+                purpose=request.purpose,
+                audience=request.audience,
+                language=request.language,
+                cultural_context=request.cultural_context,
+                allowed_topics=request.allowed_topics,
+                forbidden_topics=request.forbidden_topics,
+                handle=request.handle,
+                region=request.region,
+                topic_lane=request.topic_lane,
+                public_brand_name=request.public_brand_name,
+                parent_identity=request.parent_identity,
+                legal_principal=request.legal_principal,
+                credential_ref=request.credential_ref,
+                current_authorization=request.current_authorization,
+                authorization_ref=request.authorization_ref,
+                posting_limits=request.posting_limits,
+                risk_class=request.risk_class,
+                commercial_disclosure_requirements=(
+                    request.commercial_disclosure_requirements
+                ),
+                status=request.status,
+                last_verified=request.last_verified,
+            )
+    except (AccountRegistryError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     get_ledger().record("lane_created", {
         "id": lane.id, "name": lane.name, "identity_type": lane.identity_type,
+        "status": lane.status,
     })
-    return {"success": True, "id": lane.id}
+    return {"success": True, "id": lane.id, "status": lane.status}
+
+
+@app.post("/api/lanes/{account_id}/status")
+async def change_lane_status(
+    account_id: str,
+    request: LaneStatusRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Ledgered lifecycle transition; never infers or fetches a handle."""
+    try:
+        with get_db_session() as session:
+            lane = account_registry.get(session, account_id)
+            for field, value in (
+                ("current_authorization", request.current_authorization),
+                ("handle", request.handle),
+                ("legal_principal", request.legal_principal),
+                ("credential_ref", request.credential_ref),
+                ("posting_limits", request.posting_limits),
+            ):
+                if value is not None:
+                    setattr(lane, field, value)
+            lane = account_registry.transition(
+                session,
+                account_id,
+                request.status,
+                actor=request.actor,
+                authorization_ref=request.authorization_ref,
+                last_verified=request.last_verified,
+            )
+        return {"success": True, "account": account_registry.public_record(lane)}
+    except AccountRegistryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @app.get("/r/{redirect_id}")

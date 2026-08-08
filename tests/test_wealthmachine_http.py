@@ -85,6 +85,9 @@ def test_http_mode_posts_to_intake_with_token(tmp_path, monkeypatch):
     assert seen["body"]["schema_version"] == SCHEMA_VERSION
     assert assessment.go_no_go == "go"
     assert assessment.opportunity_packet_id == packet.id
+    assert assessment.execution_class == "EXTERNAL_WMI_HTTP_AUTHENTICATED"
+    assert assessment.evidence_class == "EXTERNAL_ASSESSMENT"
+    assert assessment.external_execution is True
 
 
 def test_http_mode_omits_auth_header_without_token(tmp_path, monkeypatch):
@@ -98,8 +101,11 @@ def test_http_mode_omits_auth_header_without_token(tmp_path, monkeypatch):
         return _FakeResponse(_assessment_wire(packet))
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
-    _client(tmp_path).evaluate(packet)
+    assessment = _client(tmp_path).evaluate(packet)
     assert seen["auth"] is None
+    assert assessment.execution_class == "EXTERNAL_HTTP_UNVERIFIED"
+    assert assessment.evidence_class == "EXTERNAL_UNVERIFIED"
+    assert assessment.external_execution is True
 
 
 def test_http_mode_forces_human_approval(tmp_path, monkeypatch):

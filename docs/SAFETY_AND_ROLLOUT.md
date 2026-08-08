@@ -174,11 +174,13 @@ unanswered inbound DMs before doing any cold outreach.
 `_publish_impl` runs, the gate:
 
 1. records a `publish_attempt` in the ledger,
-2. forces a dry run if the kill switch is disarmed,
-3. forces a dry run (and records `publish_gated`) if the platform exceeds
+2. forces a dry run when the adapter is disabled or locally marked
+   `live=False`, even if the global switch is armed for another adapter,
+3. forces a dry run if the kill switch is disarmed,
+4. forces a dry run (and records `publish_gated`) if the platform exceeds
    the rate governor's cap (default 30 live actions/hour per platform,
    override with `RATE_GOVERNOR_MAX_PER_HOUR`),
-4. records the `publish_result`.
+5. records the `publish_result`.
 
 Safety is inherited, never re-implemented: any new platform adapter gets all
 of this by subclassing.

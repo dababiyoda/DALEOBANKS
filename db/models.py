@@ -402,6 +402,11 @@ class VentureAssessment:
     requires_human_approval: bool = True
     reasons: List[str] = field(default_factory=list)
     cases: List[Dict[str, Any]] = field(default_factory=list)  # adversarial cases
+    # Provenance is part of the assessment, not an API-side footnote.  A
+    # local scorer must never be remembered as WealthMachineIntelligence.
+    execution_class: str = "UNCLASSIFIED"
+    evidence_class: str = "UNVERIFIED"
+    external_execution: bool = False
     created_at: datetime = field(default_factory=_utcnow)
 
 
@@ -477,6 +482,141 @@ class MediaAssetDraft:
 
 
 @dataclass
+class SourceRecord:
+    """A source discovered by the media system with durable provenance.
+
+    Aggregators may discover a source, but cannot silently become the
+    evidence for a consequential claim.  ``primary_source_url`` names the
+    underlying source when ``discovery_source`` is an aggregator such as
+    Feedly.
+    """
+
+    id: str = field(default_factory=_uuid)
+    title: str = ""
+    url: str = ""
+    source_class: str = "public_discussion"
+    discovery_source: str = "direct"
+    primary_source_url: str = ""
+    topic: str = ""
+    publisher: str = ""
+    published_at: Optional[datetime] = None
+    retrieved_at: datetime = field(default_factory=_utcnow)
+    content_hash: str = ""
+    evidence_status: str = "DISCOVERED"
+    contradiction_search_status: str = "NOT_RUN"
+    risk_class: str = "tier1"
+    raw_vault_ref: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ClaimRecord:
+    """One explicitly classified claim and the sources supporting it."""
+
+    id: str = field(default_factory=_uuid)
+    statement: str = ""
+    source_ids: List[str] = field(default_factory=list)
+    evidence_class: str = "FACT"
+    evidence_status: str = "SUPPORTED"
+    confidence: float = 0.0
+    contradiction_notes: List[str] = field(default_factory=list)
+    uncertainty: str = ""
+    risk_class: str = "tier1"
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class ContentRecord:
+    """Canonical knowledge record behind one or more media artifacts."""
+
+    id: str = field(default_factory=_uuid)
+    content_type: str = "explainer"
+    topic: str = ""
+    thesis: str = ""
+    claim_ids: List[str] = field(default_factory=list)
+    source_ids: List[str] = field(default_factory=list)
+    counterargument: str = ""
+    daleobanks_position: str = ""
+    uncertainty: str = ""
+    evidence_status: str = "DRAFT"
+    risk_class: str = "tier1"
+    audiences: List[str] = field(default_factory=list)
+    formats: List[str] = field(default_factory=list)
+    localization_ids: List[str] = field(default_factory=list)
+    funnel_destination: str = ""
+    publication_receipt_ids: List[str] = field(default_factory=list)
+    correction_ids: List[str] = field(default_factory=list)
+    performance: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    status: str = "DRAFT"
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class LocalizedArtifact:
+    """A local expression that retains the canonical claim/source set."""
+
+    id: str = field(default_factory=_uuid)
+    content_id: str = ""
+    language: str = "en"
+    region: str = "global"
+    platform: str = "x"
+    text: str = ""
+    claim_ids: List[str] = field(default_factory=list)
+    source_ids: List[str] = field(default_factory=list)
+    material_facts_hash: str = ""
+    disclosure: str = ""
+    cultural_notes: str = ""
+    status: str = "SHADOW"
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class PublicationReceipt:
+    """Evidence of what a platform adapter did or would have done."""
+
+    id: str = field(default_factory=_uuid)
+    content_id: str = ""
+    localized_artifact_id: str = ""
+    account_id: str = ""
+    platform: str = ""
+    mode: str = "SHADOW"
+    status: str = "SHADOW_COMPLETED"
+    external_effect: bool = False
+    post_id: str = ""
+    content_hash: str = ""
+    source_ids: List[str] = field(default_factory=list)
+    claim_ids: List[str] = field(default_factory=list)
+    authority_ref: str = ""
+    idempotency_key: str = field(default_factory=_uuid)
+    analytics_status: str = "NOT_APPLICABLE_SHADOW"
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class ContentExperiment:
+    """Predeclared content experiment; shadow results are never outcomes."""
+
+    id: str = field(default_factory=_uuid)
+    content_id: str = ""
+    hypothesis: str = ""
+    audience: str = ""
+    channel: str = ""
+    expected_outcome: str = ""
+    metric: str = ""
+    budget: float = 0.0
+    currency: str = "USD"
+    duration: str = ""
+    baseline: str = ""
+    result: Dict[str, Any] = field(default_factory=dict)
+    learning: str = ""
+    next_decision: str = ""
+    status: str = "SHADOW"
+    evidence_class: str = "SIMULATION"
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
 class AccountLane:
     """A distinct, authentic publishing lane (brand/project/page). Never a
     fake person — identity types are validated by services/venture_protocol.py."""
@@ -497,6 +637,23 @@ class AccountLane:
     approval_required: bool = True
     risk_level: str = "low"
     active: bool = False
+    # Canonical Account Registry fields.  ``active`` remains as a historical
+    # compatibility field; ``status`` is the authoritative lifecycle state.
+    handle: str = ""
+    region: str = "global"
+    topic_lane: str = "general"
+    public_brand_name: str = "DALEOBANKS"
+    parent_identity: str = "DALEOBANKS"
+    legal_principal: str = ""
+    credential_ref: str = ""
+    current_authorization: str = "SHADOW_ONLY"
+    authorization_ref: str = ""
+    posting_limits: Dict[str, Any] = field(default_factory=dict)
+    risk_class: str = "tier1"
+    commercial_disclosure_requirements: List[str] = field(default_factory=list)
+    status: str = "SHADOW"
+    created_at: datetime = field(default_factory=_utcnow)
+    last_verified: Optional[datetime] = None
 
 
 @dataclass
@@ -554,6 +711,12 @@ __all__ = [
     "VentureAssessment",
     "ValidationResult",
     "MediaAssetDraft",
+    "SourceRecord",
+    "ClaimRecord",
+    "ContentRecord",
+    "LocalizedArtifact",
+    "PublicationReceipt",
+    "ContentExperiment",
     "AccountLane",
     "ExperimentProposal",
     "PersonaVersion",
