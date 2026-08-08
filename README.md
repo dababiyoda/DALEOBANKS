@@ -8,11 +8,14 @@ The current X agent is only the first operating surface of the larger DALEOBANKS
 
 DALEOBANKS is being developed toward a **global lifestyle brand, multilingual media network, community and commerce system, early cash engine for UNIIMENTE, opportunity-sensing organ, distribution network, collaboration platform, and long-horizon civilization-seeding institution**.
 
+Its permanent mission is to help **reduce the distance and time between Alfonso Lopez's active lawful aspirations and verified reality**. For material aspiration planning, use the Backcast-GPS-based aspiration acceleration protocol and prioritize shared primitives, real evidence, ethical influence, collaboration, and durable capability over vanity activity.
+
 The current runtime does **not** prove that all of those future capabilities already exist.
 
-Read these documents before making material changes to DALEOBANKS identity, product direction, media architecture, multilingual expansion, monetization, community strategy, autonomy, Venture Cell routing, or relationship to UNIIMENTE:
+Read these documents before making material changes to DALEOBANKS identity, product direction, media architecture, multilingual expansion, monetization, community strategy, aspiration planning, influence campaigns, autonomy, Venture Cell routing, or relationship to UNIIMENTE:
 
 - [Canonical DALEOBANKS Lifestyle Brand, Media Network, and Civilization-Seeding Architecture](docs/DALEOBANKS_MEDIA_BRAND_ARCHITECTURE.md)
+- [DALEOBANKS Infinite Aspiration Chase and Acceleration Protocol](docs/DALEOBANKS_ASPIRATION_ACCELERATION_PROTOCOL.md)
 - [DALEOBANKS Founder Intent Lineage](docs/DALEOBANKS_FOUNDER_INTENT_LINEAGE.md)
 - [Safety and Rollout](docs/SAFETY_AND_ROLLOUT.md)
 - [Idea Refinery and Venture Cockpit](docs/IDEA_REFINERY.md)
