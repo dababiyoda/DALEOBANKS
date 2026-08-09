@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-09T21:43:02Z",
+  "updated_at": "2026-08-09T21:50:06Z",
   "repository": "dababiyoda/DALEOBANKS",
   "branch": "claude/daleobanks-complete-build-arqtg5",
-  "head": "cd5c66227f8d389f8e3c8bb90d44797020f353c8",
+  "head": "c4379b0d8f785956c3235170fd07b0339fc2b28b",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -12,8 +12,8 @@
     "state": "OPEN_DRAFT",
     "mergeable": true
   },
-  "current_phase": "Section 84 deliverable list closed; every remaining gate is a founder declaration",
-  "next_action": "Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. With those, predeclare_campaign accepts, the goal-chase scheduler returns PREDECLARE_CAMPAIGN instead of BLOCKED, and the first reversible pilot runs. No further internal system is justified before that.",
+  "current_phase": "Mandate surface closed. Every remaining gate is a founder declaration or an external contract.",
+  "next_action": "Supply surface, timezone, source packet, owned-audience destination, resource ceiling, and stop condition. predeclare_campaign then accepts, the goal-chase scheduler returns PREDECLARE_CAMPAIGN instead of BLOCKED, and the first reversible pilot runs against reality. Building anything further internally is now explicitly unjustified.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -67,7 +67,11 @@
     "aspiration_accelerator": "IMPLEMENTED_AND_TESTED including loop driver; no campaign can run until founder declarations exist",
     "rabbit_hole_graph": "IMPLEMENTED_AND_TESTED; counterargument, off-ramp, and capability payload required",
     "audience_intelligence": "IMPLEMENTED_AND_TESTED; aggregate only, population floor 25",
-    "reward_integrity": "IMPLEMENTED_AND_TESTED; rage-bait content guard plus reward-admissibility guard on the live optimizer"
+    "reward_integrity": "IMPLEMENTED_AND_TESTED; rage-bait content guard plus reward-admissibility guard on the live optimizer",
+    "dependency_portability": "IMPLEMENTED_AND_TESTED; nothing goes live half-declared; revocation reports what it stranded",
+    "debate_engine": "IMPLEMENTED_AND_TESTED; a debate producing only outrage closes as unproductive",
+    "content_to_research": "IMPLEMENTED_AND_TESTED; RESOLVED requires independent verification, FALSIFIED does not",
+    "multi_model_intelligence": "IMPLEMENTED_AND_TESTED as dependency kind model_provider; a live model needs failure modes, cost, latency, and a fallback"
   },
   "wmi_integration_state": {
     "idea_refinery": "PRESERVED",
@@ -119,11 +123,12 @@
     "The reward function was unguarded: fame is engagement plus followers, penalty counts only reactive platform signals, so rage-bait that avoids a block raises the J-score. The adversarial-controls list named this guard and it did not exist until now.",
     "A complete section 84 deliverable list is not a working business. Every count these systems measure is zero.",
     "Keyword-based content guards are a starting heuristic, not a classifier. Their false-positive rate on real material is unmeasured.",
-    "The ladder's guards bind the service path, not the durable store. Direct construction bypasses them; aggregates recompute from source fields so a bypassed record still fails to move a metric."
+    "The ladder's guards bind the service path, not the durable store. Direct construction bypasses them; aggregates recompute from source fields so a bypassed record still fails to move a metric.",
+    "A closed mandate surface is not a company. 494 tests describe what the institution refuses; none of them describe anyone it has served."
   ],
   "tests": {
-    "targeted": "175 passed across the guard and registry suites",
-    "full_python": "461 passed, 10 warnings",
+    "targeted": "208 passed across guard, registry, ladder, and engine suites",
+    "full_python": "494 passed, 10 warnings",
     "clean_venv_from_requirements": "verified green on pip install -r requirements.txt",
     "governance_intent": "15 records valid",
     "governance_deliberation": "DB-DEC-001, 003, 004, 005 valid; DB-DEC-002 reserved for the Phase 1 branch",
@@ -131,8 +136,8 @@
     "external_effects_exercised": 0
   },
   "ci": "NO_GITHUB_ACTIONS_WORKFLOWS_CONFIGURED; LOCAL_VALIDATION_PASSED",
-  "strongest_counterargument": "The deliverable list is closed and the business has not started. Five branches of machinery now exist whose entire purpose is refusing claims that nobody has yet tried to make. The single defensible thing built this session was the rage-bait guard, because it protects a mechanism that is already running. Everything else is scaffolding waiting for a person.",
-  "next_smallest_implementation": "Not code. Six declarations.",
+  "strongest_counterargument": "Every section of the mandate that can be satisfied without a person now is. That sentence is the problem: the mandate is a description of a business, and a business is not satisfiable by code. What exists is a machine that cannot lie about traction, attached to no traction. The rage-bait guard is the only piece defending something already running.",
+  "next_smallest_implementation": "Six declarations. There is no code left that does not require one.",
   "founder_intent_preserved": true,
   "stacked_on": {
     "branch": "agent/daleobanks-phase0-operating-substrate",
@@ -142,7 +147,7 @@
   },
   "publication_authority_ownership": "RESOLVED as composition, not conflict. PR #66 Reality Aperture is the constitutional gate (Kernel signs; Aperture.__init__ accepts no signer). Phase 0/1 account prerequisite, editorial review, CapabilityGrant, and KillSwitch are organ-local policy. They compose in series and organ-local refusal runs after Kernel authorization: a certificate permits, it never compels. Recorded PROPOSED, not IMPLEMENTED \u2014 PR #66 imports the aperture from a sibling kernel checkout and skips its tests when absent.",
   "deliverable_audit_84": {
-    "status": "COMPLETE \u2014 31 of 31 have an implementation or a documented canonical owner",
+    "status": "COMPLETE \u2014 31 of 31, plus the cross-cutting sections that had no deliverable-list entry",
     "built_here": [
       "Aspiration Registry",
       "Backcast GPS execution record",
@@ -159,7 +164,14 @@
       "PumpStation handoff interface",
       "Infinite Goal Chase scheduler",
       "Campaign Planner (aspiration campaigns)",
-      "Standing Authority interface documentation"
+      "Standing Authority interface documentation",
+      "Platform Adapter Registry completion (per-adapter bounds, section 13)",
+      "Multi-model intelligence registry (sections 41, 68)",
+      "Automation Loom registry (section 42)",
+      "Production tool adapters, vendor-neutral (section 17)",
+      "Debate Engine (section 39)",
+      "Civilization-seeding and content-to-research pipeline (sections 38, 62)",
+      "Portability report (section 67)"
     ],
     "preserved_from_phase0_phase1_or_history": [
       "canonical Account Registry",
@@ -177,9 +189,8 @@
       "Operating Work Packet",
       "Content Factory (text formats)"
     ],
-    "remaining_partial": [
-      "Content Factory produces text formats only; video, carousel, podcast, and newsletter production are ASPIRATIONAL and need external adapters",
-      "Platform Adapter Registry holds identity and lifecycle; per-adapter rate limits and content-class binding still to bind"
+    "remaining_aspirational": [
+      "Video, carousel, podcast, and newsletter production need external tool adapters; the registry holds them as NOT_CONFIGURED with no vendor lock, which is the correct state until a tool is authorized."
     ]
   },
   "adversarial_controls_75": {

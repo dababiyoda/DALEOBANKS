@@ -39,8 +39,17 @@ eligible for live authority regardless of whether its code works.
 
 `IMPLEMENTED`: the account registry holds identity, lifecycle, posting
 limits, risk class, disclosure requirements, and credential references
-(`env:`, `vault:`, `secret-manager:` only). `NOT BUILT`: per-adapter rate
-limit and permitted-content-class binding.
+(`env:`, `vault:`, `secret-manager:` only). `IMPLEMENTED`: per-adapter rate
+limits, permitted content classes, evidence requirements, rollback, and
+freeze now live in `services/dependency_registry.py`, which refuses to
+activate an adapter with any of them undeclared.
+
+Model providers, production tools, and automations sit in the same registry
+under different kinds, because they are the same shape: an outside
+capability with declared bounds, a revocation state, and a fallback. A live
+model needs failure modes, cost, latency, and something to fall back to. A
+live automation needs an owner, documentation, a rollback, and to be both
+reversible and observable — one nobody can see or stop is not automation.
 
 ## Account lifecycle
 
