@@ -186,8 +186,113 @@ class ExperimentsService:
                         "min_reward": min(rewards),
                         "max_reward": max(rewards)
                     }
-        
+
+        # Attach quality deltas so the reward guard has something to read.
+        # Without these the J-score is engagement all the way down and an arm
+        # that wins by making people angry is indistinguishable from one that
+        # wins by helping them.
+        self._attach_quality_deltas(session, logs, stats, cutoff)
         return stats
+
+    def _attach_quality_deltas(
+        self, session: Any, logs: Any, stats: Dict[str, Any], cutoff: datetime
+    ) -> None:
+        """Add engagement, capability, and trust deltas per arm.
+
+        Deltas come from splitting the window in half and comparing the
+        halves, because the alternative is storing snapshots nobody would
+        remember to write. Capability reads helpfulness ratings attributed to
+        an arm's posts; trust reads the rate of mute, block, and ethics
+        signals over the same split. An arm with no quality evidence gets no
+        delta rather than a zero — absence of a signal is not a neutral
+        signal, and the guard treats the difference as decisive.
+        """
+        from db.models import Action, HelpfulnessFeedback
+
+        midpoint = cutoff + (datetime.now(UTC) - cutoff) / 2
+
+        try:
+            feedback = session.query(HelpfulnessFeedback).filter(
+                lambda row: row.captured_at >= cutoff
+            ).all()
+            actions = session.query(Action).filter(
+                lambda row: row.created_at >= cutoff
+            ).all()
+        except Exception as exc:  # telemetry must never break sampling
+            logger.warning(f"quality delta lookup failed: {exc}")
+            return
+
+        rating_by_ref: Dict[str, List[Any]] = {}
+        for row in feedback:
+            if row.reference_id:
+                rating_by_ref.setdefault(row.reference_id, []).append(row)
+
+        penalty_kinds = {"mute_detected", "block_detected", "ethics_violation"}
+        penalties_early = sum(
+            1 for a in actions
+            if a.kind in penalty_kinds and a.created_at < midpoint
+        )
+        penalties_late = sum(
+            1 for a in actions
+            if a.kind in penalty_kinds and a.created_at >= midpoint
+        )
+
+        dimension_attr = {
+            "post_type": "post_type", "topic": "topic", "hour_bin": "hour_bin",
+            "cta_variant": "cta_variant", "intensity": "intensity",
+        }
+
+        for dimension, attr in dimension_attr.items():
+            for arm in stats.get(dimension, {}):
+                arm_logs = [
+                    log for log in logs
+                    if self._arm_key(getattr(log, attr, None), dimension) == arm
+                ]
+                early = [l for l in arm_logs if l.created_at < midpoint]
+                late = [l for l in arm_logs if l.created_at >= midpoint]
+                if not early or not late:
+                    continue  # one half is empty; a delta would be noise
+
+                engagement_delta = (
+                    self._mean([l.reward_j for l in late])
+                    - self._mean([l.reward_j for l in early])
+                )
+                stats[dimension][arm]["engagement_delta"] = round(engagement_delta, 4)
+
+                early_ratings = self._ratings_for(early, rating_by_ref)
+                late_ratings = self._ratings_for(late, rating_by_ref)
+                if early_ratings and late_ratings:
+                    stats[dimension][arm]["capability_delta"] = round(
+                        self._mean(late_ratings) - self._mean(early_ratings), 4
+                    )
+
+                # Trust falls when penalty signals rise. Attributed at the
+                # portfolio level, since a mute is rarely traceable to one arm.
+                if penalties_early or penalties_late:
+                    stats[dimension][arm]["trust_delta"] = round(
+                        (penalties_early - penalties_late) / max(len(arm_logs), 1), 4
+                    )
+
+    @staticmethod
+    def _arm_key(value: Any, dimension: str) -> Any:
+        if value is None:
+            return None
+        if dimension in ("hour_bin", "intensity"):
+            return int(value)
+        return value
+
+    @staticmethod
+    def _ratings_for(arm_logs: Any, rating_by_ref: Dict[str, List[Any]]) -> List[float]:
+        ratings: List[float] = []
+        for log in arm_logs:
+            for row in rating_by_ref.get(log.tweet_id or "", []):
+                ratings.append(float(row.rating))
+        return ratings
+
+    @staticmethod
+    def _mean(values: Any) -> float:
+        cleaned = [float(v) for v in values if v is not None]
+        return sum(cleaned) / len(cleaned) if cleaned else 0.0
     
     def get_experiment_summary(self, session: Any) -> Dict[str, Any]:
         """Get overall experiment summary"""
