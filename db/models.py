@@ -946,6 +946,93 @@ class TerritoryNode:
     created_at: datetime = field(default_factory=_utcnow)
 
 
+# ---------------------------------------------------------------------- #
+# Replaceable dependencies, and the debate that produces research
+# ---------------------------------------------------------------------- #
+
+
+@dataclass
+class DependencyRecord:
+    """One replaceable thing this institution leans on.
+
+    Platform adapters, model providers, production tools, and automations are
+    the same shape: an outside capability with declared bounds, a revocation
+    state, and something to fall back to. Recording them as one kind is what
+    makes the identity survive losing any of them."""
+
+    id: str = field(default_factory=_uuid)
+    kind: str = "platform_adapter"  # platform_adapter|model_provider|production_tool|automation
+    name: str = ""
+    vendor: str = ""
+    version: str = ""
+    role: str = ""
+    status: str = "NOT_CONFIGURED"  # NOT_CONFIGURED|CONFIGURED|ACTIVE|DEGRADED|REVOKED|RETIRED
+    authorized_capabilities: List[str] = field(default_factory=list)
+    permitted_content_classes: List[str] = field(default_factory=list)
+    posting_limit_per_day: Optional[int] = None
+    rate_limit_per_hour: Optional[int] = None
+    risk_class: str = "tier1"
+    credential_owner: str = ""
+    credential_reference: str = ""      # env:/vault:/secret-manager: only
+    revocation_state: str = "NOT_REVOKED"
+    evidence_requirements: List[str] = field(default_factory=list)
+    rollback_mechanism: str = ""
+    freeze_mechanism: str = ""
+    fallback_dependency_id: str = ""
+    reversible: bool = False
+    observable: bool = False
+    owner: str = ""
+    documentation_ref: str = ""
+    failure_modes: List[str] = field(default_factory=list)
+    cost_note: str = ""
+    latency_note: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class DebateRecord:
+    """A public argument, judged by what it produced rather than by its heat.
+
+    A debate that generated only outrage is a weak outcome and is recorded as
+    one. The strongest opposing case is required before it opens."""
+
+    id: str = field(default_factory=_uuid)
+    question: str = ""
+    daleobanks_position: str = ""
+    strongest_counterargument: str = ""
+    evidence_class: str = "PROPOSAL"  # FACT|SUPPORTED_INFERENCE|PROPOSAL|EXPERIMENT|ASPIRATION|SPECULATION
+    content_ids: List[str] = field(default_factory=list)
+    outcomes: List[str] = field(default_factory=list)
+    outcome_refs: Dict[str, Any] = field(default_factory=dict)
+    productive: bool = False
+    closed_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class ResearchLead:
+    """An unresolved technical question with somewhere to send it.
+
+    Public discussion is not scientific closure, so a lead carries its
+    verification state explicitly and starts unverified."""
+
+    id: str = field(default_factory=_uuid)
+    debate_id: str = ""
+    question: str = ""
+    primitive_id: str = ""
+    experts_identified: List[str] = field(default_factory=list)
+    hypothesis: str = ""
+    partner_ref: str = ""
+    disposition: str = "UNDECIDED"  # BUILD|PARTNER|FUND|OPEN_SOURCE|POPULARIZE|STANDARDIZE|PURCHASE
+    status: str = "OPEN"  # OPEN|IN_PROGRESS|RESOLVED|FALSIFIED|ABANDONED
+    result: str = ""
+    independently_verified: bool = False
+    verification_ref: str = ""
+    absorbed_capability_ref: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
 @dataclass
 class ExperimentProposal:
     """A proposed widening of the bandit's action space (new arm values,
@@ -1021,6 +1108,9 @@ __all__ = [
     "VentureHandoff",
     "AudienceSegment",
     "TerritoryNode",
+    "DependencyRecord",
+    "DebateRecord",
+    "ResearchLead",
     "ExperimentProposal",
     "PersonaVersion",
 ]
