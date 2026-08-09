@@ -1,0 +1,427 @@
+{
+  "decision_id": "DB-DEC-002",
+  "title": "Give the WMI authoritative-evidence rule a single owner",
+  "problem": "Phase 0 (DB-DEC-001) added assessment provenance fields and propagated simulation labels into drafts and the operator approval payload. The predicate that reads those fields was left written at two call sites in two non-equivalent forms. services/wealthmachine_client.py required external_execution AND evidence_class == EXTERNAL_ASSESSMENT before treating an assessment as authoritative. app.py required only evidence_class. An assessment carrying the strong evidence_class without an external execution behind it -- exactly the object the inbound push endpoint constructs -- was labeled non-authoritative on its own drafts while the API route set the packet status to 'assessed'. The looser copy governed the packet's recorded state, so institutional memory could record a locally produced verdict as an external claim about the world.",
+  "founder_intent_refs": [
+    "Master mandate section 30: the WealthMachineClient mock must never be confused with an actual WMI assessment; simulated results must be permanently labeled SIMULATION / MOCK / NON_EXTERNAL / NON_WMI_EXECUTION",
+    "Master mandate section 30: prevent institutional memory from learning from simulation as though it were reality",
+    "Master mandate section 75: each adversarial guard needs a negative control proving it can fail",
+    "Master mandate section 80: reconciled real outcome outranks simulation; do not invert the hierarchy",
+    "governance/founder_intent.json"
+  ],
+  "baseline": "agent/daleobanks-phase0-operating-substrate at 0d996ca. 322 tests passing. Provenance fields present on VentureAssessment; labels reach drafts and approval payloads; the reading rule duplicated and divergent across services/wealthmachine_client.py:268 and app.py:1171.",
+  "alternatives": [
+    {
+      "name": "Leave both copies and document the intended rule",
+      "description": "Record the correct predicate in the architecture documentation and rely on reviewers to keep the two call sites aligned.",
+      "advantages": [
+        "Zero code change and zero regression risk",
+        "Preserves current observable behavior exactly"
+      ],
+      "disadvantages": [
+        "The divergence already happened once without being noticed, so review is demonstrably not the control",
+        "Documentation cannot fail a build; the looser copy stays authoritative in practice",
+        "Every new consumer must re-derive the rule, adding a third divergence surface"
+      ],
+      "revival_evidence": "Revive only if the two call sites are independently proven to be the last consumers and the codebase is frozen."
+    },
+    {
+      "name": "Fix app.py to match the client's stricter form, in place",
+      "description": "Change the API route's condition to include external_execution and stop there.",
+      "advantages": [
+        "Smallest possible diff",
+        "Immediately removes the observed divergence"
+      ],
+      "disadvantages": [
+        "Leaves two copies that merely happen to agree today",
+        "Does not prevent the third copy",
+        "Provides no gate for callers who need a hard refusal rather than a boolean"
+      ],
+      "revival_evidence": "Revive if extracting a shared predicate is shown to create a circular import or a contract-ownership conflict with the WMI repository."
+    },
+    {
+      "name": "Extract one canonical predicate into venture_protocol and consume it everywhere",
+      "description": "venture_protocol owns is_authoritative_wmi_assessment, is_simulated_assessment, require_authoritative_wmi, assessment_provenance, and packet_status_for_assessment. Both call sites consume rather than restate. Reads use getattr defaults so unlabeled or foreign objects fail closed. Decision episodes surface provenance.",
+      "advantages": [
+        "One question resolves in one place; a future divergence requires deleting a shared import rather than forgetting a conjunct",
+        "venture_protocol already owns the contract both sides speak, so no new ownership is invented",
+        "require_authoritative_wmi raises, so a caller cannot ignore a return value",
+        "Decision episodes stop conflating 'assessed' with 'assessed by WMI'"
+      ],
+      "disadvantages": [
+        "Adds surface area to a module explicitly kept dependency-light for copying into the WMI repository",
+        "A shared predicate can be imported and then ignored, which the extraction alone does not prevent"
+      ],
+      "revival_evidence": "Selected."
+    },
+    {
+      "name": "Reversible experiment: add the predicate but leave call sites unchanged",
+      "description": "Introduce the canonical rule and adopt it only in new code, migrating existing call sites later.",
+      "advantages": [
+        "No behavior change on existing routes",
+        "Allows staged adoption"
+      ],
+      "disadvantages": [
+        "Leaves the observed defect live for the duration of the migration",
+        "Creates a third form of the rule while the first two remain"
+      ],
+      "revival_evidence": "Revive if changing packet status transitions turns out to break an external consumer contract."
+    }
+  ],
+  "do_nothing_option": {
+    "expected_outcome": "The API route continues marking packets 'assessed' for assessments the client itself labels non-authoritative. Decision episodes continue reporting an assessment stage with no way to tell a simulation from an external verdict. Any downstream learning, scorecard, or routing decision that reads packet status inherits a fabricated external-evidence claim.",
+    "advantages": [
+      "No new code risk",
+      "322 tests continue to pass, because none of them exercises the divergence"
+    ],
+    "disadvantages": [
+      "Directly violates the founder's explicit prohibition on simulation entering institutional memory as reality",
+      "The passing suite actively conceals the defect, which makes the status quo worse than an obviously broken one"
+    ]
+  },
+  "roles": [
+    {
+      "role": "Founder-Intent Steward",
+      "position": "Section 30 is stated as a prohibition, not a preference. A divergence that lets a simulated verdict set a packet to 'assessed' is the prohibited case, regardless of intent.",
+      "material_concerns": [
+        "Phase 0's labeling work must be preserved and consumed, not replaced by a competing vocabulary",
+        "The fix must not invent a second provenance ontology alongside execution_class/evidence_class"
+      ],
+      "evidence_refs": [
+        "services/wealthmachine_client.py:268",
+        "app.py:1171",
+        "governance/deliberations/DB-DEC-001.json"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Systems Architect",
+      "position": "venture_protocol is the correct canonical owner: it already defines the wire contract both sides speak and holds no dependency on db or services, so no cycle is introduced.",
+      "material_concerns": [
+        "The module is documented as copy-ready for the WMI repository and must stay dependency-light",
+        "Predicates must read through getattr so objects deserialized from older snapshots fail closed rather than raising"
+      ],
+      "evidence_refs": [
+        "services/venture_protocol.py module docstring",
+        "db/session.py dataclass registry rehydrates persisted rows by field name"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Adversarial Reviewer",
+      "position": "A shared predicate removes the divergence but not the bypass. Nothing stops a future call site from reading evidence_class directly, and the extraction is invisible to CI.",
+      "material_concerns": [
+        "Every guard must have a negative control; a guard only observed passing is untested",
+        "There must be a test that fails if the rule is restated locally again"
+      ],
+      "evidence_refs": [
+        "Master mandate section 75",
+        "tests/test_wmi_evidence_rule.py::test_call_sites_agree_with_the_canonical_rule"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Operator and Maintainer",
+      "position": "Deriving packet status from one function is materially easier to operate than two conditionals that must be kept in sync by memory.",
+      "material_concerns": [
+        "Changing status transitions could surprise a frontend or external consumer reading packet.status",
+        "The new 'assessment_received_unverified' outcome must already be a known status value, not a new one"
+      ],
+      "evidence_refs": [
+        "app.py previously emitted 'assessment_received_unverified' on its else branch, so the value is pre-existing"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Evidence and Welfare Guardian",
+      "position": "Supports the change and notes what it does not achieve: no external evidence is created here. The system becomes honest about the absence of a real WMI verdict; it does not acquire one.",
+      "material_concerns": [
+        "This work must not be reported as progress toward real WMI integration",
+        "WMI_REAL_PATH remains unexercised against a live endpoint; every current assessment in this repository is a simulation"
+      ],
+      "evidence_refs": [
+        "No WEALTHMACHINE_URL is configured; client.mode resolves to 'mock'",
+        "tests/test_wealthmachine_http.py exercises a fake urlopen, not a live WMI service"
+      ],
+      "recommendation": "RETAIN"
+    }
+  ],
+  "evidence": [
+    {
+      "claim": "The rule was written twice in non-equivalent forms.",
+      "tier": "primary_source",
+      "reference": "services/wealthmachine_client.py:268 and app.py:1171 at Phase 0 head 0d996ca",
+      "finding": "The client required external_execution AND evidence_class == EXTERNAL_ASSESSMENT; the API route required only evidence_class."
+    },
+    {
+      "claim": "The divergent case is constructible by existing code, not hypothetical.",
+      "tier": "primary_source",
+      "reference": "app.py receive_assessment constructs an assessment with external_execution=False",
+      "finding": "An inbound payload carrying evidence_class EXTERNAL_ASSESSMENT with no external execution reaches the branch where the two rules disagree."
+    },
+    {
+      "claim": "The existing suite did not detect the divergence.",
+      "tier": "sandbox_execution",
+      "reference": "python -m pytest tests/ -q at Phase 0 head",
+      "finding": "322 passed with both divergent forms live; no test exercised the disagreeing case."
+    },
+    {
+      "claim": "The convergence holds under negative controls.",
+      "tier": "unit_test",
+      "reference": "python -m pytest tests/ -q after the change",
+      "finding": "338 passed. tests/test_wmi_evidence_rule.py adds 16, each guard paired with a case proving it refuses."
+    }
+  ],
+  "counterevidence": [
+    {
+      "claim": "The divergence caused a production incident.",
+      "tier": "other",
+      "reference": "No incident record exists in governance/ or the decision ledger.",
+      "finding": "Unsupported. Severity is argued from reachability by construction, not from observed damage; a reviewer may reasonably rank this below work that moves an external number."
+    },
+    {
+      "claim": "The stricter branch this change protects is itself proven to work.",
+      "tier": "deterministic_fixture",
+      "reference": "tests/test_wealthmachine_http.py substitutes a fake urllib.request.urlopen; no WEALTHMACHINE_URL is configured.",
+      "finding": "Unsupported against reality. No real assessment has ever traversed the authoritative path in this repository; correctness is proven only against a fake transport."
+    },
+    {
+      "claim": "A shared predicate prevents future divergence.",
+      "tier": "unit_test",
+      "reference": "tests/test_wmi_evidence_rule.py::test_call_sites_agree_with_the_canonical_rule",
+      "finding": "Only partially. The test inspects two known call sites; a third consumer reading the raw fields would not be caught. The control is a review aid, not an enforced invariant."
+    }
+  ],
+  "pass_1": {
+    "intended_outcome": "One predicate answers 'did WealthMachineIntelligence actually produce this verdict', consumed by every call site, with packet status derived from it rather than restated.",
+    "advantages": [
+      {
+        "id": "A1",
+        "statement": "One predicate answers the authoritative-evidence question for every consumer.",
+        "amplified_value": "A future divergence now requires deleting a shared import rather than forgetting a conjunct, which is visible in review."
+      },
+      {
+        "id": "A2",
+        "statement": "The fix consumes Phase 0's provenance vocabulary instead of introducing a competing one.",
+        "amplified_value": "execution_class / evidence_class / external_execution stay the single ontology; DB-DEC-001's labeling work is preserved intact."
+      },
+      {
+        "id": "A3",
+        "statement": "Predicates read through getattr defaults, so unlabeled and legacy-deserialized objects fail closed.",
+        "amplified_value": "Assessments rehydrated from pre-Phase-0 snapshots are reported as non-authoritative rather than raising or passing by omission."
+      },
+      {
+        "id": "A4",
+        "statement": "require_authoritative_wmi raises instead of returning a boolean.",
+        "amplified_value": "Converts a forgettable check into an enforced gate at every future routing or settlement call site."
+      },
+      {
+        "id": "A5",
+        "statement": "Decision episodes report provenance explicitly.",
+        "amplified_value": "The memory layer stops inferring 'WMI participated' from the mere presence of an assessment stage."
+      }
+    ],
+    "disadvantages": [
+      {
+        "id": "D1",
+        "statement": "venture_protocol grows, though it is documented as copy-ready and deliberately minimal.",
+        "severity": "low",
+        "response_type": "modularity",
+        "redesigned_response": "Additions are pure predicates importing nothing beyond typing, so the copy-ready property is preserved and verified by the module's unchanged import block."
+      },
+      {
+        "id": "D2",
+        "statement": "An observable packet status transition changes.",
+        "severity": "medium",
+        "response_type": "protective",
+        "redesigned_response": "'assessment_received_unverified' was already emitted by app.py's else branch, so no new status value enters the vocabulary; only the boundary between two existing values moves, and strictly toward the conservative label."
+      },
+      {
+        "id": "D3",
+        "statement": "A shared helper can be bypassed by reading the raw provenance fields directly.",
+        "severity": "medium",
+        "response_type": "evidence",
+        "redesigned_response": "test_call_sites_agree_with_the_canonical_rule inspects both call sites' source and fails if the raw condition reappears. Residual risk recorded rather than claimed closed."
+      },
+      {
+        "id": "D4",
+        "statement": "Correct labeling could be mistaken for progress on real WMI integration.",
+        "severity": "high",
+        "response_type": "evidence",
+        "redesigned_response": "The Evidence and Welfare Guardian's dissent is recorded as binding on reporting; WMI_REAL_PATH stays reported as unexercised until a live endpoint responds."
+      }
+    ],
+    "comparisons": {
+      "baseline": "Two divergent copies; looser copy authoritative for packet status.",
+      "do_nothing": "Rejected: preserves an explicitly prohibited failure mode that the passing suite conceals.",
+      "simplest_viable": "Patch app.py in place. Rejected: fixes today's symptom, preserves the duplication that produced it.",
+      "strongest_competing": "Move the predicate onto VentureAssessment as a method. Rejected: db/models is deliberately behavior-free and cannot own a rule the WMI repository must also apply.",
+      "reversible_experiment": "Add the predicate, migrate call sites later. Rejected: leaves the defect live during migration and creates a third form.",
+      "simplest_viable_alternative": "Patch app.py's condition in place to match the client's stricter form. Rejected: it fixes today's symptom while preserving the duplication that produced it, leaving two copies that merely happen to agree.",
+      "strongest_competing_architecture": "Move the predicate onto VentureAssessment as a method so provenance travels with the object. Rejected: db/models is deliberately behavior-free, and the rule must also be applicable inside the WealthMachineIntelligence repository, which imports the protocol module and not this repo's models."
+    },
+    "rejected_alternatives": [
+      {
+        "name": "Documentation-only alignment",
+        "rejection_reason": "The divergence already occurred without review catching it, so documentation is demonstrably not the control.",
+        "revival_evidence": "The two call sites are proven to be the last consumers and the codebase is frozen."
+      },
+      {
+        "name": "In-place patch of app.py",
+        "rejection_reason": "Fixes today's symptom while preserving the duplication that produced it.",
+        "revival_evidence": "Extracting a shared predicate is shown to create an import cycle."
+      },
+      {
+        "name": "Predicate as a VentureAssessment method",
+        "rejection_reason": "db/models is deliberately behavior-free and cannot own a rule the WMI repository must also apply.",
+        "revival_evidence": "Models gain behavior by an explicit architecture decision."
+      },
+      {
+        "name": "Staged adoption with call sites unchanged",
+        "rejection_reason": "Leaves the defect live during migration and creates a third form of the rule.",
+        "revival_evidence": "Changing status transitions is shown to break an external consumer contract."
+      }
+    ]
+  },
+  "pass_2": {
+    "attack_summary": "Attacked the strengthened design for bypasses, fake outcome learning, invisible enforcement, and cathedral growth.",
+    "new_weaknesses": [
+      {
+        "id": "N1",
+        "category": "gaming",
+        "statement": "A future call site can read assessment.evidence_class directly and reintroduce the divergence.",
+        "strengthening_response": "A source-inspection test fails if the raw condition reappears in either known call site; the gap beyond those two is recorded as residual, not claimed closed."
+      },
+      {
+        "id": "N2",
+        "category": "overfit",
+        "statement": "An authoritative label proves a signed transport ran, not that the verdict behind it is sound.",
+        "strengthening_response": "Name the boundary in the predicate's own docstring and in the work packet: this answers provenance, never quality. No downstream consumer may treat authoritative as correct."
+      },
+      {
+        "id": "N3",
+        "category": "bureaucracy",
+        "statement": "Five new exported functions on a module whose stated virtue is minimality.",
+        "strengthening_response": "Three are thin readers over one rule and one is a formatter; the rule itself exists once. No new file, model, endpoint, or config is added."
+      },
+      {
+        "id": "N4",
+        "category": "fragility",
+        "statement": "Assessments persisted under Phase 0 defaults rehydrate as non-authoritative and will look like a regression in historical episodes.",
+        "strengthening_response": "This is the intended conservative reading: those assessments were never proven external. Documented here so the change in historical reporting is not mistaken for data loss."
+      },
+      {
+        "id": "N5",
+        "category": "fragility",
+        "statement": "The anti-drift test couples to source text and will break on unrelated refactors of the two inspected functions.",
+        "strengthening_response": "Accepted deliberately: a test that breaks loudly on refactor is preferable to a divergence that passes silently. Recorded as residual risk with an owner."
+      }
+    ],
+    "pass_1_disadvantage_dispositions": [
+      {
+        "disadvantage_id": "D1",
+        "outcome": "accepted",
+        "rationale": "Measured cost is one import block per consumer; the copy-ready property is preserved because no new dependency is introduced.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "venture_protocol acquires any import beyond the standard library."
+      },
+      {
+        "disadvantage_id": "D2",
+        "outcome": "accepted",
+        "rationale": "No new status value is introduced and the boundary moves strictly toward the more conservative label.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "An external consumer is found to depend on 'assessed' for the non-authoritative case."
+      },
+      {
+        "disadvantage_id": "D3",
+        "outcome": "experiment",
+        "rationale": "The inspection test mitigates the two known call sites; whether it is sufficient is an open empirical question.",
+        "owner": "Adversarial reviewer",
+        "review_trigger": "Any new consumer of VentureAssessment provenance is added."
+      },
+      {
+        "disadvantage_id": "D4",
+        "outcome": "accepted",
+        "rationale": "Handled by binding dissent on reporting rather than by changing the implementation.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any report that describes this work as WMI integration progress."
+      }
+    ],
+    "final_design": "venture_protocol owns EXECUTION_CLASS_* and EVIDENCE_CLASS_* constants, SIMULATION_LABELS, MOCK_ASSESSMENT_LABEL, UNVERIFIED_ASSESSMENT_LABEL, SimulatedEvidenceError, is_authoritative_wmi_assessment, is_simulated_assessment, require_authoritative_wmi, assessment_provenance, and packet_status_for_assessment. wealthmachine_client and app.py consume them. decision_episode reports assessment_provenance, externally_assessed, and simulated_assessment_count. 16 tests, each guard with a negative control, plus a source-inspection guard against re-divergence.",
+    "residual_risks": [
+      {
+        "risk": "A new consumer can still read provenance fields directly; only two call sites are inspected.",
+        "mitigation": "Add the predicate to the review checklist for any new VentureAssessment consumer; consider a lint rule if a third bypass appears.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "A third consumer of VentureAssessment provenance is added."
+      },
+      {
+        "risk": "Provenance says who produced a verdict, never whether the verdict is correct.",
+        "mitigation": "No downstream metric may treat authoritative_wmi as a quality signal; assessment quality remains WMI's responsibility.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any scorecard proposes using authoritative_wmi as a quality input."
+      },
+      {
+        "risk": "No live WMI endpoint has ever been exercised; the authoritative branch is proven only against a fake transport.",
+        "mitigation": "Report WMI_REAL_PATH as unexercised until a signed response from a real deployment is verified.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "WEALTHMACHINE_URL is configured against a real deployment."
+      },
+      {
+        "risk": "The anti-drift test is source-text coupled and needs updating if either call site is refactored.",
+        "mitigation": "Keep the assertion narrow and note the coupling in the test docstring so a refactor updates it deliberately.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "Either inspected function is refactored."
+      }
+    ],
+    "recommendation": "RETAIN"
+  },
+  "dissent": {
+    "present": true,
+    "handling": "Recorded as binding on reporting rather than on implementation. The change proceeds; the claim it is allowed to support is narrowed.",
+    "entries": [
+      {
+        "role": "Evidence and Welfare Guardian",
+        "position": "Making the system honest about lacking external evidence is not the same as obtaining external evidence. This must never be reported as WMI integration progress.",
+        "rationale": "Every assessment in this repository is currently a local simulation. Correct labeling improves integrity and moves no external number.",
+        "evidence_threshold": "One OpportunityPacket assessed by a live WealthMachineIntelligence endpoint, with a signed response verified by bridge_security.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "WEALTHMACHINE_URL is configured against a real deployment."
+      },
+      {
+        "role": "Adversarial Reviewer",
+        "position": "A shared predicate plus a source-inspection test is a weaker control than a type-level or lint-level prohibition on reading the raw fields.",
+        "rationale": "The inspection test covers exactly two functions and is coupled to source text.",
+        "evidence_threshold": "A third call site reads evidence_class directly without being caught in review.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any new consumer of VentureAssessment provenance is added."
+      }
+    ]
+  },
+  "authority_impact": {
+    "level": "standard",
+    "changes_authority": false,
+    "requires_authorized_human": false,
+    "approval_status": "not_required",
+    "approver": null,
+    "notes": "No new capability, credential, connector, publishing path, or spending path. The change narrows what the system may claim and makes one status transition strictly more conservative. Kernel authority and the consequence gate are untouched."
+  },
+  "migration_plan": "Additive constants and predicates in venture_protocol; two call sites switched from local conditionals to imports; decision_episode gains three read-only reported fields. No model fields added, no schema version change, no data migration. Assessments persisted under Phase 0 defaults rehydrate as non-authoritative, which is the intended conservative reading.",
+  "rollback_plan": {
+    "possible": true,
+    "steps": [
+      "Revert commit 29c724d.",
+      "The Phase 0 provenance fields, labels, and draft propagation are untouched by the revert and remain in place.",
+      "Re-run the suite; the expected post-revert state is 322 passing with both divergent copies restored."
+    ],
+    "data_migration_required": false
+  },
+  "kill_criteria": [
+    "The derived packet status breaks a real external consumer that depends on 'assessed' for the non-authoritative case.",
+    "The shared predicate is shown to create an import cycle or to block copying venture_protocol into the WealthMachineIntelligence repository.",
+    "A third call site is added that bypasses the predicate and the inspection test fails to catch it, indicating the control is insufficient rather than merely imperfect."
+  ],
+  "decision": "RETAIN",
+  "decision_owner": "Alfonso Lopez",
+  "review_trigger": "A live WealthMachineIntelligence endpoint is configured, or any new consumer of VentureAssessment provenance is introduced."
+}

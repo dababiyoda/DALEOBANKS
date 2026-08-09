@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-08T23:16:00Z",
+  "updated_at": "2026-08-09T15:42:52Z",
   "repository": "dababiyoda/DALEOBANKS",
-  "branch": "agent/daleobanks-phase0-operating-substrate",
-  "head": "1667df74583e463bafc6efee117b63d0e3df2c3a",
+  "branch": "claude/daleobanks-complete-build-arqtg5",
+  "head": "29c724d5888130e9b4cdfc68d76953baaf64704b",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -12,8 +12,8 @@
     "state": "OPEN_DRAFT",
     "mergeable": true
   },
-  "current_phase": "Phase 0 - truth, convergence, and controlled media substrate",
-  "next_action": "Keep PR #67 draft and unmerged; address review evidence, then run one real shadow pilot only after Alfonso declares the exact official account, timezone, source packet, and bounded shadow authority.",
+  "current_phase": "Phase 0 convergence - single ownership of the WMI authoritative-evidence rule",
+  "next_action": "Push the stacked branch and open a draft PR against the Phase 0 branch. Then continue Phase 1 editorial orchestration. Unchanged prerequisite: no live publication until Alfonso declares the exact official account, timezone, source packet, and bounded shadow authority.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -34,7 +34,11 @@
     "official_accounts_registered": 0,
     "languages_active": 0,
     "platforms_active": 0,
-    "shadow_platform_interfaces": ["x", "linkedin", "mastodon"],
+    "shadow_platform_interfaces": [
+      "x",
+      "linkedin",
+      "mastodon"
+    ],
     "publication_receipts": "Model and API implemented; no repository fixture presented as a real receipt"
   },
   "major_metrics": {
@@ -67,7 +71,11 @@
     "http_path": "IMPLEMENTED_HISTORICALLY_AND_PROVENANCE_LABELED",
     "actual_wmi_runtime_verified": false,
     "mock_bypass_status": "BLOCKED_FROM_REALITY_CLAIM_BY_PERMANENT_SIMULATION_LABELS",
-    "inbound_push_status": "EXTERNAL_UNVERIFIED_UNTIL_RUNTIME_IDENTITY_ATTESTATION_EXISTS"
+    "inbound_push_status": "EXTERNAL_UNVERIFIED_UNTIL_RUNTIME_IDENTITY_ATTESTATION_EXISTS",
+    "authoritative_evidence_rule": "SINGLE_OWNER_IN_VENTURE_PROTOCOL",
+    "rule_divergence_found_and_closed": "app.py marked a packet 'assessed' on evidence_class alone while the client required external_execution as well; the looser copy governed recorded state. Both call sites now consume venture_protocol.packet_status_for_assessment / is_authoritative_wmi_assessment.",
+    "hard_gate": "require_authoritative_wmi raises SimulatedEvidenceError; callers cannot ignore a boolean.",
+    "episode_provenance": "decision_episode reports assessment_provenance, externally_assessed, simulated_assessment_count."
   },
   "pumpstation_handoff": {
     "state": "NOT_IMPLEMENTED",
@@ -86,24 +94,32 @@
     "No canonical timezone is declared for the 8:00 PM daily edition.",
     "Actual WMI and Kernel runtimes are outside the authorized repository scope.",
     "No real owned-audience offer, buyer, participant advancement action, or payment exists.",
-    "PR #66 publication-authority ownership is unresolved while it remains a separate draft."
+    "PR #66 publication-authority ownership is unresolved while it remains a separate draft.",
+    "A third consumer of VentureAssessment provenance could bypass the canonical predicate; only two call sites are covered by the source-inspection guard."
   ],
   "falsifications": [
     "The earlier claim that implementation was blocked by the absence of GitHub CLI is false in this environment because the repository can be cloned and the connected GitHub write path can create branch objects and a draft PR.",
     "A local WealthMachineClient result is not evidence that WMI participated.",
     "A dry-run receipt is not a publication, audience outcome, advancement action, or commercial result.",
-    "Repository documentation does not prove runtime implementation."
+    "Repository documentation does not prove runtime implementation.",
+    "Correct provenance labeling is not WMI integration. Every assessment in this repository is still a local simulation; the authoritative branch has only ever run against a fake transport."
   ],
   "tests": {
-    "targeted": "40 passed",
-    "full_python": "322 passed, 10 warnings",
+    "targeted": "16 passed (tests/test_wmi_evidence_rule.py, every guard with a negative control)",
+    "full_python": "338 passed, 10 warnings",
     "governance_intent": "15 records valid",
-    "governance_deliberation": "five required roles and exactly two passes valid",
+    "governance_deliberation": "DB-DEC-001 and DB-DEC-002 both valid: five required roles, exactly two passes",
     "node": "NOT_RUN_NO_FRONTEND_CHANGE",
     "external_effects_exercised": 0
   },
   "ci": "NO_GITHUB_ACTIONS_WORKFLOWS_CONFIGURED; LOCAL_VALIDATION_PASSED",
-  "strongest_counterargument": "This Phase 0 substrate may become a sophisticated internal cathedral unless the next authorized step tests a real owned relationship, participant advancement, or buyer outcome.",
-  "next_smallest_implementation": "After CI, select one founder-declared SHADOW account and one real source packet; run the loop without external publication. Then request only the exact authority needed for the cheapest real owned-audience evidence test.",
-  "founder_intent_preserved": true
+  "strongest_counterargument": "Closing a rule divergence moves no external number. The system is now honest about having no external WMI evidence, which is integrity work, not traction. Phase 0 remains a cathedral until one real owned relationship, participant advancement, or buyer outcome exists.",
+  "next_smallest_implementation": "Phase 1 editorial orchestration on top of this branch, local and shadow-scoped, minting no capability and authorizing no publication.",
+  "founder_intent_preserved": true,
+  "stacked_on": {
+    "branch": "agent/daleobanks-phase0-operating-substrate",
+    "head": "0d996ca",
+    "pull_request": 67,
+    "note": "This branch is stacked on the Phase 0 substrate rather than on main, so PR #67 stays independently reviewable and its history intact."
+  }
 }
