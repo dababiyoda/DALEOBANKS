@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-09T21:50:06Z",
+  "updated_at": "2026-08-09T21:54:54Z",
   "repository": "dababiyoda/DALEOBANKS",
   "branch": "claude/daleobanks-complete-build-arqtg5",
-  "head": "c4379b0d8f785956c3235170fd07b0339fc2b28b",
+  "head": "88bb60cd79c89589be13560f62c1d9b43b096571",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -13,7 +13,7 @@
     "mergeable": true
   },
   "current_phase": "Mandate surface closed. Every remaining gate is a founder declaration or an external contract.",
-  "next_action": "Supply surface, timezone, source packet, owned-audience destination, resource ceiling, and stop condition. predeclare_campaign then accepts, the goal-chase scheduler returns PREDECLARE_CAMPAIGN instead of BLOCKED, and the first reversible pilot runs against reality. Building anything further internally is now explicitly unjustified.",
+  "next_action": "Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. Nothing buildable remains that does not require one.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -71,7 +71,9 @@
     "dependency_portability": "IMPLEMENTED_AND_TESTED; nothing goes live half-declared; revocation reports what it stranded",
     "debate_engine": "IMPLEMENTED_AND_TESTED; a debate producing only outrage closes as unproductive",
     "content_to_research": "IMPLEMENTED_AND_TESTED; RESOLVED requires independent verification, FALSIFIED does not",
-    "multi_model_intelligence": "IMPLEMENTED_AND_TESTED as dependency kind model_provider; a live model needs failure modes, cost, latency, and a fallback"
+    "multi_model_intelligence": "IMPLEMENTED_AND_TESTED as dependency kind model_provider; a live model needs failure modes, cost, latency, and a fallback",
+    "failure_posture": "IMPLEMENTED_AND_TESTED; degrade toward pause, draft-only, read-only, silent; loosening only through recorded recovery against predeclared conditions; postures compose by taking the tightest",
+    "risk_review": "IMPLEMENTED; 9 of 10 named high-risk classes classified, immigration folded into legal"
   },
   "wmi_integration_state": {
     "idea_refinery": "PRESERVED",
@@ -124,11 +126,12 @@
     "A complete section 84 deliverable list is not a working business. Every count these systems measure is zero.",
     "Keyword-based content guards are a starting heuristic, not a classifier. Their false-positive rate on real material is unmeasured.",
     "The ladder's guards bind the service path, not the durable store. Direct construction bypasses them; aggregates recompute from source fields so a bypassed record still fails to move a metric.",
-    "A closed mandate surface is not a company. 494 tests describe what the institution refuses; none of them describe anyone it has served."
+    "A closed mandate surface is not a company. 494 tests describe what the institution refuses; none of them describe anyone it has served.",
+    "A documented failure posture is not an enforced one. It was documented for the whole session and enforced only at the end."
   ],
   "tests": {
-    "targeted": "208 passed across guard, registry, ladder, and engine suites",
-    "full_python": "494 passed, 10 warnings",
+    "targeted": "225 passed across guard, registry, ladder, engine, and posture suites",
+    "full_python": "511 passed, 10 warnings",
     "clean_venv_from_requirements": "verified green on pip install -r requirements.txt",
     "governance_intent": "15 records valid",
     "governance_deliberation": "DB-DEC-001, 003, 004, 005 valid; DB-DEC-002 reserved for the Phase 1 branch",
@@ -171,7 +174,9 @@
       "Production tool adapters, vendor-neutral (section 17)",
       "Debate Engine (section 39)",
       "Civilization-seeding and content-to-research pipeline (sections 38, 62)",
-      "Portability report (section 67)"
+      "Portability report (section 67)",
+      "Failure posture as executable incident/freeze/recovery (sections 53, 65, 66)",
+      "Remaining high-risk content classes (section 44)"
     ],
     "preserved_from_phase0_phase1_or_history": [
       "canonical Account Registry",
