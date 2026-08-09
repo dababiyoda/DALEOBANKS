@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-09T22:12:33Z",
+  "updated_at": "2026-08-09T22:21:30Z",
   "repository": "dababiyoda/DALEOBANKS",
   "branch": "claude/daleobanks-complete-build-arqtg5",
-  "head": "aad836ff985f1b69297ddb84becc27f772c841ee",
+  "head": "7a897c9d037faa9ddcd0874aede7bcb9d3b0b56e",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -12,8 +12,8 @@
     "state": "OPEN_DRAFT",
     "mergeable": true
   },
-  "current_phase": "Runnable institution. One declaration file, four commands, report computed from live state.",
-  "next_action": "Fill in founder_declaration.yaml: surface handle, timezone, source packet, owned-audience destination, resource ceiling, stop condition. Run python -m daleobanks run. The first cycle against a real source packet is the cheapest test that moves anything outside this repository.",
+  "current_phase": "Defaults carry the mandate. Zero-config run seeds the canonical institution and names what only the founder can supply.",
+  "next_action": "python -m daleobanks run already works. To make it mean something: set the flagship handle, an owned-audience destination, a budget ceiling, and one real source packet. The first cycle over real sources is the cheapest thing that moves a number outside this repository.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -131,11 +131,12 @@
     "I found that the optimizer rewards anger, built a guard, and did not connect it. It was unwired for four commits. A guard nothing calls is documentation.",
     "The rage-bait guard is wired and still cannot fire: no per-arm capability or trust telemetry exists. Presence is not protection.",
     "Guard binding is not guard coverage. The outrage guard fires only on arms that have helpfulness ratings attached; arms with no feedback remain unguarded.",
-    "Per-service unit tests do not catch integration defects. Composing the parts surfaced two immediately: AccountLane takes legal_principal not owner, and shadow_publish is a coroutine. Both were green in isolation."
+    "Per-service unit tests do not catch integration defects. Composing the parts surfaced two immediately: AccountLane takes legal_principal not owner, and shadow_publish is a coroutine. Both were green in isolation.",
+    "A CLI that writes logs to stdout is not pipeable. The shared logger did, and one DRY RUN line broke . Found only by running the thing end to end."
   ],
   "tests": {
     "targeted": "225 passed across guard, registry, ladder, engine, and posture suites",
-    "full_python": "537 passed, 10 warnings",
+    "full_python": "547 passed, 10 warnings",
     "clean_venv_from_requirements": "verified green on pip install -r requirements.txt",
     "governance_intent": "15 records valid",
     "governance_deliberation": "DB-DEC-001, 003, 004, 005 valid; DB-DEC-002 reserved for the Phase 1 branch",
@@ -144,8 +145,8 @@
     "end_to_end": "One declaration runs source -> claim -> content -> localization -> shadow receipt -> campaign predeclared -> next move"
   },
   "ci": "GITHUB_ACTIONS_CONFIGURED_ON_THIS_BRANCH; runs pytest from requirements.txt plus governance JSON parse on every push and PR",
-  "strongest_counterargument": "The machine now runs end to end and produces a shadow receipt, a predeclared campaign, and a report that says nothing went live. That is a working institution with no participants. The front door is real; nobody has walked through it.",
-  "next_smallest_implementation": "Fill founder_declaration.yaml with a real surface and a real source packet, then run it.",
+  "strongest_counterargument": "The institution now boots from nothing, seeds its own canonical structure, and refuses every claim it has not earned. It is a complete, honest, runnable machine with zero participants. The defaults carry the mandate; they cannot carry a customer.",
+  "next_smallest_implementation": "Four values: handle, destination, budget ceiling, source packet. Then run it.",
   "founder_intent_preserved": true,
   "stacked_on": {
     "branch": "agent/daleobanks-phase0-operating-substrate",
@@ -232,6 +233,22 @@
       "python -m daleobanks report"
     ],
     "authority": "A declaration seeds surfaces SHADOW with SHADOW_ONLY and never raises authority.",
-    "report": "Computed from the durable store. No field is hand-entered."
+    "report": "Computed from the durable store. No field is hand-entered.",
+    "zero_config": "python -m daleobanks run  \u2014 no file needed; runs the canon and reports the four gaps",
+    "inspect_canon": "python -m daleobanks canon"
+  },
+  "canon": {
+    "flagship_channel": "UNIIMENTE, public media surface beneath DALEOBANKS; kernel_distinction field states it is NOT the Golden Kernel",
+    "pillars": "three, with boundaries encoded: no individualized financial advice, no diagnosis, no healing promises",
+    "rabbit_hole": "four stops, each carrying the opposing case, an off-ramp, and a capability payload",
+    "daily_news": "8:00 PM local, seven sections, reporting separated from opinion, Feedly as discovery not evidence",
+    "language_lanes": "en PRIMARY; es and pt CANDIDATE, because success is not language count",
+    "primitives": "five candidates, ranked by live aspirations unlocked rather than by interest",
+    "what_canon_cannot_supply": [
+      "handle",
+      "owned-audience destination",
+      "budget ceiling",
+      "source packet"
+    ]
   }
 }
