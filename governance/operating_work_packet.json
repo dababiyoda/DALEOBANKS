@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-09T22:00:24Z",
+  "updated_at": "2026-08-09T22:02:36Z",
   "repository": "dababiyoda/DALEOBANKS",
   "branch": "claude/daleobanks-complete-build-arqtg5",
-  "head": "0af1f3a12ccabb27c29f686bdbabcaefb15c6a78",
+  "head": "04fb0814e6c3bfd30a32c5fa26b6cf79f6c7091e",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -13,7 +13,7 @@
     "mergeable": true
   },
   "current_phase": "Mandate surface closed. Every remaining gate is a founder declaration or an external contract.",
-  "next_action": "1. Per-arm quality telemetry, to bind the outrage guard. 2. Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition.",
+  "next_action": "Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. The one guard defending a live mechanism is now wired, bound, and firing against real telemetry; everything else waits on a person.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -129,11 +129,12 @@
     "A closed mandate surface is not a company. 494 tests describe what the institution refuses; none of them describe anyone it has served.",
     "A documented failure posture is not an enforced one. It was documented for the whole session and enforced only at the end.",
     "I found that the optimizer rewards anger, built a guard, and did not connect it. It was unwired for four commits. A guard nothing calls is documentation.",
-    "The rage-bait guard is wired and still cannot fire: no per-arm capability or trust telemetry exists. Presence is not protection."
+    "The rage-bait guard is wired and still cannot fire: no per-arm capability or trust telemetry exists. Presence is not protection.",
+    "Guard binding is not guard coverage. The outrage guard fires only on arms that have helpfulness ratings attached; arms with no feedback remain unguarded."
   ],
   "tests": {
     "targeted": "225 passed across guard, registry, ladder, engine, and posture suites",
-    "full_python": "516 passed, 10 warnings",
+    "full_python": "523 passed, 10 warnings",
     "clean_venv_from_requirements": "verified green on pip install -r requirements.txt",
     "governance_intent": "15 records valid",
     "governance_deliberation": "DB-DEC-001, 003, 004, 005 valid; DB-DEC-002 reserved for the Phase 1 branch",
@@ -142,7 +143,7 @@
   },
   "ci": "GITHUB_ACTIONS_CONFIGURED_ON_THIS_BRANCH; runs pytest from requirements.txt plus governance JSON parse on every push and PR",
   "strongest_counterargument": "The single most defensible thing built this session spent most of the session disconnected from the mechanism it guards, and now that it is connected it still cannot fire for lack of telemetry. That is the honest state: a complete mandate surface, one live defect identified, and its guard wired but blind. Everything else refuses claims nobody has yet tried to make.",
-  "next_smallest_implementation": "Two things, in order. Collect per-arm capability and trust deltas so the outrage guard can actually fire \u2014 that is code and needs nothing from Alfonso. Then the six declarations.",
+  "next_smallest_implementation": "Six declarations. Nothing buildable remains that does not require one.",
   "founder_intent_preserved": true,
   "stacked_on": {
     "branch": "agent/daleobanks-phase0-operating-substrate",
@@ -211,13 +212,12 @@
       "aspiration gate clearance (verified_gates_cleared recomputes the tier at count time)",
       "participant ladder (aggregates recompute from source fields)",
       "dependency activation (refuses undeclared properties)",
-      "incident posture (loosening only through recorded recovery)"
-    ],
-    "wired_but_inert": [
-      "rage-bait reward guard: _thompson_sample calls it, but arm stats carry only mean_reward and count. No capability or trust telemetry exists per arm, so the guard cannot fire. Optimizer.integrity_guard_status reports bound_to_telemetry=false. It binds when per-arm quality deltas are collected."
+      "incident posture (loosening only through recorded recovery)",
+      "rage-bait reward guard: per-arm engagement, capability, and trust deltas now computed in ExperimentsService.get_arm_performance; the guard withholds reinforcement on the degradation signature"
     ],
     "not_wired": [
       "participant_ladder, dependency_registry, debate_engine, incident_posture, goal_chase have no API routes by design, so the Phase 1 branch's app.py changes merge cleanly. They are callable services with no HTTP surface."
-    ]
+    ],
+    "binding_caveat": "The guard binds only where evidence exists. An arm with no helpfulness ratings gets no capability delta and the guard stays inert for it, by design \u2014 absence of a signal is not a neutral signal. Trust is attributed at the portfolio level, so it is a coarse signal, not per-post attribution."
   }
 }
