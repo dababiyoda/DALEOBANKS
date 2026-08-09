@@ -70,9 +70,23 @@ def declaration_path(tmp_path):
 # It refuses a decision nobody made
 # ------------------------------------------------------------------ #
 
-def test_missing_declaration_file_names_the_next_step(tmp_path):
-    with pytest.raises(DeclarationError, match="founder_declaration.example"):
-        Declaration.load(str(tmp_path / "absent.yaml"))
+def test_missing_declaration_file_falls_back_to_canon(tmp_path):
+    """No file is not an error. It means run the mandate's own defaults and
+    report what is still undecided."""
+    declaration = Declaration.load(str(tmp_path / "absent.yaml"))
+    assert declaration.path == "<canon>"
+    assert declaration.accounts[0]["name"] == "UNIIMENTE"
+    # Canon supplies structure and cannot supply ownership.
+    assert any("handle is blank" in gap for gap in declaration.gaps())
+
+
+def test_a_present_but_incomplete_declaration_still_refuses(tmp_path):
+    """Negative control on the fallback: canon rescues an absent file, never
+    a half-written one. A partial declaration is a decision in progress."""
+    path = tmp_path / "partial.yaml"
+    path.write_text("founder: \"Alfonso Lopez\"\ntimezone: \"UTC\"\n")
+    with pytest.raises(DeclarationError, match="campaign"):
+        Declaration.load(str(path))
 
 
 def test_incomplete_campaign_names_every_missing_field(tmp_path):
@@ -230,3 +244,108 @@ def test_report_before_any_cycle_is_all_zeros(declaration_path):
         report = institution.report(session)
     assert report["CURRENT_IMPLEMENTED"]["shadow_receipts"] == 0
     assert report["VERIFIED_ASPIRATION_GATES_CLEARED"] == 0
+
+
+# ------------------------------------------------------------------ #
+# The defaults carry the mandate
+# ------------------------------------------------------------------ #
+
+def test_canon_seeds_the_rabbit_hole_with_off_ramps():
+    """Every node in the shipped journey carries the opposing case and a way
+    out, because the territory graph refuses one that does not."""
+    from services.canon import RABBIT_HOLE
+
+    assert len(RABBIT_HOLE) >= 4
+    for node in RABBIT_HOLE:
+        assert node["counterargument"].strip()
+        assert node["off_ramp"].strip()
+        assert node["capability_payload"].strip()
+
+
+def test_canon_marks_the_public_channel_as_not_the_kernel():
+    """The most expensive confusion available, refused in data."""
+    from services.canon import FLAGSHIP_CHANNEL
+
+    assert FLAGSHIP_CHANNEL["kernel_distinction"].startswith("PUBLIC_MEDIA_CHANNEL")
+    assert "NOT the Golden Kernel" in FLAGSHIP_CHANNEL["purpose"]
+
+
+def test_canon_ships_one_language_lane_not_three():
+    """Success is not language count. Two lanes are candidates, not active."""
+    from services.canon import LANGUAGE_LANES, default_declaration
+
+    assert default_declaration()["languages"] == ["en"]
+    assert {lane["status"] for lane in LANGUAGE_LANES} == {"PRIMARY", "CANDIDATE"}
+
+
+def test_canon_declares_no_budget_and_no_handle():
+    """Canon knows what the channel is for and nothing about who owns it."""
+    from services.canon import default_declaration
+
+    declaration = default_declaration()
+    assert declaration["accounts"][0]["handle"] == ""
+    assert declaration["budget"]["ceiling"] == 0.0
+    assert declaration["source_packet"]["sources"] == []
+
+
+def test_seeding_canon_is_idempotent(declaration_path):
+    from db.models import TerritoryNode
+
+    init_db()
+    institution = DaleoBanks.from_declaration(declaration_path)
+    with get_db_session() as session:
+        first = institution.seed_canon(session)
+        second = institution.seed_canon(session)
+        nodes = session.query(TerritoryNode).all()
+
+    assert first["territory_nodes"] == 4
+    assert second["territory_nodes"] == 0
+    assert len(nodes) == 4
+
+
+def test_zero_config_run_seeds_canon_and_refuses_the_rest(tmp_path):
+    """The out-of-the-box path: no file, real structure, honest refusals."""
+    init_db()
+    institution = DaleoBanks.from_declaration(str(tmp_path / "absent.yaml"))
+    with get_db_session() as session:
+        result = institution.run_cycle(session)
+    steps = {step["step"]: step for step in result["steps"]}
+
+    assert steps["seed_canon"]["territory_nodes"] == 4
+    assert steps["seed_canon"]["primitives"] == 5
+    assert steps["ingest"]["status"] == "SKIPPED"
+    assert steps["goal_chase"]["code"] == "NO_BUDGET_CEILING"
+
+
+def test_daily_edition_refuses_a_missing_section(declaration_path):
+    init_db()
+    institution = DaleoBanks.from_declaration(declaration_path)
+    with get_db_session() as session:
+        institution.run_cycle(session)
+        result = institution.daily_edition(session, sections={"what_happened": "x"})
+    assert result["status"] == "REFUSED"
+    assert "what_most_people_are_missing" in result["reason"]
+
+
+def test_daily_edition_publishes_with_all_seven_sections(declaration_path):
+    from services.canon import DAILY_NEWS
+
+    init_db()
+    institution = DaleoBanks.from_declaration(declaration_path)
+    with get_db_session() as session:
+        institution.run_cycle(session)
+        result = institution.daily_edition(
+            session, sections={s: f"content for {s}" for s in DAILY_NEWS["sections"]}
+        )
+    assert result["status"] == "OK"
+    assert result["hour_local"] == 20
+
+
+def test_daily_edition_refuses_with_nothing_to_report(declaration_path):
+    """Negative control: an edition with no claims is headline repetition."""
+    init_db()
+    institution = DaleoBanks.from_declaration(declaration_path)
+    with get_db_session() as session:
+        result = institution.daily_edition(session)
+    assert result["status"] == "REFUSED"
+    assert "nothing to report" in result["reason"]

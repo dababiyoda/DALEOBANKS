@@ -11,10 +11,23 @@ from datetime import datetime, UTC
 from db.session import get_db_session
 
 # Configure root logger
+def _log_stream():
+    """Where diagnostics go. stderr by default so stdout stays a payload.
+
+    The CLI prints JSON on stdout, and one log line in the middle of it makes
+    the output unpipeable. Logs are diagnostics; stderr is where diagnostics
+    belong, in a server as much as in a command. Set LOG_STREAM=stdout to
+    restore the old behavior.
+    """
+    import os
+
+    return sys.stdout if os.getenv("LOG_STREAM", "stderr") == "stdout" else sys.stderr
+
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(_log_stream())]
 )
 
 class JSONFormatter(logging.Formatter):
@@ -47,7 +60,7 @@ def get_logger(name: str) -> logging.Logger:
     
     # Avoid duplicate handlers
     if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
+        handler = logging.StreamHandler(_log_stream())
         handler.setFormatter(JSONFormatter())
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)

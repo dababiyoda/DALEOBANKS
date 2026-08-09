@@ -5,6 +5,9 @@ DaLeoBanks is a production-grade, self-evolving AI agent that operates on Twitte
 ## Run it
 
 ```bash
+python -m daleobanks run          # works with no config: runs the canon
+python -m daleobanks canon        # what the defaults actually contain
+
 cp founder_declaration.example.yaml founder_declaration.yaml
 # fill in the six campaign fields, the owned destination, and your surfaces
 
@@ -13,6 +16,18 @@ python -m daleobanks preflight   # what is authorized, what is blocked
 python -m daleobanks run         # one full cycle, shadow only
 python -m daleobanks report      # the status report, computed from the store
 ```
+
+With no declaration file at all it runs anyway, on the mandate's own canon:
+the UNIIMENTE flagship channel and its topic mix, the three community
+pillars, the four-stop rabbit hole with an opposing case and an off-ramp at
+every stop, the 8:00 PM daily edition's seven sections, and five candidate
+shared primitives. What canon cannot supply is what canon cannot know — the
+handle, the destination, the budget, the source packet — so it seeds the
+structure, refuses the rest, and names the four.
+
+The public UNIIMENTE channel is a media surface beneath DALEOBANKS. It is not
+the Golden Kernel and carries no constitutional authority; the canon record
+says so in a field, because that is the most expensive confusion available.
 
 `validate` refuses an incomplete declaration and names the missing field,
 because a default is a decision nobody made. `run` goes source → claim →

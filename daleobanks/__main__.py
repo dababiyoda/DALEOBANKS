@@ -29,9 +29,10 @@ def main(argv: list[str] | None = None) -> int:
         description="Run the DALEOBANKS institution from a founder declaration.",
     )
     parser.add_argument(
-        "command", choices=["validate", "preflight", "run", "report"],
-        help="validate the declaration, show what is authorized, run one "
-             "shadow cycle, or print the report",
+        "command", choices=["validate", "preflight", "seed", "run", "report", "canon"],
+        help="validate the declaration, show what is authorized, seed the "
+             "canonical structure, run one shadow cycle, print the report, "
+             "or dump the canon the defaults come from",
     )
     parser.add_argument("--declaration", default=DEFAULT_DECLARATION_PATH)
     args = parser.parse_args(argv)
@@ -42,6 +43,24 @@ def main(argv: list[str] | None = None) -> int:
         # The useful output is which decision has not been made.
         _emit({"ok": False, "error": str(exc)})
         return 2
+
+    if args.command == "canon":
+        from services.canon import (
+            COMMUNITY, DAILY_NEWS, FLAGSHIP_CHANNEL, LANGUAGE_LANES,
+            PILLARS, PORTFOLIO_MIX, RABBIT_HOLE,
+        )
+
+        _emit({
+            "flagship_channel": FLAGSHIP_CHANNEL,
+            "community": COMMUNITY,
+            "pillars": [{"id": p["id"], "name": p["name"]} for p in PILLARS],
+            "rabbit_hole": [{"depth": n["depth"], "surface": n["surface"],
+                             "title": n["title"]} for n in RABBIT_HOLE],
+            "daily_news": DAILY_NEWS,
+            "language_lanes": LANGUAGE_LANES,
+            "portfolio_mix": PORTFOLIO_MIX,
+        })
+        return 0
 
     if args.command == "validate":
         _emit({
@@ -64,7 +83,9 @@ def main(argv: list[str] | None = None) -> int:
 
     init_db()
     with get_db_session() as session:
-        if args.command == "run":
+        if args.command == "seed":
+            _emit(institution.seed_canon(session))
+        elif args.command == "run":
             _emit(institution.run_cycle(session))
         else:
             _emit(institution.report(session))

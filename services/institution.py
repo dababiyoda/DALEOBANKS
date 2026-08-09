@@ -99,7 +99,30 @@ class Declaration:
     path: str = ""
 
     @classmethod
+    def canonical(cls) -> "Declaration":
+        """The mandate's own defaults, with only ownership left blank.
+
+        Running with no file at all is legitimate and produces a real cycle.
+        What canon cannot supply is what canon cannot know: the handle, the
+        destination, the budget, the source packet.
+        """
+        from services.canon import default_declaration
+
+        raw = default_declaration()
+        return cls(
+            founder=raw["founder"], timezone=raw["timezone"],
+            campaign=raw["campaign"], accounts=raw["accounts"],
+            owned_audience=raw["owned_audience"], budget=raw["budget"],
+            source_packet=raw["source_packet"], languages=raw["languages"],
+            path="<canon>",
+        )
+
+    @classmethod
     def load(cls, path: str = DEFAULT_DECLARATION_PATH) -> "Declaration":
+        if not os.path.exists(path):
+            # No file is not an error. It means "run the canon and tell me
+            # what I still have to decide."
+            return cls.canonical()
         raw = _load_yaml(path)
         missing = [k for k in REQUIRED_TOP_LEVEL if not raw.get(k)]
         if missing:
@@ -278,6 +301,110 @@ class DaleoBanks:
             "all_surfaces_shadow": True,
         }
 
+    def seed_canon(self, session: Any) -> Dict[str, Any]:
+        """Seed the structural canon: rabbit hole, pillars, primitives.
+
+        Structure only. No handle, no credential, no authority, no claim that
+        anyone has walked any of it.
+        """
+        from db.models import AspirationRecord, SharedPrimitive, TerritoryNode
+        from services.canon import CANDIDATE_PRIMITIVES, PILLARS, RABBIT_HOLE
+        from services.participant_ladder import register_territory_node
+
+        existing_nodes = {n.title for n in session.query(TerritoryNode).all()}
+        node_ids: List[str] = []
+        previous: Optional[str] = None
+        for spec in RABBIT_HOLE:
+            if spec["title"] in existing_nodes:
+                continue
+            node = register_territory_node(
+                session, title=spec["title"], surface=spec["surface"],
+                depth=spec["depth"], thesis=spec["thesis"],
+                counterargument=spec["counterargument"],
+                off_ramp=spec["off_ramp"],
+                capability_payload=spec["capability_payload"],
+                terminal_action=spec.get("terminal_action", ""),
+            )
+            if previous is not None:
+                prior = session.query(TerritoryNode).filter(
+                    lambda row, p=previous: row.id == p
+                ).first()
+                if prior is not None:
+                    prior.next_node_ids.append(node.id)
+            previous = node.id
+            node_ids.append(node.id)
+
+        aspiration = session.query(AspirationRecord).filter(
+            lambda row: row.founder_statement == self.declaration.campaign["aspiration"]
+        ).first()
+
+        existing_primitives = {p.name for p in session.query(SharedPrimitive).all()}
+        primitive_ids: List[str] = []
+        for spec in CANDIDATE_PRIMITIVES:
+            if spec["name"] in existing_primitives:
+                continue
+            primitive = self.aspirations.register_primitive(
+                session, name=spec["name"], description=spec["description"],
+                category=spec["category"],
+                unlocks=[aspiration.id] if aspiration else [],
+            )
+            primitive_ids.append(primitive.id)
+
+        session.commit()
+        return {
+            "territory_nodes": len(node_ids),
+            "pillars": [p["id"] for p in PILLARS],
+            "primitives": len(primitive_ids),
+            "note": (
+                "structure only; no handle, credential, authority, or claim "
+                "that anyone has walked it"
+            ),
+        }
+
+    def daily_edition(
+        self, session: Any, *, sections: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """The 8:00 PM edition, refused unless all seven sections are present.
+
+        Its purpose is not headline repetition, and the contract enforces
+        that by requiring the section that is hardest to fake: what most
+        people are missing.
+        """
+        from db.models import ClaimRecord, SourceRecord
+        from services.canon import DAILY_NEWS
+
+        claims = session.query(ClaimRecord).all()
+        sources = session.query(SourceRecord).all()
+        if not claims or not sources:
+            return {
+                "status": "REFUSED",
+                "reason": "a daily edition needs claims and sources; there is nothing to report",
+                "hour_local": DAILY_NEWS["hour_local"],
+                "timezone": self.declaration.timezone,
+            }
+        body = sections or {}
+        missing = [s for s in DAILY_NEWS["sections"] if not str(body.get(s, "")).strip()]
+        if missing:
+            return {
+                "status": "REFUSED",
+                "reason": "edition is missing sections: " + ", ".join(missing),
+                "required_sections": list(DAILY_NEWS["sections"]),
+                "separation_rule": DAILY_NEWS["separation_rule"],
+            }
+        record = self.media.create_daily_news(
+            session, topic=self.declaration.source_packet.get("topic", "daily"),
+            sections=body, claim_ids=[claims[-1].id],
+            source_ids=[sources[-1].id],
+            counterargument=self.declaration.source_packet.get(
+                "counterargument", "The strongest case against today's read."
+            ),
+            uncertainty="single-day window",
+            audiences=[self.declaration.accounts[0].get("audience", "general")],
+        )
+        return {"status": "OK", "content_id": record.id,
+                "hour_local": DAILY_NEWS["hour_local"],
+                "timezone": self.declaration.timezone}
+
     # ----------------------------------------------------------------- #
     # One cycle
     # ----------------------------------------------------------------- #
@@ -292,6 +419,7 @@ class DaleoBanks:
 
         boot = self.bootstrap(session)
         steps: List[Dict[str, Any]] = [{"step": "bootstrap", **boot}]
+        steps.append({"step": "seed_canon", **self.seed_canon(session)})
 
         sources = self.declaration.source_packet.get("sources") or []
         if not sources:
