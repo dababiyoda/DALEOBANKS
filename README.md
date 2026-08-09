@@ -2,6 +2,31 @@
 
 DaLeoBanks is a production-grade, self-evolving AI agent that operates on Twitter/X. The stack pairs a Python FastAPI backend (agent logic, scheduler, persona management) with a Node/Express + Vite frontend that proxies requests to the backend.
 
+## Run it
+
+```bash
+cp founder_declaration.example.yaml founder_declaration.yaml
+# fill in the six campaign fields, the owned destination, and your surfaces
+
+python -m daleobanks validate    # names every decision you have not made
+python -m daleobanks preflight   # what is authorized, what is blocked
+python -m daleobanks run         # one full cycle, shadow only
+python -m daleobanks report      # the status report, computed from the store
+```
+
+`validate` refuses an incomplete declaration and names the missing field,
+because a default is a decision nobody made. `run` goes source → claim →
+content → localization → shadow receipt → campaign predeclaration → next
+move, and stops at whatever the declaration does not support rather than
+inventing it.
+
+Two things the declaration cannot do. It cannot raise authority: every
+surface is seeded `SHADOW` with `SHADOW_ONLY` authorization, and live
+publication still needs the separate approval and capability path. And it
+cannot flatter the report — `report` is computed from the durable store, so
+it will tell you a full cycle ran and that nothing went live, in the same
+breath, because both are true.
+
 ## Canonical product direction
 
 The current X agent is only the first operating surface of the larger DALEOBANKS product.
