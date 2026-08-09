@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-09T22:02:36Z",
+  "updated_at": "2026-08-09T22:12:33Z",
   "repository": "dababiyoda/DALEOBANKS",
   "branch": "claude/daleobanks-complete-build-arqtg5",
-  "head": "04fb0814e6c3bfd30a32c5fa26b6cf79f6c7091e",
+  "head": "aad836ff985f1b69297ddb84becc27f772c841ee",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -12,8 +12,8 @@
     "state": "OPEN_DRAFT",
     "mergeable": true
   },
-  "current_phase": "Mandate surface closed. Every remaining gate is a founder declaration or an external contract.",
-  "next_action": "Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. The one guard defending a live mechanism is now wired, bound, and firing against real telemetry; everything else waits on a person.",
+  "current_phase": "Runnable institution. One declaration file, four commands, report computed from live state.",
+  "next_action": "Fill in founder_declaration.yaml: surface handle, timezone, source packet, owned-audience destination, resource ceiling, stop condition. Run python -m daleobanks run. The first cycle against a real source packet is the cheapest test that moves anything outside this repository.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -130,20 +130,22 @@
     "A documented failure posture is not an enforced one. It was documented for the whole session and enforced only at the end.",
     "I found that the optimizer rewards anger, built a guard, and did not connect it. It was unwired for four commits. A guard nothing calls is documentation.",
     "The rage-bait guard is wired and still cannot fire: no per-arm capability or trust telemetry exists. Presence is not protection.",
-    "Guard binding is not guard coverage. The outrage guard fires only on arms that have helpfulness ratings attached; arms with no feedback remain unguarded."
+    "Guard binding is not guard coverage. The outrage guard fires only on arms that have helpfulness ratings attached; arms with no feedback remain unguarded.",
+    "Per-service unit tests do not catch integration defects. Composing the parts surfaced two immediately: AccountLane takes legal_principal not owner, and shadow_publish is a coroutine. Both were green in isolation."
   ],
   "tests": {
     "targeted": "225 passed across guard, registry, ladder, engine, and posture suites",
-    "full_python": "523 passed, 10 warnings",
+    "full_python": "537 passed, 10 warnings",
     "clean_venv_from_requirements": "verified green on pip install -r requirements.txt",
     "governance_intent": "15 records valid",
     "governance_deliberation": "DB-DEC-001, 003, 004, 005 valid; DB-DEC-002 reserved for the Phase 1 branch",
     "node": "NOT_RUN_NO_FRONTEND_CHANGE",
-    "external_effects_exercised": 0
+    "external_effects_exercised": 0,
+    "end_to_end": "One declaration runs source -> claim -> content -> localization -> shadow receipt -> campaign predeclared -> next move"
   },
   "ci": "GITHUB_ACTIONS_CONFIGURED_ON_THIS_BRANCH; runs pytest from requirements.txt plus governance JSON parse on every push and PR",
-  "strongest_counterargument": "The single most defensible thing built this session spent most of the session disconnected from the mechanism it guards, and now that it is connected it still cannot fire for lack of telemetry. That is the honest state: a complete mandate surface, one live defect identified, and its guard wired but blind. Everything else refuses claims nobody has yet tried to make.",
-  "next_smallest_implementation": "Six declarations. Nothing buildable remains that does not require one.",
+  "strongest_counterargument": "The machine now runs end to end and produces a shadow receipt, a predeclared campaign, and a report that says nothing went live. That is a working institution with no participants. The front door is real; nobody has walked through it.",
+  "next_smallest_implementation": "Fill founder_declaration.yaml with a real surface and a real source packet, then run it.",
   "founder_intent_preserved": true,
   "stacked_on": {
     "branch": "agent/daleobanks-phase0-operating-substrate",
@@ -179,7 +181,8 @@
       "Civilization-seeding and content-to-research pipeline (sections 38, 62)",
       "Portability report (section 67)",
       "Failure posture as executable incident/freeze/recovery (sections 53, 65, 66)",
-      "Remaining high-risk content classes (section 44)"
+      "Remaining high-risk content classes (section 44)",
+      "Composition root: services/institution.py plus the daleobanks CLI"
     ],
     "preserved_from_phase0_phase1_or_history": [
       "canonical Account Registry",
@@ -219,5 +222,16 @@
       "participant_ladder, dependency_registry, debate_engine, incident_posture, goal_chase have no API routes by design, so the Phase 1 branch's app.py changes merge cleanly. They are callable services with no HTTP surface."
     ],
     "binding_caveat": "The guard binds only where evidence exists. An arm with no helpfulness ratings gets no capability delta and the guard stays inert for it, by design \u2014 absence of a signal is not a neutral signal. Trust is attributed at the portfolio level, so it is a coarse signal, not per-post attribution."
+  },
+  "how_to_run": {
+    "declaration": "cp founder_declaration.example.yaml founder_declaration.yaml",
+    "commands": [
+      "python -m daleobanks validate",
+      "python -m daleobanks preflight",
+      "python -m daleobanks run",
+      "python -m daleobanks report"
+    ],
+    "authority": "A declaration seeds surfaces SHADOW with SHADOW_ONLY and never raises authority.",
+    "report": "Computed from the durable store. No field is hand-entered."
   }
 }
