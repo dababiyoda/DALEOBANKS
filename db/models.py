@@ -770,6 +770,182 @@ class AspirationGateEvent:
     created_at: datetime = field(default_factory=_utcnow)
 
 
+# ---------------------------------------------------------------------- #
+# The participant ladder: viewer -> ... -> creator of new infrastructure
+# ---------------------------------------------------------------------- #
+
+
+@dataclass
+class ParticipantRecord:
+    """One person's standing in the network, at the coarsest useful grain.
+
+    Deliberately thin. The temptation with a record like this is to widen it
+    until it becomes a psychological dossier; every field here has to earn
+    its place against a stated purpose."""
+
+    id: str = field(default_factory=_uuid)
+    handle_ref: str = ""            # pseudonymous reference, never raw PII
+    rung: str = "viewer"
+    language: str = ""
+    region: str = ""
+    consent_state: str = "NONE"     # NONE | CONTACT | RESEARCH | WITHDRAWN
+    consent_recorded_at: str = ""
+    purposes: List[str] = field(default_factory=list)
+    retention_until: str = ""
+    rung_history: List[Dict[str, Any]] = field(default_factory=list)
+    advancement_action_ids: List[str] = field(default_factory=list)
+    contribution_notes: List[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AdvancementAction:
+    """Something a person did that left them more capable.
+
+    Only counts when it was voluntary and verified. An unverified claim is
+    kept as a claim, never promoted to the metric."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    action_type: str = ""
+    description: str = ""
+    voluntary: bool = False
+    verification_method: str = ""
+    verification_evidence_ref: str = ""
+    verified: bool = False
+    harm_reported: bool = False
+    occurred_at: str = ""
+    recorded_by: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class OwnedRelationship:
+    """A direct relationship that does not depend on a rented platform.
+
+    Requires recorded consent. Migration off a social platform is offered,
+    never forced and never tricked."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    channel: str = "email"          # email | community | app | event | newsletter
+    destination_ref: str = ""
+    consent_evidence_ref: str = ""
+    source_surface: str = ""
+    migrated_voluntarily: bool = False
+    withdrawn: bool = False
+    withdrawn_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class CommerceRecord:
+    """Money that actually moved and was reconciled.
+
+    A row here is not created by an intent, a projection, or a test. It is
+    created by a reconciled payment."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    offer: str = ""
+    amount: float = 0.0
+    currency: str = "USD"
+    delivered: bool = False
+    accepted: bool = False
+    reconciled: bool = False
+    reconciliation_ref: str = ""
+    direct_cost: float = 0.0
+    repeat: bool = False
+    refunded: bool = False
+    occurred_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class CollaborationLink:
+    """Two participants who found each other and built something.
+
+    The network's value is people finding one another, so this is recorded as
+    an outcome in its own right rather than as a funnel step."""
+
+    id: str = field(default_factory=_uuid)
+    participant_ids: List[str] = field(default_factory=list)
+    kind: str = ""                  # research | build | mentorship | hire | partnership
+    description: str = ""
+    outcome: str = ""
+    verified: bool = False
+    verification_evidence_ref: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class VentureHandoff:
+    """A warm introduction to a venture cell such as PumpStation.
+
+    Six things must exist before a handoff: a detected need, an eligibility
+    check, a disclosure, consent, any required evidence, and a place to
+    record what happened afterwards."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    destination: str = ""           # pumpstation | venture_cell | partner
+    need_detected: str = ""
+    eligibility_checked: bool = False
+    eligibility_note: str = ""
+    disclosure_text: str = ""
+    consent_evidence_ref: str = ""
+    evidence_refs: List[str] = field(default_factory=list)
+    status: str = "PREPARED"        # PREPARED | SENT | ACCEPTED | DECLINED | WITHDRAWN
+    outcome: str = ""
+    outcome_recorded_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AudienceSegment:
+    """Aggregated, lawful segment intelligence.
+
+    Aggregate only. A segment that describes a small enough group to identify
+    a person is not a segment."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    language: str = ""
+    region: str = ""
+    population: int = 0
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    common_problems: List[str] = field(default_factory=list)
+    objections: List[str] = field(default_factory=list)
+    preferred_platforms: List[str] = field(default_factory=list)
+    verified_advancement_count: int = 0
+    purpose: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class TerritoryNode:
+    """One stop in the knowledge and participation graph.
+
+    Every node that makes a claim must also carry the opposing case and a way
+    out. That requirement is what separates a rabbit hole that deepens what
+    someone can do from one that narrows what they can believe."""
+
+    id: str = field(default_factory=_uuid)
+    title: str = ""
+    surface: str = ""
+    depth: int = 0
+    thesis: str = ""
+    counterargument: str = ""
+    off_ramp: str = ""
+    capability_payload: str = ""
+    content_id: str = ""
+    next_node_ids: List[str] = field(default_factory=list)
+    terminal_action: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
 @dataclass
 class ExperimentProposal:
     """A proposed widening of the bandit's action space (new arm values,
@@ -837,6 +1013,14 @@ __all__ = [
     "SharedPrimitive",
     "AspirationCampaign",
     "AspirationGateEvent",
+    "ParticipantRecord",
+    "AdvancementAction",
+    "OwnedRelationship",
+    "CommerceRecord",
+    "CollaborationLink",
+    "VentureHandoff",
+    "AudienceSegment",
+    "TerritoryNode",
     "ExperimentProposal",
     "PersonaVersion",
 ]
