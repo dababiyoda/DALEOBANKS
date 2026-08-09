@@ -72,6 +72,26 @@ _HIGH_RISK_TERMS = {
     "legal": ("legal advice", "immigration advice", "you should sue"),
     "accusation": ("criminal", "fraudster", "stole", "corrupt person"),
     "political_persuasion": ("vote for", "vote against"),
+    # Section 44 classes that were named but unclassified. Each needs extra
+    # review, and none of them is caught by the financial or medical lists.
+    "financial_product_recommendation": (
+        "buy this fund", "buy this stock", "open an account with",
+        "this broker", "this etf", "this coin", "use this card",
+        "switch to this lender", "this insurance policy",
+    ),
+    "mental_health_diagnosis": (
+        "you have depression", "you have anxiety", "you're bipolar",
+        "you are bipolar", "you have adhd", "you have ptsd",
+        "sounds like you're autistic", "self-diagnose",
+    ),
+    "paid_endorsement": (
+        "sponsored by", "paid partnership", "ad:", "#ad", "affiliate link",
+        "commission from", "we were paid",
+    ),
+    "conflict_of_interest": (
+        "we own", "i own", "our company", "our venture", "we invested",
+        "portfolio company", "pumpstation", "uniimente venture",
+    ),
 }
 _HUMILIATION_TERMS = (
     "poor people are stupid", "immigrants are stupid", "idiots deserve",

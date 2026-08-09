@@ -1034,6 +1034,35 @@ class ResearchLead:
 
 
 @dataclass
+class IncidentRecord:
+    """Something went wrong, what the system did about it, and how it got back.
+
+    A freeze that leaves no trace cannot be audited, cannot be lifted
+    deliberately, and quietly becomes permanent or quietly evaporates. Both
+    failures are worse than the incident."""
+
+    id: str = field(default_factory=_uuid)
+    kind: str = ""  # security|reputational|legal|platform|data|budget|scheduler|other
+    severity: str = "low"  # low | medium | high | critical
+    summary: str = ""
+    detected_by: str = ""
+    detected_at: str = ""
+    posture: str = "RUN"  # RUN|PAUSE|DRAFT_ONLY|READ_ONLY|SILENT
+    posture_reason: str = ""
+    evidence_refs: List[str] = field(default_factory=list)
+    affected_dependency_ids: List[str] = field(default_factory=list)
+    affected_account_ids: List[str] = field(default_factory=list)
+    escalated_to: str = ""
+    status: str = "OPEN"  # OPEN | CONTAINED | RECOVERED | CLOSED_UNRESOLVED
+    recovery_conditions: List[str] = field(default_factory=list)
+    recovery_evidence_refs: List[str] = field(default_factory=list)
+    recovered_at: str = ""
+    posture_history: List[Dict[str, Any]] = field(default_factory=list)
+    learning: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
 class ExperimentProposal:
     """A proposed widening of the bandit's action space (new arm values,
     routing weights, intensity range), pending human review. Nothing the
@@ -1111,6 +1140,7 @@ __all__ = [
     "DependencyRecord",
     "DebateRecord",
     "ResearchLead",
+    "IncidentRecord",
     "ExperimentProposal",
     "PersonaVersion",
 ]
