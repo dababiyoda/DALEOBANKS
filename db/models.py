@@ -656,6 +656,120 @@ class AccountLane:
     last_verified: Optional[datetime] = None
 
 
+# ---------------------------------------------------------------------- #
+# Infinite Goal Chase: aspirations, backcast paths, shared primitives
+# ---------------------------------------------------------------------- #
+
+
+@dataclass
+class AspirationRecord:
+    """One founder aspiration, kept for as long as it exists.
+
+    A blocked aspiration is a finding, not a failure to tidy away. Nothing
+    here deletes; status changes and the reason travels with it."""
+
+    id: str = field(default_factory=_uuid)
+    founder_statement: str = ""
+    source_lineage: List[str] = field(default_factory=list)
+    success_state: str = ""  # observable, not aspirational restatement
+    importance: str = "medium"  # low | medium | high | critical
+    status: str = "EXPLORATORY"
+    current_evidence: List[str] = field(default_factory=list)
+    missing_primitives: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
+    legal_constraints: List[str] = field(default_factory=list)
+    safety_constraints: List[str] = field(default_factory=list)
+    active_backcast_id: str = ""
+    current_gate: str = ""
+    active_sbm: str = ""
+    resource_budget: str = ""
+    unlock_relationships: List[str] = field(default_factory=list)
+    review_trigger: str = ""
+    owner: str = ""
+    status_history: List[Dict[str, Any]] = field(default_factory=list)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class BackcastPath:
+    """G, P, S for one aspiration.
+
+    G is the observable success state. P is the minimum stage-gated path from
+    that state back to today. S is the small repeatable system that weakens
+    the gate standing closest to now."""
+
+    id: str = field(default_factory=_uuid)
+    aspiration_id: str = ""
+    success_state: str = ""            # G
+    stages: List[Dict[str, Any]] = field(default_factory=list)  # P, nearest last
+    repeatable_system: str = ""        # S
+    current_gate: str = ""
+    superseded_by: str = ""            # revisions chain, never overwrite
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class SharedPrimitive:
+    """A bottleneck that stands in front of more than one aspiration.
+
+    Ranked by how many aspirations it unlocks, not by how interesting it is."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    description: str = ""
+    category: str = ""
+    unlocks: List[str] = field(default_factory=list)  # aspiration ids
+    disposition: str = "UNDECIDED"  # BUILD|PARTNER|FUND|OPEN_SOURCE|POPULARIZE|STANDARDIZE|PURCHASE
+    disposition_rationale: str = ""
+    status: str = "IDENTIFIED"  # IDENTIFIED | IN_PROGRESS | UNLOCKED | ABANDONED
+    external_absorption_ref: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AspirationCampaign:
+    """A predeclared attempt to weaken one gate.
+
+    Every field below answers one of the six questions a campaign claiming
+    aspiration progress must answer before it starts. Predeclaration is the
+    point: a campaign that picks its success threshold afterwards is not
+    evidence, it is a story told about whatever happened."""
+
+    id: str = field(default_factory=_uuid)
+    aspiration_id: str = ""
+    gate: str = ""
+    sbm: str = ""
+    evidence_threshold: str = ""
+    resource_ceiling: str = ""
+    stop_condition: str = ""
+    hypothesis: str = ""
+    status: str = "PREDECLARED"  # PREDECLARED | RUNNING | STOPPED | CONCLUDED
+    outcome_event_id: str = ""
+    predeclared_at: datetime = field(default_factory=_utcnow)
+    concluded_at: Optional[datetime] = None
+
+
+@dataclass
+class AspirationGateEvent:
+    """What reality said about a gate.
+
+    CLEARED is the only outcome that requires external evidence, and it is
+    the only one that counts toward VERIFIED_ASPIRATION_GATES_CLEARED. A
+    falsified route is a real result and is recorded as one."""
+
+    id: str = field(default_factory=_uuid)
+    aspiration_id: str = ""
+    campaign_id: str = ""
+    gate: str = ""
+    outcome: str = "DEFERRED"  # CLEARED | REROUTED | DEFERRED | FALSIFIED
+    evidence_tier: str = "aspiration"
+    external_evidence_refs: List[str] = field(default_factory=list)
+    narrative: str = ""
+    recorded_by: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
 @dataclass
 class ExperimentProposal:
     """A proposed widening of the bandit's action space (new arm values,
@@ -718,6 +832,11 @@ __all__ = [
     "PublicationReceipt",
     "ContentExperiment",
     "AccountLane",
+    "AspirationRecord",
+    "BackcastPath",
+    "SharedPrimitive",
+    "AspirationCampaign",
+    "AspirationGateEvent",
     "ExperimentProposal",
     "PersonaVersion",
 ]
