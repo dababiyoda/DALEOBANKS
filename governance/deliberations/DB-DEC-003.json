@@ -1,5 +1,5 @@
 {
-  "decision_id": "DB-DEC-002",
+  "decision_id": "DB-DEC-003",
   "title": "Give the WMI authoritative-evidence rule a single owner",
   "problem": "Phase 0 (DB-DEC-001) added assessment provenance fields and propagated simulation labels into drafts and the operator approval payload. The predicate that reads those fields was left written at two call sites in two non-equivalent forms. services/wealthmachine_client.py required external_execution AND evidence_class == EXTERNAL_ASSESSMENT before treating an assessment as authoritative. app.py required only evidence_class. An assessment carrying the strong evidence_class without an external execution behind it -- exactly the object the inbound push endpoint constructs -- was labeled non-authoritative on its own drafts while the API route set the packet status to 'assessed'. The looser copy governed the packet's recorded state, so institutional memory could record a locally produced verdict as an external claim about the world.",
   "founder_intent_refs": [
@@ -406,7 +406,7 @@
     "approver": null,
     "notes": "No new capability, credential, connector, publishing path, or spending path. The change narrows what the system may claim and makes one status transition strictly more conservative. Kernel authority and the consequence gate are untouched."
   },
-  "migration_plan": "Additive constants and predicates in venture_protocol; two call sites switched from local conditionals to imports; decision_episode gains three read-only reported fields. No model fields added, no schema version change, no data migration. Assessments persisted under Phase 0 defaults rehydrate as non-authoritative, which is the intended conservative reading.",
+  "migration_plan": "Additive constants and predicates in venture_protocol; two call sites switched from local conditionals to imports; decision_episode gains three read-only reported fields. No model fields added, no schema version change, no data migration. Assessments persisted under Phase 0 defaults rehydrate as non-authoritative, which is the intended conservative reading. Renumbered from DB-DEC-002 to DB-DEC-003: the Phase 1 editorial-control decision on agent/daleobanks-phase1-editorial-control-loop already carries DB-DEC-002 and is cross-referenced by that branch's work packet and README. This decision is self-contained, so it moved rather than forcing a renumber in an environment that cannot currently push.",
   "rollback_plan": {
     "possible": true,
     "steps": [

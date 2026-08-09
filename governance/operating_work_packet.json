@@ -95,7 +95,8 @@
     "Actual WMI and Kernel runtimes are outside the authorized repository scope.",
     "No real owned-audience offer, buyer, participant advancement action, or payment exists.",
     "PR #66 publication-authority ownership is unresolved while it remains a separate draft.",
-    "A third consumer of VentureAssessment provenance could bypass the canonical predicate; only two call sites are covered by the source-inspection guard."
+    "A third consumer of VentureAssessment provenance could bypass the canonical predicate; only two call sites are covered by the source-inspection guard.",
+    "This branch and agent/daleobanks-phase1-editorial-control-loop both stack on PR #67 and both rewrite README.md and governance/operating_work_packet.json. The DB-DEC-002 identifier collision is resolved; the README and work-packet merges are not."
   ],
   "falsifications": [
     "The earlier claim that implementation was blocked by the absence of GitHub CLI is false in this environment because the repository can be cloned and the connected GitHub write path can create branch objects and a draft PR.",
@@ -108,7 +109,7 @@
     "targeted": "16 passed (tests/test_wmi_evidence_rule.py, every guard with a negative control)",
     "full_python": "338 passed, 10 warnings",
     "governance_intent": "15 records valid",
-    "governance_deliberation": "DB-DEC-001 and DB-DEC-002 both valid: five required roles, exactly two passes",
+    "governance_deliberation": "DB-DEC-001 and DB-DEC-003 valid: five required roles, exactly two passes. DB-DEC-002 is reserved for the Phase 1 editorial-control decision on agent/daleobanks-phase1-editorial-control-loop.",
     "node": "NOT_RUN_NO_FRONTEND_CHANGE",
     "external_effects_exercised": 0
   },
