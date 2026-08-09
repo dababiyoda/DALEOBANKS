@@ -1,0 +1,46 @@
+# Several tests here exist to catch structural drift rather than to check a
+# feature: the anti-drift guard in tests/test_wmi_evidence_rule.py fails if
+# the authoritative-evidence rule is restated at a call site instead of
+# imported, and tests/test_integrity_guard.py fails if the optimizer stops
+# calling the outrage guard. A drift guard that runs only when a person
+# remembers to run it is documentation.
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # The documented install path, exactly as written. If the suite needs
+      # something requirements.txt does not name, that is a defect worth
+      # failing on rather than papering over here.
+      - run: pip install -r requirements.txt
+
+      - run: python -m pytest tests/ -q
+
+      - name: Governance records parse
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          bad = []
+          paths = sorted(pathlib.Path("governance").rglob("*.json"))
+          for path in paths:
+              try:
+                  json.loads(path.read_text())
+              except json.JSONDecodeError as exc:
+                  bad.append(f"{path}: {exc}")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          print(f"{len(paths)} governance records parse")
+          PY

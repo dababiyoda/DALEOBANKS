@@ -214,3 +214,71 @@ def test_extra_entities_are_honored():
     assert disclosure_required("We like AcmeCo", extra_entities=["AcmeCo"]) == ["acmeco"]
     with pytest.raises(IntegrityGuardError):
         assert_disclosed("AcmeCo is excellent.", extra_entities=["AcmeCo"])
+
+
+# ------------------------------------------------------------------ #
+# The guard is wired to the thing it guards
+# ------------------------------------------------------------------ #
+
+def test_optimizer_calls_the_guard():
+    """A guard nothing calls is documentation. This asserts the call site."""
+    import inspect
+
+    from services.optimizer import Optimizer
+
+    source = inspect.getsource(Optimizer._thompson_sample)
+    assert "_apply_integrity_guard" in source
+
+
+def test_optimizer_withholds_reinforcement_on_the_signature():
+    from services.optimizer import Optimizer
+
+    optimizer = Optimizer.__new__(Optimizer)
+    successes, failures = optimizer._apply_integrity_guard(
+        "topic", "outrage_thread",
+        {"engagement_delta": 0.40, "capability_delta": -0.12, "trust_delta": 0.0},
+        8, 2,
+    )
+    # The pulls happened; they just do not count as wins.
+    assert successes == 0
+    assert failures == 10
+
+
+def test_optimizer_leaves_healthy_arms_alone():
+    """Negative control: growth is not what is being punished."""
+    from services.optimizer import Optimizer
+
+    optimizer = Optimizer.__new__(Optimizer)
+    assert optimizer._apply_integrity_guard(
+        "topic", "explainer",
+        {"engagement_delta": 0.40, "capability_delta": 0.20, "trust_delta": 0.05},
+        8, 2,
+    ) == (8, 2)
+
+
+def test_guard_is_inert_without_quality_telemetry_and_says_so():
+    """The honest state today. The guard cannot see, and the system reports
+    that rather than letting its presence imply protection."""
+    from services.optimizer import Optimizer
+
+    optimizer = Optimizer.__new__(Optimizer)
+    assert optimizer._apply_integrity_guard(
+        "topic", "anything", {"mean_reward": 0.9, "count": 10}, 8, 2
+    ) == (8, 2)
+
+    status = Optimizer.integrity_guard_status(
+        {"topic": {"a": {"mean_reward": 0.9, "count": 10}}}
+    )
+    assert status["wired"] is True
+    assert status["bound_to_telemetry"] is False
+    assert "inert" in status["note"]
+
+
+def test_status_reports_bound_once_telemetry_exists():
+    from services.optimizer import Optimizer
+
+    status = Optimizer.integrity_guard_status(
+        {"topic": {"a": {"capability_delta": -0.2, "trust_delta": 0.0}}}
+    )
+    assert status["bound_to_telemetry"] is True
+    assert status["arms_with_quality_signal"] == 1
