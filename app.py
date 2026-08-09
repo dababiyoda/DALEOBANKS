@@ -42,7 +42,11 @@ from services.ledger import get_kill_switch, get_ledger
 from services.operator_line import get_operator_line, validate_twilio_signature
 from services.idea_refinery import IdeaRefinery
 from services.wealthmachine_client import get_wealthmachine_client
-from services.venture_protocol import validate_assessment_wire, LANE_POLICY
+from services.venture_protocol import (
+    LANE_POLICY,
+    packet_status_for_assessment,
+    validate_assessment_wire,
+)
 from services.account_registry import AccountRegistry, AccountRegistryError
 from services.media_operating_system import (
     MediaOperatingSystem,
@@ -1166,12 +1170,11 @@ async def send_to_wealthmachine(packet_id: str, _: RequestContext = Depends(requ
             client = get_wealthmachine_client()
             assessment = client.evaluate(packet)
             session.add(assessment)
-            if assessment.execution_class == "SIMULATION":
-                packet.status = "simulated"
-            elif assessment.evidence_class == "EXTERNAL_ASSESSMENT":
-                packet.status = "assessed"
-            else:
-                packet.status = "assessment_received_unverified"
+            # One rule, owned by venture_protocol. This call site used to
+            # decide on evidence_class alone, which would mark a packet
+            # "assessed" for an assessment the client itself labels
+            # non-authoritative.
+            packet.status = packet_status_for_assessment(assessment)
             actions = client.assessment_to_actions(session, assessment, packet, get_operator_line())
         from services.venture_protocol import assessment_to_wire
         return {

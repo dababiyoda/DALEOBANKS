@@ -32,15 +32,19 @@ from services.bridge_security import (
 )
 from services.ledger import DecisionLedger, get_ledger
 from services.logging_utils import get_logger
-from services.venture_protocol import SCHEMA_VERSION, packet_to_wire, validate_assessment_wire
+from services.venture_protocol import (
+    MOCK_ASSESSMENT_LABEL,
+    SCHEMA_VERSION,
+    UNVERIFIED_ASSESSMENT_LABEL,
+    is_authoritative_wmi_assessment,
+    is_simulated_assessment,
+    packet_to_wire,
+    validate_assessment_wire,
+)
 
 logger = get_logger(__name__)
 
 _LEGAL_RISK_FLAGS = {"legal_risk", "regulated_product", "licensing_required"}
-MOCK_ASSESSMENT_LABEL = "SIMULATION | MOCK | NON_EXTERNAL | NON_WMI_EXECUTION"
-UNVERIFIED_ASSESSMENT_LABEL = (
-    "EXTERNAL | UNVERIFIED_RUNTIME_IDENTITY | NON_AUTHORITATIVE"
-)
 
 
 class CircuitOpenError(ConnectionError):
@@ -264,11 +268,8 @@ class WealthMachineClient:
     ) -> Dict[str, Any]:
         finance = "finance_education_only" in packet.risk_flags
         disclosure = "\n\nEducational only — not financial advice." if finance else ""
-        simulated = assessment.execution_class == "SIMULATION"
-        authoritative_external = (
-            assessment.external_execution
-            and assessment.evidence_class == "EXTERNAL_ASSESSMENT"
-        )
+        simulated = is_simulated_assessment(assessment)
+        authoritative_external = is_authoritative_wmi_assessment(assessment)
         planning_label = (
             MOCK_ASSESSMENT_LABEL
             if simulated

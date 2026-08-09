@@ -34,6 +34,100 @@ ALLOWED_SIGNAL_TYPES = frozenset({
 
 ALLOWED_GO_NO_GO = frozenset({"go", "defer", "kill", "needs_more_evidence"})
 
+# --------------------------------------------------------------------- #
+# Assessment provenance
+# --------------------------------------------------------------------- #
+# A simulated verdict and a WealthMachineIntelligence verdict have the same
+# shape by design — that is what lets the loop run offline. It also means
+# shape cannot tell them apart, so provenance travels on the object.
+#
+# One question, one answer: "did WMI actually produce this?" is decided here
+# and nowhere else. When that rule lives at each call site instead, the copies
+# drift, and the loosest copy silently becomes the system's real policy.
+
+EXECUTION_CLASS_SIMULATION = "SIMULATION"
+EXECUTION_CLASS_WMI_HTTP_AUTHENTICATED = "EXTERNAL_WMI_HTTP_AUTHENTICATED"
+EXECUTION_CLASS_HTTP_UNVERIFIED = "EXTERNAL_HTTP_UNVERIFIED"
+EXECUTION_CLASS_INBOUND_CONTRACT = "INBOUND_CONTRACT"
+EXECUTION_CLASS_UNCLASSIFIED = "UNCLASSIFIED"
+
+EVIDENCE_CLASS_MOCK = "MOCK"
+EVIDENCE_CLASS_EXTERNAL_ASSESSMENT = "EXTERNAL_ASSESSMENT"
+EVIDENCE_CLASS_EXTERNAL_UNVERIFIED = "EXTERNAL_UNVERIFIED"
+EVIDENCE_CLASS_UNVERIFIED = "UNVERIFIED"
+
+# Stamped verbatim onto simulated assessments, for as long as they exist.
+SIMULATION_LABELS = ("SIMULATION", "MOCK", "NON_EXTERNAL", "NON_WMI_EXECUTION")
+MOCK_ASSESSMENT_LABEL = " | ".join(SIMULATION_LABELS)
+UNVERIFIED_ASSESSMENT_LABEL = (
+    "EXTERNAL | UNVERIFIED_RUNTIME_IDENTITY | NON_AUTHORITATIVE"
+)
+
+
+class SimulatedEvidenceError(ValueError):
+    """Non-authoritative evidence was offered where a real WMI verdict is required."""
+
+
+def is_authoritative_wmi_assessment(assessment: Any) -> bool:
+    """The single rule. Both conditions are required.
+
+    Reads through ``getattr`` defaults so an object that predates provenance,
+    or comes from somewhere else entirely, fails closed instead of passing by
+    omission.
+    """
+    external = getattr(assessment, "external_execution", False) is True
+    evidence = getattr(assessment, "evidence_class", EVIDENCE_CLASS_UNVERIFIED)
+    return external and evidence == EVIDENCE_CLASS_EXTERNAL_ASSESSMENT
+
+
+def is_simulated_assessment(assessment: Any) -> bool:
+    """True when this repo produced the verdict rather than receiving it."""
+    return getattr(
+        assessment, "execution_class", EXECUTION_CLASS_UNCLASSIFIED
+    ) == EXECUTION_CLASS_SIMULATION
+
+
+def require_authoritative_wmi(assessment: Any, *, action: str) -> None:
+    """Gate an action that may only rest on a real WMI verdict.
+
+    Raises rather than returning a boolean: a caller who forgets to check a
+    return value would promote a simulation to evidence, which is the exact
+    failure this exists to prevent.
+    """
+    if not is_authoritative_wmi_assessment(assessment):
+        raise SimulatedEvidenceError(
+            f"{action} requires an authoritative WealthMachineIntelligence "
+            f"assessment; this one is execution_class="
+            f"{getattr(assessment, 'execution_class', EXECUTION_CLASS_UNCLASSIFIED)!r} "
+            f"evidence_class="
+            f"{getattr(assessment, 'evidence_class', EVIDENCE_CLASS_UNVERIFIED)!r} "
+            f"external_execution="
+            f"{getattr(assessment, 'external_execution', False)!r}"
+        )
+
+
+def assessment_provenance(assessment: Any) -> Dict[str, Any]:
+    """Provenance summary for episodes, dashboards, and operator surfaces."""
+    return {
+        "execution_class": getattr(
+            assessment, "execution_class", EXECUTION_CLASS_UNCLASSIFIED),
+        "evidence_class": getattr(
+            assessment, "evidence_class", EVIDENCE_CLASS_UNVERIFIED),
+        "external_execution": getattr(assessment, "external_execution", False),
+        "authoritative_wmi": is_authoritative_wmi_assessment(assessment),
+        "simulated": is_simulated_assessment(assessment),
+    }
+
+
+def packet_status_for_assessment(assessment: Any) -> str:
+    """The packet status an assessment earns. Derived from the one rule."""
+    if is_simulated_assessment(assessment):
+        return "simulated"
+    if is_authoritative_wmi_assessment(assessment):
+        return "assessed"
+    return "assessment_received_unverified"
+
+
 # ValidationResult contract: outcomes the world can hand back. Negative
 # (no response) is a legitimate, recorded outcome — never an absence.
 ALLOWED_RESULT_CLASSIFICATIONS = frozenset({
@@ -131,4 +225,13 @@ __all__ = [
     "ALLOWED_IDENTITY_TYPES", "FORBIDDEN_IDENTITY_TYPES", "LANE_POLICY",
     "packet_to_wire", "assessment_to_wire", "validate_assessment_wire",
     "validate_identity_type",
+    "EXECUTION_CLASS_SIMULATION", "EXECUTION_CLASS_WMI_HTTP_AUTHENTICATED",
+    "EXECUTION_CLASS_HTTP_UNVERIFIED", "EXECUTION_CLASS_INBOUND_CONTRACT",
+    "EXECUTION_CLASS_UNCLASSIFIED", "EVIDENCE_CLASS_MOCK",
+    "EVIDENCE_CLASS_EXTERNAL_ASSESSMENT", "EVIDENCE_CLASS_EXTERNAL_UNVERIFIED",
+    "EVIDENCE_CLASS_UNVERIFIED", "SIMULATION_LABELS", "MOCK_ASSESSMENT_LABEL",
+    "UNVERIFIED_ASSESSMENT_LABEL", "SimulatedEvidenceError",
+    "is_authoritative_wmi_assessment", "is_simulated_assessment",
+    "require_authoritative_wmi", "assessment_provenance",
+    "packet_status_for_assessment",
 ]
