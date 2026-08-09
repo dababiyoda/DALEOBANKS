@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-09T21:30:46Z",
+  "updated_at": "2026-08-09T21:43:02Z",
   "repository": "dababiyoda/DALEOBANKS",
   "branch": "claude/daleobanks-complete-build-arqtg5",
-  "head": "398c599c82a989ecbc48b339f65a3b61527db38b",
+  "head": "cd5c66227f8d389f8e3c8bb90d44797020f353c8",
   "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
   "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
   "pull_request": {
@@ -12,8 +12,8 @@
     "state": "OPEN_DRAFT",
     "mergeable": true
   },
-  "current_phase": "Phase 0 convergence + Infinite Goal Chase substrate",
-  "next_action": "Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. Six adversarial guards remain buildable without them.",
+  "current_phase": "Section 84 deliverable list closed; every remaining gate is a founder declaration",
+  "next_action": "Six founder declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. With those, predeclare_campaign accepts, the goal-chase scheduler returns PREDECLARE_CAMPAIGN instead of BLOCKED, and the first reversible pilot runs. No further internal system is justified before that.",
   "active_sbm": {
     "name": "CONTROLLED_CONTENT_LOOP_COMPLETION_RATE",
     "definition": "Completed source-to-claim-to-content-to-localization-to-account-authority-to-shadow-receipt loop divided by the single predeclared Phase 0 target loop.",
@@ -61,10 +61,13 @@
     "authorized_live_publication": "NOT_IMPLEMENTED_IN_THIS_PHASE",
     "analytics": "EXPERIMENT_PREDECLARATION_IMPLEMENTED; REAL_OUTCOME_INGESTION_EXISTED_HISTORICALLY; NO_PHASE0_REAL_OUTCOME",
     "daily_news_contract": "IMPLEMENTED_AND_TESTED; SCHEDULER_NOT_ACTIVATED",
-    "owned_audience": "NOT_IMPLEMENTED",
-    "community": "NOT_IMPLEMENTED",
-    "commerce": "HISTORICAL_CONVERSION_LEDGER_ONLY; NO_REVENUE_PROOF",
-    "aspiration_accelerator": "SUBSTRATE_IMPLEMENTED_AND_TESTED; NO CAMPAIGN CAN RUN UNTIL FOUNDER DECLARATIONS EXIST"
+    "owned_audience": "IMPLEMENTED_AND_TESTED; consent and voluntary migration required; 0 relationships",
+    "community": "IMPLEMENTED_AND_TESTED (participant ladder rungs); 0 participants",
+    "commerce": "IMPLEMENTED_AND_TESTED; reconciliation required before revenue counts; 0 reconciled",
+    "aspiration_accelerator": "IMPLEMENTED_AND_TESTED including loop driver; no campaign can run until founder declarations exist",
+    "rabbit_hole_graph": "IMPLEMENTED_AND_TESTED; counterargument, off-ramp, and capability payload required",
+    "audience_intelligence": "IMPLEMENTED_AND_TESTED; aggregate only, population floor 25",
+    "reward_integrity": "IMPLEMENTED_AND_TESTED; rage-bait content guard plus reward-admissibility guard on the live optimizer"
   },
   "wmi_integration_state": {
     "idea_refinery": "PRESERVED",
@@ -79,8 +82,8 @@
     "episode_provenance": "decision_episode reports assessment_provenance, externally_assessed, simulated_assessment_count."
   },
   "pumpstation_handoff": {
-    "state": "NOT_IMPLEMENTED",
-    "reason": "No consent, eligibility, disclosure, or external PumpStation contract is available inside this repository."
+    "state": "INTERFACE_IMPLEMENTED_AND_TESTED",
+    "reason": "Six prerequisites enforced: detected need, eligibility check, disclosure, consent, evidence, and an outcome slot. Prepares only; nothing contacts anyone. No external PumpStation contract exists."
   },
   "aspiration_campaign_state": {
     "registry": "IMPLEMENTED_AND_TESTED (services/aspiration_registry.py); NO RECORDS SEEDED",
@@ -113,20 +116,23 @@
     "An executable aspiration registry is not aspiration progress. It is the instrument, and an instrument is not a measurement. VERIFIED_ASPIRATION_GATES_CLEARED is 0 before and after.",
     "Correct provenance labeling is not WMI integration.",
     "Resolving the PR #66 ownership question did not make PR #66 deployable; the kernel packaging gap is unchanged.",
-    "The reward function was unguarded: fame is engagement plus followers, penalty counts only reactive platform signals, so rage-bait that avoids a block raises the J-score. The adversarial-controls list named this guard and it did not exist until now."
+    "The reward function was unguarded: fame is engagement plus followers, penalty counts only reactive platform signals, so rage-bait that avoids a block raises the J-score. The adversarial-controls list named this guard and it did not exist until now.",
+    "A complete section 84 deliverable list is not a working business. Every count these systems measure is zero.",
+    "Keyword-based content guards are a starting heuristic, not a classifier. Their false-positive rate on real material is unmeasured.",
+    "The ladder's guards bind the service path, not the durable store. Direct construction bypasses them; aggregates recompute from source fields so a bypassed record still fails to move a metric."
   ],
   "tests": {
-    "targeted": "72 passed (16 WMI evidence rule + 35 aspiration registry + 21 integrity guard)",
-    "full_python": "394 passed, 10 warnings",
-    "clean_venv_from_requirements": "373 passed from a fresh venv on pip install -r requirements.txt",
+    "targeted": "175 passed across the guard and registry suites",
+    "full_python": "461 passed, 10 warnings",
+    "clean_venv_from_requirements": "verified green on pip install -r requirements.txt",
     "governance_intent": "15 records valid",
-    "governance_deliberation": "DB-DEC-001, DB-DEC-003, DB-DEC-004 valid. DB-DEC-002 reserved for the Phase 1 editorial-control decision.",
+    "governance_deliberation": "DB-DEC-001, 003, 004, 005 valid; DB-DEC-002 reserved for the Phase 1 branch",
     "node": "NOT_RUN_NO_FRONTEND_CHANGE",
     "external_effects_exercised": 0
   },
   "ci": "NO_GITHUB_ACTIONS_WORKFLOWS_CONFIGURED; LOCAL_VALIDATION_PASSED",
-  "strongest_counterargument": "Four branches of internal control machinery now exist and not one person, buyer, or owned relationship has been touched. Every guard added this session refuses something; none of them attracts anyone. The registry's own first act was to refuse the only campaign the repository has, which is correct and is also the whole point: the binding constraint is six founder declarations, not more code.",
-  "next_smallest_implementation": "Not code. Six declarations: surface, timezone, source packet, owned-audience destination, resource ceiling, stop condition. With those, predeclare_campaign accepts and the first reversible pilot can run.",
+  "strongest_counterargument": "The deliverable list is closed and the business has not started. Five branches of machinery now exist whose entire purpose is refusing claims that nobody has yet tried to make. The single defensible thing built this session was the rage-bait guard, because it protects a mechanism that is already running. Everything else is scaffolding waiting for a person.",
+  "next_smallest_implementation": "Not code. Six declarations.",
   "founder_intent_preserved": true,
   "stacked_on": {
     "branch": "agent/daleobanks-phase0-operating-substrate",
@@ -136,14 +142,26 @@
   },
   "publication_authority_ownership": "RESOLVED as composition, not conflict. PR #66 Reality Aperture is the constitutional gate (Kernel signs; Aperture.__init__ accepts no signer). Phase 0/1 account prerequisite, editorial review, CapabilityGrant, and KillSwitch are organ-local policy. They compose in series and organ-local refusal runs after Kernel authorization: a certificate permits, it never compels. Recorded PROPOSED, not IMPLEMENTED \u2014 PR #66 imports the aperture from a sibling kernel checkout and skips its tests when absent.",
   "deliverable_audit_84": {
-    "done_here": [
+    "status": "COMPLETE \u2014 31 of 31 have an implementation or a documented canonical owner",
+    "built_here": [
       "Aspiration Registry",
       "Backcast GPS execution record",
       "Shared Primitive Registry",
-      "WMI interface convergence (single authoritative-evidence rule)",
-      "rage-bait / integrity guards"
+      "WMI interface convergence",
+      "Persona/Brand Genome enforcement (integrity_guard + PERSONA_CONSTITUTION)",
+      "Rabbit Hole / Territory Graph",
+      "Audience Intelligence Ledger",
+      "Relationship Memory (purpose-limited)",
+      "Owned Audience / CRM",
+      "Community progression model",
+      "Commerce / revenue ledger",
+      "Collaboration / expert network",
+      "PumpStation handoff interface",
+      "Infinite Goal Chase scheduler",
+      "Campaign Planner (aspiration campaigns)",
+      "Standing Authority interface documentation"
     ],
-    "done_phase0_or_phase1": [
+    "preserved_from_phase0_phase1_or_history": [
       "canonical Account Registry",
       "Source and Evidence Ledger",
       "Content Knowledge Base",
@@ -151,64 +169,22 @@
       "Localization Engine",
       "Risk Classifier",
       "Publication Receipt",
-      "Correction Ledger (Phase 1 branch, unreachable)",
-      "Operating Work Packet"
-    ],
-    "done_historically": [
+      "Correction Ledger (Phase 1 branch)",
       "Scheduler",
       "Analytics / Experiment Engine",
       "Opportunity Router",
       "IdeaRefinery",
-      "Standing Authority interface (CapabilityService)"
+      "Operating Work Packet",
+      "Content Factory (text formats)"
     ],
-    "partial": [
-      "Persona / Brand Genome (documented + partially enforced; automation disclosure and privacy minimization are PROPOSED)",
-      "Content Factory (text formats only; no video, carousel, podcast, or newsletter production)",
-      "Campaign Planner (aspiration campaigns only; no media campaign planner)",
-      "Platform Adapter Registry (identity and lifecycle yes; per-adapter rate limits and content-class binding no)",
-      "Relationship Memory (historical model; not aligned to the privacy requirements)",
-      "Commerce / revenue ledger (historical Conversion rows; no reconciled economics)"
-    ],
-    "not_built": [
-      "Rabbit Hole / Territory Graph",
-      "Audience Intelligence Ledger",
-      "Owned Audience / CRM integration",
-      "Community progression model",
-      "PumpStation handoff interface",
-      "Collaboration / expert network",
-      "Infinite Goal Chase scheduler (deliberately: no campaign is permitted to run)"
-    ],
-    "note": "Not-built items are blocked on founder declarations or external contracts, except the Rabbit Hole graph and Audience Intelligence Ledger, which are buildable and were deprioritized under the anti-cathedral rule."
+    "remaining_partial": [
+      "Content Factory produces text formats only; video, carousel, podcast, and newsletter production are ASPIRATIONAL and need external adapters",
+      "Platform Adapter Registry holds identity and lifecycle; per-adapter rate limits and content-class binding still to bind"
+    ]
   },
   "adversarial_controls_75": {
-    "covered": [
-      "fake account identity",
-      "unauthorized publishing",
-      "credential leakage",
-      "mock WMI result presented as real",
-      "missing source provenance",
-      "unsupported financial claim",
-      "cross-language factual drift",
-      "replay",
-      "stale approval",
-      "platform connector failure",
-      "account compromise",
-      "evidence ledger break",
-      "persona drift",
-      "rage-bait optimization",
-      "fake engagement ingestion",
-      "PumpStation promotion without disclosure",
-      "fake sponsorship disclosure"
-    ],
-    "not_covered": [
-      "unauthorized DM (partial)",
-      "unsupported health claim (risk class only, no guard)",
-      "duplicate publishing (Phase 1 branch, unreachable)",
-      "scheduler crash",
-      "budget overrun",
-      "relationship privacy violation"
-    ],
-    "note": "17 of 23 have guards with negative controls. Six remain."
+    "status": "23 of 23 covered, each with a negative control",
+    "note": "Every guard is paired with a case proving it refuses and a case proving it permits legitimate work. The health guard's own permit case caught an inversion before commit."
   },
   "docs_85": "README + 4 canonical preserved; added OPERATING_AUTHORITY, PLATFORM_AUTOMATION_MATRIX, COMMERCIAL_MODEL, PERSONA_CONSTITUTION"
 }
