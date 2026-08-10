@@ -1,0 +1,425 @@
+{
+  "decision_id": "DB-DEC-005",
+  "title": "Complete the deliverable list by building refusals, not features",
+  "problem": "After DB-DEC-004 the section 84 list still had seven items unbuilt and six adversarial controls missing. Six of the seven \u2014 owned audience, community progression, commerce ledger, collaboration network, PumpStation handoff, and the audience ledger \u2014 were each specified separately, which invited six separate identity stores and six places for consent to go missing. The missing adversarial controls included rage-bait optimization, and inspection showed that guard was not merely absent but load-bearing: the live Thompson-sampling optimizer scores a J-function of impact, revenue, authority, and fame minus a penalty, where fame is an engagement proxy and the penalty counts only reactive platform signals. Content that raises engagement by making people angry and never trips a block raises the score and gets sampled more often.",
+  "founder_intent_refs": [
+    "Master mandate section 11 rabbit hole engine",
+    "Master mandate section 15 audience intelligence",
+    "Master mandate section 19 advancement actions",
+    "Master mandate section 21 owned distribution",
+    "Master mandate section 22 relationship memory",
+    "Master mandate section 23 community operating system",
+    "Master mandate section 31 PumpStation routing",
+    "Master mandate section 47 privacy",
+    "Master mandate section 48 commercial proof",
+    "Master mandate section 55 do not optimize into an outrage machine",
+    "Master mandate section 59 global civilian innovation network",
+    "Master mandate section 75 adversarial controls",
+    "Master mandate section 84 deliverables",
+    "governance/founder_intent.json"
+  ],
+  "baseline": "Branch claude/daleobanks-complete-build-arqtg5 at d9b1a0b. 394 tests. Seven section 84 deliverables unbuilt, six of twenty-three adversarial controls missing, optimizer reward unguarded.",
+  "alternatives": [
+    {
+      "name": "Build the six participant deliverables as six services",
+      "description": "One service each for owned audience, community progression, commerce, collaboration, handoff, and audience intelligence, matching the deliverable list one to one.",
+      "advantages": [
+        "Maps directly onto the specification",
+        "Each service stays small"
+      ],
+      "disadvantages": [
+        "Six identity stores for one person",
+        "Consent recorded in six places means six places it can be missing",
+        "A withdrawal would have to be honored six times"
+      ],
+      "revival_evidence": "Revive if the rungs turn out to have genuinely disjoint lifecycles in operation."
+    },
+    {
+      "name": "One participant ladder carrying all six",
+      "description": "Implement the section 59 progression as the spine, with owned relationships, advancement, commerce, collaboration, and handoffs as transitions on it.",
+      "advantages": [
+        "One person, one record, one consent state",
+        "Withdrawal cascades once and covers every channel",
+        "Advancement gates rung changes structurally rather than by convention"
+      ],
+      "disadvantages": [
+        "One module carries more responsibility",
+        "A bug in the spine touches six capabilities"
+      ],
+      "revival_evidence": "Selected."
+    },
+    {
+      "name": "Defer everything and demand founder inputs first",
+      "description": "Stop building and wait for the six declarations.",
+      "advantages": [
+        "Zero further internal expansion",
+        "Maximum pressure toward the real bottleneck"
+      ],
+      "disadvantages": [
+        "The declarations unblock a pilot, not these guards; the rage-bait guard protects a mechanism running today",
+        "Leaves a named adversarial control absent while the optimizer it guards is live"
+      ],
+      "revival_evidence": "Revive for anything requiring a declared surface, budget, or destination."
+    },
+    {
+      "name": "Guard content only, not the learning loop",
+      "description": "Screen drafts for rage-bait and skip the reward-admissibility check.",
+      "advantages": [
+        "Simpler",
+        "No coupling to optimizer internals"
+      ],
+      "disadvantages": [
+        "Catches instances and misses the pattern; the failure named in section 55 is the system learning the shortcut, which is invisible at the level of a single draft"
+      ],
+      "revival_evidence": "Revive if reward telemetry proves too noisy to read."
+    }
+  ],
+  "do_nothing_option": {
+    "expected_outcome": "Seven deliverables stay unbuilt and the optimizer keeps rewarding whatever raises engagement without tripping a platform block. The repository would continue to carry a metric it cannot verify and a reward it cannot audit.",
+    "advantages": [
+      "No new surface",
+      "No risk of new ceremony"
+    ],
+    "disadvantages": [
+      "Leaves a live mechanism unguarded against a failure the founder named explicitly",
+      "Six of twenty-three adversarial controls remain absent"
+    ]
+  },
+  "roles": [
+    {
+      "role": "Founder-Intent Steward",
+      "position": "Section 59's ladder is the institution's actual shape, and the separately listed deliverables are stations on it. Building the ladder honors the intent better than building the list literally.",
+      "material_concerns": [
+        "The ladder must not become a funnel that pressures people upward",
+        "Status must reward contribution, never conformity"
+      ],
+      "evidence_refs": [
+        "Master mandate sections 24, 59, 60"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Systems Architect",
+      "position": "One spine with additive dataclasses over the existing durable store; guards as pure functions with no service coupling so they can be called from any layer.",
+      "material_concerns": [
+        "No app.py routes, to keep the Phase 1 branch merge clean",
+        "The guards must not import the optimizer, or the coupling inverts"
+      ],
+      "evidence_refs": [
+        "services/participant_ladder.py",
+        "services/integrity_guard.py",
+        "services/operational_guards.py"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Adversarial Reviewer",
+      "position": "Assume an operator will count enthusiasm as advancement, migrate people without consent, book revenue at checkout, diagnose a reader, DM strangers at scale, and read records for purposes nobody agreed to.",
+      "material_concerns": [
+        "Every guard needs a refusal case and a permit case",
+        "A guard that blocks legitimate work is worse than the failure it prevents"
+      ],
+      "evidence_refs": [
+        "tests/test_participant_ladder.py",
+        "tests/test_operational_guards.py",
+        "tests/test_integrity_guard.py"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Operator and Maintainer",
+      "position": "The refusal messages must name the missing element so the guard produces the input rather than blocking on ceremony.",
+      "material_concerns": [
+        "A false positive in the health guard would make pillar three unwritable",
+        "Duplicate detection must not block legitimate cross-posting"
+      ],
+      "evidence_refs": [
+        "health guard scans residual text after disclaimers are removed",
+        "duplicate fingerprint is per surface"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Evidence and Welfare Guardian",
+      "position": "Supports it and restates the limit unchanged: none of this produces a participant, a customer, or an owned relationship. It makes those claims unfakeable when they eventually exist.",
+      "material_concerns": [
+        "Nothing may be seeded",
+        "No count here may be reported as traction"
+      ],
+      "evidence_refs": [
+        "no records seeded",
+        "governance/operating_work_packet.json major_metrics"
+      ],
+      "recommendation": "RETAIN"
+    }
+  ],
+  "evidence": [
+    {
+      "claim": "The optimizer reward has no term for whether a human was served.",
+      "tier": "primary_source",
+      "reference": "services/analytics.py calculate_goal_aligned_j_score, calculate_fame_score, calculate_penalty_score",
+      "finding": "fame is engagement proxy plus follower growth; penalty counts rate limits, mutes, blocks, ethics violations. No capability or trust term exists."
+    },
+    {
+      "claim": "The health guard's first implementation was inverted.",
+      "tier": "unit_test",
+      "reference": "tests/test_operational_guards.py::test_qualified_educational_health_content_passes",
+      "finding": "Scanning raw text flagged 'this is not a diagnosis' as a diagnosis, refusing the qualified version and leaving only the unqualified one writable. Caught by the guard's own negative control before commit."
+    },
+    {
+      "claim": "The batch does not regress the branch.",
+      "tier": "sandbox_execution",
+      "reference": "python -m pytest tests/ -q",
+      "finding": "461 passed, up from 394."
+    },
+    {
+      "claim": "Adversarial coverage is complete.",
+      "tier": "unit_test",
+      "reference": "tests/test_integrity_guard.py, tests/test_operational_guards.py, and prior suites",
+      "finding": "23 of 23 named controls have guards, each with a negative control."
+    }
+  ],
+  "counterevidence": [
+    {
+      "claim": "Completing the deliverable list means the institution is built.",
+      "tier": "other",
+      "reference": "governance/operating_work_packet.json",
+      "finding": "It does not. Every count these systems measure is zero. The list is complete; the business has not started."
+    },
+    {
+      "claim": "The rage-bait guard prevents the outrage failure.",
+      "tier": "unit_test",
+      "reference": "services/integrity_guard.py",
+      "finding": "It refuses content shaped that way and refuses rewards with the degradation signature. It cannot detect a subtly corrosive piece that trips no marker, and its thresholds are judgment encoded as constants."
+    },
+    {
+      "claim": "The ladder's guards cannot be bypassed.",
+      "tier": "primary_source",
+      "reference": "db/session.py",
+      "finding": "They can. The durable store enforces no invariants for any record, so direct construction bypasses the service path, as with the aspiration registry."
+    }
+  ],
+  "pass_1": {
+    "intended_outcome": "Complete the deliverable list and the adversarial-control list by building mechanisms whose defining behavior is refusing unearned claims about people, money, and progress.",
+    "advantages": [
+      {
+        "id": "A1",
+        "statement": "One ladder replaces six identity stores.",
+        "amplified_value": "Consent is recorded once and withdrawal cascades across every channel in a single operation instead of six that can drift."
+      },
+      {
+        "id": "A2",
+        "statement": "The rage-bait guard reads the learning loop, not only the draft.",
+        "amplified_value": "Catches the pattern the founder named \u2014 the system learning the shortcut \u2014 which is invisible at the level of any single piece of content."
+      },
+      {
+        "id": "A3",
+        "statement": "Every metric these systems expose is unfakeable by construction.",
+        "amplified_value": "Advancement needs verification, revenue needs reconciliation, an empty population returns None rather than a rate of zero."
+      },
+      {
+        "id": "A4",
+        "statement": "Territory nodes require the opposing case and an off-ramp.",
+        "amplified_value": "The distinction between a regenerative rabbit hole and an echo chamber becomes a schema constraint rather than an intention."
+      }
+    ],
+    "disadvantages": [
+      {
+        "id": "D1",
+        "statement": "A large amount of internal machinery lands with no participant, customer, or relationship in existence.",
+        "severity": "high",
+        "response_type": "do_not_proceed",
+        "redesigned_response": "Seed nothing, add no routes, and keep the anti-cathedral warning raised. Treat the deliverable list as closed and refuse further internal expansion."
+      },
+      {
+        "id": "D2",
+        "statement": "One spine means one bug touches six capabilities.",
+        "severity": "medium",
+        "response_type": "modularity",
+        "redesigned_response": "Guards are pure functions callable independently; the ladder holds state and delegates judgment, so a fault in one guard does not corrupt the others."
+      },
+      {
+        "id": "D3",
+        "statement": "Content guards encode judgment as word lists that will produce false positives.",
+        "severity": "high",
+        "response_type": "evidence",
+        "redesigned_response": "Pair every refusal with a permit case in tests. This already caught one inversion in the health guard before it shipped."
+      },
+      {
+        "id": "D4",
+        "statement": "Refusing rewards could suppress legitimate growth.",
+        "severity": "medium",
+        "response_type": "evidence",
+        "redesigned_response": "The signature requires both halves \u2014 engagement rising and quality falling. A good week and a bad week both pass."
+      }
+    ],
+    "comparisons": {
+      "baseline": "Seven deliverables unbuilt, six controls missing, optimizer unguarded.",
+      "do_nothing": "Rejected: leaves a live mechanism unguarded against a named failure.",
+      "simplest_viable_alternative": "Six separate services matching the list one to one. Rejected: six identity stores and six places for consent to go missing.",
+      "strongest_competing_architecture": "Content-only rage-bait screening without reward admissibility. Rejected: catches instances and misses the pattern.",
+      "reversible_experiment": "Additive dataclasses and pure-function guards on a stacked draft branch, nothing seeded, no routes, no migration."
+    },
+    "rejected_alternatives": [
+      {
+        "name": "Six separate services",
+        "rejection_reason": "Six identity stores for one person.",
+        "revival_evidence": "The rungs prove to have disjoint lifecycles in operation."
+      },
+      {
+        "name": "Defer everything pending founder inputs",
+        "rejection_reason": "The declarations unblock a pilot, not these guards.",
+        "revival_evidence": "Applies to anything needing a declared surface, budget, or destination."
+      },
+      {
+        "name": "Content-only rage-bait screening",
+        "rejection_reason": "Misses the learning pattern that section 55 actually names.",
+        "revival_evidence": "Reward telemetry proves too noisy to read."
+      }
+    ]
+  },
+  "pass_2": {
+    "attack_summary": "Attacked the batch for word-list brittleness, for bypassability, for suppressing legitimate work, and for the possibility that completing a checklist gets reported as building a business.",
+    "new_weaknesses": [
+      {
+        "id": "N1",
+        "category": "fragility",
+        "statement": "Keyword-based content guards will miss a subtle piece and flag an awkward one.",
+        "strengthening_response": "Every guard carries a permit case; the health guard's inversion was caught this way before commit. Recorded as residual with an owner rather than claimed solved."
+      },
+      {
+        "id": "N2",
+        "category": "gaming",
+        "statement": "Direct store writes bypass every ladder guard, as with the aspiration registry.",
+        "strengthening_response": "Aggregates recompute from source fields rather than trusting stored flags, so a bypassed record still fails to move the metric. The remaining exposure is recorded."
+      },
+      {
+        "id": "N3",
+        "category": "bureaucracy",
+        "statement": "Completing the deliverable list invites reporting the institution as built.",
+        "strengthening_response": "Nothing seeded, every count zero, guardian dissent binding on reporting, anti-cathedral warning left raised."
+      },
+      {
+        "id": "N4",
+        "category": "overfit",
+        "statement": "Thresholds \u2014 engagement rise, quality fall, segment floor, heartbeat tolerance \u2014 are judgment encoded as constants.",
+        "strengthening_response": "Each is a named module constant rather than an inline literal, so changing one is a single reviewable edit."
+      },
+      {
+        "id": "N5",
+        "category": "comprehensibility",
+        "statement": "One module carrying six capabilities is harder to read than six small ones.",
+        "strengthening_response": "Accepted. The alternative was six copies of a person and six consent states, which is harder to reason about correctly even though each file would be easier to read."
+      }
+    ],
+    "pass_1_disadvantage_dispositions": [
+      {
+        "disadvantage_id": "D1",
+        "outcome": "accepted",
+        "rationale": "The deliverable list is now closed; further internal expansion is explicitly not justified.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any proposal for a new internal system before an authorized external pilot."
+      },
+      {
+        "disadvantage_id": "D2",
+        "outcome": "resolved",
+        "rationale": "Guards are pure functions with no service coupling and are independently testable.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "A guard acquires state or a service dependency."
+      },
+      {
+        "disadvantage_id": "D3",
+        "outcome": "experiment",
+        "rationale": "Word lists are a starting heuristic whose false-positive rate is unknown until real content flows through.",
+        "owner": "DALEOBANKS editorial operator",
+        "review_trigger": "First ten pieces of real content screened."
+      },
+      {
+        "disadvantage_id": "D4",
+        "outcome": "accepted",
+        "rationale": "Requiring both halves of the signature keeps ordinary growth admissible.",
+        "owner": "DALEOBANKS growth operator",
+        "review_trigger": "A legitimate arm is refused."
+      }
+    ],
+    "final_design": "services/participant_ladder.py implements the section 59 ladder with ParticipantRecord, AdvancementAction, OwnedRelationship, CommerceRecord, CollaborationLink, VentureHandoff, AudienceSegment, and TerritoryNode. services/integrity_guard.py guards content shape and reward admissibility. services/operational_guards.py closes budget, scheduler liveness, duplicate publication, direct messages, health claims, and purpose limitation. services/goal_chase.py drives the loop and refuses when no legitimate move exists. Nothing seeded, no API routes, no scheduler activation.",
+    "residual_risks": [
+      {
+        "risk": "Keyword guards produce false positives and negatives on real content.",
+        "mitigation": "Permit cases in tests; review the first ten screened pieces and tune from evidence rather than intuition.",
+        "owner": "DALEOBANKS editorial operator",
+        "review_trigger": "First ten pieces screened."
+      },
+      {
+        "risk": "Direct store writes bypass service guards.",
+        "mitigation": "Aggregates recompute from source fields; add API-layer guards when routes are exposed.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "Participant or aspiration API routes are added."
+      },
+      {
+        "risk": "A complete deliverable list is mistaken for a working business.",
+        "mitigation": "All counts zero, nothing seeded, anti-cathedral warning standing.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any report describing the list as traction."
+      },
+      {
+        "risk": "Thresholds are unvalidated judgment.",
+        "mitigation": "Named constants, single-edit changes.",
+        "owner": "DALEOBANKS growth operator",
+        "review_trigger": "A threshold produces a wrong call in practice."
+      }
+    ],
+    "recommendation": "RETAIN"
+  },
+  "dissent": {
+    "present": true,
+    "handling": "Binding on reporting. The list closes; the claim does not widen.",
+    "entries": [
+      {
+        "role": "Evidence and Welfare Guardian",
+        "position": "The deliverable list being complete is not the institution being built. Every count these systems measure is zero.",
+        "rationale": "These mechanisms make future claims unfakeable. They do not create the things being claimed.",
+        "evidence_threshold": "One consented participant with one verified advancement action, or one reconciled sale.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "First real participant or first reconciled payment."
+      },
+      {
+        "role": "Operator and Maintainer",
+        "position": "Word-list content guards will be wrong in both directions on real material.",
+        "rationale": "They are a starting heuristic, not a classifier, and their error rate is unmeasured.",
+        "evidence_threshold": "Ten real pieces screened with the false-positive and false-negative rate recorded.",
+        "owner": "DALEOBANKS editorial operator",
+        "review_trigger": "First ten pieces screened."
+      }
+    ]
+  },
+  "authority_impact": {
+    "level": "standard",
+    "changes_authority": false,
+    "requires_authorized_human": false,
+    "approval_status": "not_required",
+    "approver": null,
+    "notes": "No capability, credential, connector, publishing path, spending path, or scheduler activation. Every mechanism added only records and refuses. The direct-message guard narrows an existing path; it opens nothing."
+  },
+  "migration_plan": "Eight additive dataclasses auto-registered by the existing durable store, plus four new service modules. No schema version change, no data migration, no seeded records, no API routes, so the branch merges cleanly with the Phase 1 branch's app.py changes.",
+  "rollback_plan": {
+    "possible": true,
+    "steps": [
+      "Revert commits f4a98a2, 3b0cdec, and cd5c662.",
+      "No data migration is required because nothing was seeded and no existing record gained a field.",
+      "Re-run the suite; the expected post-revert state is 394 passing."
+    ],
+    "reason_impossible": null
+  },
+  "kill_criteria": [
+    "A rung advances without a verified voluntary action.",
+    "Revenue is recorded without reconciliation.",
+    "An owned relationship is created without consent evidence.",
+    "A handoff is prepared without disclosure.",
+    "A content guard refuses legitimate material at a rate that makes a pillar unwritable.",
+    "The completed deliverable list is reported as business traction."
+  ],
+  "decision": "RETAIN",
+  "decision_owner": "Alfonso Lopez",
+  "review_trigger": "First ten pieces of real content screened, or the first consented participant, whichever comes first."
+}

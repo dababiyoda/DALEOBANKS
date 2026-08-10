@@ -1,0 +1,424 @@
+{
+  "decision_id": "DB-DEC-004",
+  "title": "Make the Infinite Goal Chase refusable instead of narrated",
+  "problem": "Both operating work packets recorded 'EXECUTABLE ASPIRATION REGISTRY DEFERRED' while aspiration state lived as prose inside a JSON field: an active_aspiration string, an active_gate string, a backcast string. Prose records intent and refuses nothing. With aspiration state unstructured, nothing prevented a simulation or a passing test suite from being narrated as aspiration progress, nothing forced a campaign to declare its success threshold before running, nothing stopped a second bottleneck metric from running beside the first, and a blocked aspiration could be dropped silently, discarding the finding about the world that produced the block.",
+  "founder_intent_refs": [
+    "Master mandate section 33: the Infinite Goal Chase loop, and what infinite does not mean",
+    "Master mandate section 34: durable aspiration registry, thirteen statuses, never delete blocked aspirations silently",
+    "Master mandate section 35: Backcast GPS G/P/S, and the six questions every campaign must answer",
+    "Master mandate section 36: prefer bottlenecks that unlock many aspirations",
+    "Master mandate section 37: BUILD is one of seven dispositions; mission progress can exceed ownership value",
+    "Master mandate section 50: one dominant SBM per operating period",
+    "Master mandate section 80: reconciled real outcome outranks simulation; do not invert the hierarchy",
+    "Master mandate section 88 item 15: build Aspiration Registry plus Backcast GPS cards",
+    "governance/founder_intent.json"
+  ],
+  "baseline": "Branch claude/daleobanks-complete-build-arqtg5 at cfaf629, stacked on PR #67 (0d996ca). 338 tests passing. Aspiration state present only as prose in governance/operating_work_packet.json under aspiration_campaign_state.",
+  "alternatives": [
+    {
+      "name": "Keep aspiration state as work-packet prose",
+      "description": "Continue recording active aspiration, gate, and backcast as strings a human reads.",
+      "advantages": [
+        "Zero code",
+        "Already written and legible"
+      ],
+      "disadvantages": [
+        "Cannot refuse a simulation narrated as progress",
+        "Cannot force predeclaration",
+        "Cannot detect two live SBMs",
+        "A dropped blocked aspiration leaves no trace"
+      ],
+      "revival_evidence": "Revive if the registry is shown to add ceremony without ever refusing anything a human would have caught."
+    },
+    {
+      "name": "Store aspirations, do not gate outcomes",
+      "description": "Add the records from section 34 as durable dataclasses with CRUD and no invariants.",
+      "advantages": [
+        "Small",
+        "Queryable",
+        "No behavior to argue about"
+      ],
+      "disadvantages": [
+        "A wishlist with a schema",
+        "The failure mode is recording, not storage",
+        "Would satisfy the deliverable list while leaving the actual risk untouched"
+      ],
+      "revival_evidence": "Revive if the refusals prove unworkable in practice and structured storage alone is worth keeping."
+    },
+    {
+      "name": "Registry whose refusals are the point",
+      "description": "Durable records plus three invariants: no delete, six-part predeclaration with one live SBM, and gate clearance only on evidence at or above authorized_pilot in the founder's hierarchy.",
+      "advantages": [
+        "Turns section 80 into executable code rather than a document",
+        "Reproduces known blockers mechanically and names the exact missing fields",
+        "Blocked aspirations survive as findings",
+        "Negative results are first-class"
+      ],
+      "disadvantages": [
+        "New service and five models before any external outcome exists",
+        "Strict predeclaration could obstruct a legitimate fast pilot",
+        "The hierarchy is a judgment encoded as a constant"
+      ],
+      "revival_evidence": "Selected."
+    },
+    {
+      "name": "Extend the existing GoalProposal and ExperimentProposal records",
+      "description": "Reuse the historical proposal models rather than adding aspiration-specific ones.",
+      "advantages": [
+        "No new model surface",
+        "Reuses a mechanism that already exists"
+      ],
+      "disadvantages": [
+        "Those records model bandit action-space widening and operator goal review, not multi-year aspirations with backcast paths and gate lineage",
+        "Overloading them would blur two unrelated lifecycles"
+      ],
+      "revival_evidence": "Revive if aspiration records and experiment proposals converge on the same lifecycle in practice."
+    }
+  ],
+  "do_nothing_option": {
+    "expected_outcome": "Aspiration state stays prose. The repository keeps a metric named VERIFIED_ASPIRATION_GATES_CLEARED with no mechanism that could ever verify one, and the anti-cathedral warning depends entirely on a human remembering to raise it.",
+    "advantages": [
+      "No new code",
+      "No risk of new ceremony"
+    ],
+    "disadvantages": [
+      "The one deliverable that costs no founder authority stays deferred indefinitely",
+      "Nothing structurally prevents simulation from being narrated as aspiration progress"
+    ]
+  },
+  "roles": [
+    {
+      "role": "Founder-Intent Steward",
+      "position": "Sections 34 through 37 specify a registry in concrete detail, and section 88 lists it as build step 15. It is the only substantial deliverable left that requires no founder declaration.",
+      "material_concerns": [
+        "The thirteen statuses must be implemented exactly, not summarized",
+        "Never delete blocked aspirations must be structural, not a convention"
+      ],
+      "evidence_refs": [
+        "Master mandate sections 34-37",
+        "governance/operating_work_packet.json aspiration_campaign_state"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Systems Architect",
+      "position": "Five additive dataclasses plus one orchestrating service, reusing the existing durable object store and decision ledger. No new authority owner, no new store, no scheduler.",
+      "material_concerns": [
+        "Must not become a second planning bureaucracy beside the work packet",
+        "Must not add app.py routes that collide with the Phase 1 branch's heavy app.py changes"
+      ],
+      "evidence_refs": [
+        "db/session.py dataclass registry",
+        "services/aspiration_registry.py"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Adversarial Reviewer",
+      "position": "Assume an operator will clear a gate with a green test suite, predeclare a threshold after seeing the result, attack an easier distant gate, and run a second SBM while claiming focus.",
+      "material_concerns": [
+        "Every guard needs a case proving it refuses",
+        "An unknown evidence tier must rank lowest, not highest",
+        "There must be no delete method to find"
+      ],
+      "evidence_refs": [
+        "tests/test_aspiration_registry.py"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Operator and Maintainer",
+      "position": "Strict predeclaration is real friction. It is the correct friction here, because the friction is exactly the founder input that is missing.",
+      "material_concerns": [
+        "Refusal messages must name the missing field, not just fail",
+        "A legitimate fast pilot must not be blocked by ceremony that adds no information"
+      ],
+      "evidence_refs": [
+        "AspirationRegistryError messages name the missing predeclarations"
+      ],
+      "recommendation": "RETAIN"
+    },
+    {
+      "role": "Evidence and Welfare Guardian",
+      "position": "Supports it, and states the limit: this creates the instrument that measures aspiration progress. It creates no aspiration progress. VERIFIED_ASPIRATION_GATES_CLEARED remains 0 and correctly cannot be moved from inside this repository.",
+      "material_concerns": [
+        "Nothing may be seeded, so no fixture reads as a real aspiration or campaign",
+        "Building the measuring instrument must not be reported as movement"
+      ],
+      "evidence_refs": [
+        "No records seeded",
+        "governance/operating_work_packet.json major_metrics"
+      ],
+      "recommendation": "RETAIN"
+    }
+  ],
+  "evidence": [
+    {
+      "claim": "Aspiration state existed only as prose before this change.",
+      "tier": "primary_source",
+      "reference": "governance/operating_work_packet.json aspiration_campaign_state at cfaf629",
+      "finding": "registry field read 'FOUNDER_INTENT_PRESERVED; EXECUTABLE ASPIRATION REGISTRY DEFERRED'; gate and backcast were free-text strings."
+    },
+    {
+      "claim": "The registry refuses the repository's own current campaign for missing founder inputs.",
+      "tier": "sandbox_execution",
+      "reference": "Transcribed the work packet's aspiration, backcast, and SBM verbatim and called predeclare_campaign",
+      "finding": "Refused with 'missing: resource_ceiling, stop_condition' \u2014 independently reproducing two founder inputs the blocker list already names."
+    },
+    {
+      "claim": "Every guard refuses when it should.",
+      "tier": "unit_test",
+      "reference": "tests/test_aspiration_registry.py",
+      "finding": "35 tests, each guard paired with a refusal case, including clearing a gate on a passing test suite."
+    },
+    {
+      "claim": "The change does not regress the branch.",
+      "tier": "sandbox_execution",
+      "reference": "python -m pytest tests/ -q",
+      "finding": "373 passed, up from 338, no failures."
+    }
+  ],
+  "counterevidence": [
+    {
+      "claim": "An executable aspiration registry advances an aspiration.",
+      "tier": "other",
+      "reference": "governance/operating_work_packet.json major_metrics",
+      "finding": "It does not. VERIFIED_ASPIRATION_GATES_CLEARED is 0 before and after. This builds the instrument, and an instrument is not a measurement."
+    },
+    {
+      "claim": "The evidence hierarchy is objective.",
+      "tier": "primary_source",
+      "reference": "services/aspiration_registry.py EVIDENCE_HIERARCHY",
+      "finding": "It is the founder's stated ordering from section 80, transcribed. The cut at authorized_pilot is a judgment call encoded as a constant, and a legitimate strong prototype result will be refused by it."
+    },
+    {
+      "claim": "Refusals cannot be bypassed.",
+      "tier": "unit_test",
+      "reference": "tests/test_aspiration_registry.py",
+      "finding": "They can. A caller with session access can construct and add the dataclasses directly, bypassing the service. The guards bind the service path, not the store."
+    }
+  ],
+  "pass_1": {
+    "intended_outcome": "Convert the Infinite Goal Chase from narrated state into a record system whose defining behavior is refusing to record unearned progress.",
+    "advantages": [
+      {
+        "id": "A1",
+        "statement": "Section 80's hierarchy becomes executable rather than documentary.",
+        "amplified_value": "Any future scorecard, campaign, or report reads one constant instead of re-litigating what counts as evidence."
+      },
+      {
+        "id": "A2",
+        "statement": "Blocked aspirations survive as findings with reason and actor.",
+        "amplified_value": "The same dead route stops being rediscovered as though nobody had tried it; the block itself becomes reusable knowledge."
+      },
+      {
+        "id": "A3",
+        "statement": "Predeclaration is enforced, so a campaign cannot choose its threshold after seeing the result.",
+        "amplified_value": "The refusal message names the missing field, converting a vague founder ask into a short concrete list."
+      },
+      {
+        "id": "A4",
+        "statement": "Primitives rank by live aspirations unlocked, and BUILD is not the default.",
+        "amplified_value": "Leverage is computed rather than asserted, and the seven dispositions keep ownership from being the reflex."
+      }
+    ],
+    "disadvantages": [
+      {
+        "id": "D1",
+        "statement": "Five models and a service land before any external outcome exists.",
+        "severity": "high",
+        "response_type": "do_not_proceed",
+        "redesigned_response": "Scope to service layer with nothing seeded and no API routes; treat this as the last internal slice and record the anti-cathedral dissent as binding on reporting."
+      },
+      {
+        "id": "D2",
+        "statement": "Strict predeclaration could obstruct a legitimate fast pilot.",
+        "severity": "medium",
+        "response_type": "governance",
+        "redesigned_response": "The six required answers are all things a founder must decide anyway; refusal messages name exactly which are missing, so the friction produces the input rather than blocking on ceremony."
+      },
+      {
+        "id": "D3",
+        "statement": "The authorized_pilot cut is a judgment encoded as a constant.",
+        "severity": "medium",
+        "response_type": "evidence",
+        "redesigned_response": "Transcribe the founder's ordering verbatim and expose it as a named module constant so changing the bar is a visible, reviewable edit rather than a scattered condition."
+      },
+      {
+        "id": "D4",
+        "statement": "A second planning bureaucracy could grow beside the work packet.",
+        "severity": "medium",
+        "response_type": "modularity",
+        "redesigned_response": "The registry stores aspiration state; the work packet keeps pointing at it rather than restating it. No scheduler, no routes, no duplicate metric surface."
+      }
+    ],
+    "comparisons": {
+      "baseline": "Aspiration state as prose in one JSON field; no mechanism can refuse anything.",
+      "do_nothing": "Rejected: leaves a metric named VERIFIED_ASPIRATION_GATES_CLEARED with nothing capable of verifying one.",
+      "simplest_viable_alternative": "Add the section 34 fields as a dataclass with CRUD and no invariants. Rejected: the failure mode is what gets recorded, not where it is stored, so storage alone addresses nothing.",
+      "strongest_competing_architecture": "Extend the existing GoalProposal and ExperimentProposal records. Rejected: those model bandit action-space widening and operator goal review, lifecycles unrelated to multi-year aspirations with backcast lineage.",
+      "reversible_experiment": "Additive dataclasses and one service on a stacked draft branch, nothing seeded, no routes, no migration."
+    },
+    "rejected_alternatives": [
+      {
+        "name": "Work-packet prose",
+        "rejection_reason": "Cannot refuse anything.",
+        "revival_evidence": "The registry is shown to add ceremony without catching anything a human would not have."
+      },
+      {
+        "name": "Storage without invariants",
+        "rejection_reason": "Addresses the wrong failure mode.",
+        "revival_evidence": "The refusals prove unworkable and structured storage alone is still worth keeping."
+      },
+      {
+        "name": "Overload GoalProposal / ExperimentProposal",
+        "rejection_reason": "Blurs two unrelated lifecycles.",
+        "revival_evidence": "The two lifecycles converge in practice."
+      }
+    ]
+  },
+  "pass_2": {
+    "attack_summary": "Attacked the strengthened design for bypass, for encoding a judgment as if it were physics, for becoming a second bureaucracy, and for the possibility that its own existence gets reported as aspiration movement.",
+    "new_weaknesses": [
+      {
+        "id": "N1",
+        "category": "gaming",
+        "statement": "A caller with session access can construct AspirationGateEvent directly and add it, bypassing every service guard.",
+        "strengthening_response": "Recorded as an explicit residual risk rather than papered over. The guards bind the service path; the store has never enforced invariants for any record in this repository, so this is a known property of the persistence layer, not a new hole. verified_gates_cleared independently re-checks the evidence tier when counting, so a directly inserted weak-tier CLEARED still does not increment the metric."
+      },
+      {
+        "id": "N2",
+        "category": "overfit",
+        "statement": "Cutting external evidence at authorized_pilot will refuse a genuinely strong working-prototype result.",
+        "strengthening_response": "Accepted deliberately and named in counterevidence. The bar is a single module constant with the founder's ordering transcribed beside it, so raising or lowering it is one reviewable edit."
+      },
+      {
+        "id": "N3",
+        "category": "bureaucracy",
+        "statement": "The registry and the work packet could both claim to own aspiration state.",
+        "strengthening_response": "The work packet points at the registry rather than restating it; the registry adds no scheduler, no routes, and no second metric surface."
+      },
+      {
+        "id": "N4",
+        "category": "comprehensibility",
+        "statement": "Shipping the measuring instrument could be read as moving the measurement.",
+        "strengthening_response": "Nothing is seeded, the guardian's dissent is binding on reporting, and the commit and work packet both state that VERIFIED_ASPIRATION_GATES_CLEARED is 0 before and after."
+      },
+      {
+        "id": "N5",
+        "category": "reversibility",
+        "statement": "Aspirations can never be deleted, so a mistaken or duplicate entry is permanent.",
+        "strengthening_response": "Intended. SUPERSEDED and RETIRED exist for exactly that, and both carry a reason and an actor. Permanence of the record is cheaper than losing a finding."
+      }
+    ],
+    "pass_1_disadvantage_dispositions": [
+      {
+        "disadvantage_id": "D1",
+        "outcome": "accepted",
+        "rationale": "This is the last deliverable that costs no founder authority; further internal expansion is not justified by this result.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any proposal to build a further internal slice before an authorized external pilot."
+      },
+      {
+        "disadvantage_id": "D2",
+        "outcome": "accepted",
+        "rationale": "The six answers are founder decisions regardless; the refusal surfaces which are missing instead of hiding the gap.",
+        "owner": "DALEOBANKS business operator",
+        "review_trigger": "A legitimate pilot is delayed by predeclaration rather than by a genuinely absent input."
+      },
+      {
+        "disadvantage_id": "D3",
+        "outcome": "accepted",
+        "rationale": "A visible constant is the honest way to hold a judgment; the alternative is the same judgment scattered across call sites.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "A strong prototype result is refused and the refusal is judged wrong."
+      },
+      {
+        "disadvantage_id": "D4",
+        "outcome": "resolved",
+        "rationale": "Registry owns aspiration state; work packet references it. No duplicated metric surface was introduced.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "The work packet begins restating registry contents."
+      }
+    ],
+    "final_design": "Five additive dataclasses (AspirationRecord, BackcastPath, SharedPrimitive, AspirationCampaign, AspirationGateEvent) and one service, services/aspiration_registry.py. Thirteen statuses exactly as specified. No delete method, asserted by test. Backcast requires G, P, and S, with the nearest stage becoming the current gate and revisions superseding rather than overwriting. Campaigns require all six predeclarations, must attack the current gate, cannot run on a terminal aspiration, and cannot coexist with a different live SBM. Gate clearance requires evidence at or above authorized_pilot plus at least one external reference; REROUTED, DEFERRED, and FALSIFIED accept any tier. Unknown tiers rank lowest. Primitives rank by live aspirations unlocked and default to UNDECIDED. Nothing seeded, no API routes, no scheduler.",
+    "residual_risks": [
+      {
+        "risk": "Direct store writes bypass every service guard.",
+        "mitigation": "verified_gates_cleared re-checks the evidence tier at count time, so a bypassed weak CLEARED still does not increment the metric. Add an API-layer guard if routes are ever exposed.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "Aspiration API routes are added."
+      },
+      {
+        "risk": "The authorized_pilot bar refuses a legitimate strong prototype.",
+        "mitigation": "Single named constant with the founder's ordering transcribed beside it.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "A refusal is judged wrong in practice."
+      },
+      {
+        "risk": "Building the instrument is mistaken for moving the metric.",
+        "mitigation": "Nothing seeded; binding dissent recorded; metric reported as 0 before and after.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "Any report describing this work as aspiration progress."
+      },
+      {
+        "risk": "No aspiration campaign can run at all until the founder supplies resource_ceiling and stop_condition.",
+        "mitigation": "This is the intended behavior and it names the exact gap; it is a blocker on reality, not on the code.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "The founder supplies the missing declarations."
+      }
+    ],
+    "recommendation": "RETAIN"
+  },
+  "dissent": {
+    "present": true,
+    "handling": "Binding on reporting, not on implementation. The registry ships; what it is allowed to be called does not include progress.",
+    "entries": [
+      {
+        "role": "Evidence and Welfare Guardian",
+        "position": "This is the measuring instrument for aspiration progress and must never be counted as aspiration progress.",
+        "rationale": "VERIFIED_ASPIRATION_GATES_CLEARED is 0 before and after, and by the registry's own rule it cannot be moved from inside this repository.",
+        "evidence_threshold": "One AspirationGateEvent with outcome CLEARED at authorized_pilot or stronger, carrying an external evidence reference from a founder-declared surface.",
+        "owner": "Alfonso Lopez",
+        "review_trigger": "The founder declares surface, timezone, source packet, destination, resource ceiling, and stop condition."
+      },
+      {
+        "role": "Operator and Maintainer",
+        "position": "Refusing every campaign until six fields exist could read as the tool obstructing the work.",
+        "rationale": "The refusal names the missing fields, and those fields are founder decisions that must be made regardless, so the friction produces the input rather than replacing it.",
+        "evidence_threshold": "A pilot delayed by predeclaration rather than by a genuinely absent founder input.",
+        "owner": "DALEOBANKS business operator",
+        "review_trigger": "First real campaign attempt."
+      }
+    ]
+  },
+  "authority_impact": {
+    "level": "standard",
+    "changes_authority": false,
+    "requires_authorized_human": false,
+    "approval_status": "not_required",
+    "approver": null,
+    "notes": "No capability, credential, connector, publishing path, spending path, or scheduler. The registry only records and refuses. It narrows what may be claimed and creates nothing that can act."
+  },
+  "migration_plan": "Five additive dataclasses in db/models.py, auto-registered by the existing durable object store, plus one new service module. No schema version change, no data migration, no seeded records, no API routes. Service layer only so the branch merges cleanly with the Phase 1 branch's app.py changes.",
+  "rollback_plan": {
+    "possible": true,
+    "steps": [
+      "Revert commit 81b6a7d.",
+      "No data migration is required because nothing was seeded and no existing record gained a field.",
+      "Re-run the suite; the expected post-revert state is 338 passing."
+    ],
+    "reason_impossible": null
+  },
+  "kill_criteria": [
+    "The registry records a gate as cleared on evidence weaker than authorized_pilot.",
+    "A campaign runs without all six predeclarations.",
+    "Two bottleneck metrics run simultaneously without refusal.",
+    "A blocked aspiration disappears without a status history entry.",
+    "The registry becomes a second planning bureaucracy restating the work packet.",
+    "Its existence is reported as aspiration progress."
+  ],
+  "decision": "RETAIN",
+  "decision_owner": "Alfonso Lopez",
+  "review_trigger": "The founder supplies resource ceiling and stop condition for the first pilot, or any refusal is judged wrong in practice."
+}

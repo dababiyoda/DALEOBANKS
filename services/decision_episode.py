@@ -18,7 +18,13 @@ from typing import Any, Dict, List, Optional
 
 from db.models import ApprovalRequest, Idea, OpportunityPacket, ValidationResult, VentureAssessment
 from services.ledger import DecisionLedger, get_ledger
-from services.venture_protocol import assessment_to_wire, packet_to_wire
+from services.venture_protocol import (
+    assessment_provenance,
+    assessment_to_wire,
+    is_authoritative_wmi_assessment,
+    is_simulated_assessment,
+    packet_to_wire,
+)
 
 # The canonical stage names, in loop order. A stage absent from an episode
 # appears in missing_stages so incompleteness is visible, not silent.
@@ -129,6 +135,17 @@ def build_episode(
     }
     episode["missing_stages"] = [s for s in STAGES if not episode.get(s)]
     episode["loop_closed"] = "validation_result" not in episode["missing_stages"]
+    # An episode can carry a complete-looking assessment stage that no external
+    # system ever produced. "Assessed" and "assessed by WMI" are different
+    # claims, and only the second one says anything about the world — so the
+    # episode states which one it holds rather than leaving a reader to infer it.
+    episode["assessment_provenance"] = [assessment_provenance(a) for a in assessments]
+    episode["externally_assessed"] = any(
+        is_authoritative_wmi_assessment(a) for a in assessments
+    )
+    episode["simulated_assessment_count"] = sum(
+        1 for a in assessments if is_simulated_assessment(a)
+    )
     return episode
 
 

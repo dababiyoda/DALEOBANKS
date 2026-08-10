@@ -1,0 +1,57 @@
+# DALEOBANKS founder declaration.
+#
+# Copy to founder_declaration.yaml, fill it in, then:
+#
+#     python -m daleobanks validate
+#     python -m daleobanks preflight
+#     python -m daleobanks run
+#
+# Nothing here grants live publication. Every surface below starts SHADOW and
+# stays there until authorization is raised deliberately, because a config
+# file is not a standing mandate.
+
+founder: "Alfonso Lopez"
+timezone: "America/New_York"        # the 8:00 PM daily edition resolves here
+
+# The six declarations the aspiration registry refuses a campaign without.
+campaign:
+  aspiration: "Prove one real DALEOBANKS source-to-owned-relationship transaction"
+  success_state: "One retained external observation from a declared surface"
+  gate: "Founder-declared surface, source packet, destination, and exact authority"
+  sbm: "AUTHORIZED_EXTERNAL_EVIDENCE_LOOP_CLOSURE_RATE"
+  evidence_threshold: "One retained observation: positive, negative, mixed, or inconclusive"
+  resource_ceiling: "USD 0 — no spend authorized"
+  stop_condition: "No response within 14 days, or any integrity guard fires"
+
+# Owned destination. Rented distribution is where people find you; this is
+# where the relationship lives.
+owned_audience:
+  destination: ""                    # e.g. "newsletter:daleobanks-weekly"
+  channel: "email"
+
+budget:
+  ceiling: 0.0                       # an undeclared ceiling is zero, not unlimited
+  currency: "USD"
+
+# Declared surfaces. Handles are never inferred from public search.
+accounts:
+  - name: "UNIIMENTE"                # the public media channel, not the Kernel
+    platform: "x"
+    handle: ""                       # leave blank until you own it
+    language: "en"
+    identity_type: "brand_account"
+    purpose: "Flagship public rabbit hole: FIRE, discoveries, psychology"
+    audience: "Immigrant builders and cross-border earners"
+    allowed_topics: ["financial_independence", "technology", "psychology", "news"]
+    forbidden_topics: ["individual_financial_advice", "medical_diagnosis"]
+    monetization_policy: "none"
+    risk_level: "medium"
+
+# The source packet the first cycle reasons over. Feedly is a preferred
+# discovery route, never the evidence itself.
+source_packet:
+  topic: "cross-border financial friction"
+  discovery_source: "feedly"
+  sources: []                        # fill with {title, url, source_class, publisher, text}
+
+languages: ["en"]                    # add a lane only when evidence earns it

@@ -656,6 +656,412 @@ class AccountLane:
     last_verified: Optional[datetime] = None
 
 
+# ---------------------------------------------------------------------- #
+# Infinite Goal Chase: aspirations, backcast paths, shared primitives
+# ---------------------------------------------------------------------- #
+
+
+@dataclass
+class AspirationRecord:
+    """One founder aspiration, kept for as long as it exists.
+
+    A blocked aspiration is a finding, not a failure to tidy away. Nothing
+    here deletes; status changes and the reason travels with it."""
+
+    id: str = field(default_factory=_uuid)
+    founder_statement: str = ""
+    source_lineage: List[str] = field(default_factory=list)
+    success_state: str = ""  # observable, not aspirational restatement
+    importance: str = "medium"  # low | medium | high | critical
+    status: str = "EXPLORATORY"
+    current_evidence: List[str] = field(default_factory=list)
+    missing_primitives: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
+    legal_constraints: List[str] = field(default_factory=list)
+    safety_constraints: List[str] = field(default_factory=list)
+    active_backcast_id: str = ""
+    current_gate: str = ""
+    active_sbm: str = ""
+    resource_budget: str = ""
+    unlock_relationships: List[str] = field(default_factory=list)
+    review_trigger: str = ""
+    owner: str = ""
+    status_history: List[Dict[str, Any]] = field(default_factory=list)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class BackcastPath:
+    """G, P, S for one aspiration.
+
+    G is the observable success state. P is the minimum stage-gated path from
+    that state back to today. S is the small repeatable system that weakens
+    the gate standing closest to now."""
+
+    id: str = field(default_factory=_uuid)
+    aspiration_id: str = ""
+    success_state: str = ""            # G
+    stages: List[Dict[str, Any]] = field(default_factory=list)  # P, nearest last
+    repeatable_system: str = ""        # S
+    current_gate: str = ""
+    superseded_by: str = ""            # revisions chain, never overwrite
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class SharedPrimitive:
+    """A bottleneck that stands in front of more than one aspiration.
+
+    Ranked by how many aspirations it unlocks, not by how interesting it is."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    description: str = ""
+    category: str = ""
+    unlocks: List[str] = field(default_factory=list)  # aspiration ids
+    disposition: str = "UNDECIDED"  # BUILD|PARTNER|FUND|OPEN_SOURCE|POPULARIZE|STANDARDIZE|PURCHASE
+    disposition_rationale: str = ""
+    status: str = "IDENTIFIED"  # IDENTIFIED | IN_PROGRESS | UNLOCKED | ABANDONED
+    external_absorption_ref: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AspirationCampaign:
+    """A predeclared attempt to weaken one gate.
+
+    Every field below answers one of the six questions a campaign claiming
+    aspiration progress must answer before it starts. Predeclaration is the
+    point: a campaign that picks its success threshold afterwards is not
+    evidence, it is a story told about whatever happened."""
+
+    id: str = field(default_factory=_uuid)
+    aspiration_id: str = ""
+    gate: str = ""
+    sbm: str = ""
+    evidence_threshold: str = ""
+    resource_ceiling: str = ""
+    stop_condition: str = ""
+    hypothesis: str = ""
+    status: str = "PREDECLARED"  # PREDECLARED | RUNNING | STOPPED | CONCLUDED
+    outcome_event_id: str = ""
+    predeclared_at: datetime = field(default_factory=_utcnow)
+    concluded_at: Optional[datetime] = None
+
+
+@dataclass
+class AspirationGateEvent:
+    """What reality said about a gate.
+
+    CLEARED is the only outcome that requires external evidence, and it is
+    the only one that counts toward VERIFIED_ASPIRATION_GATES_CLEARED. A
+    falsified route is a real result and is recorded as one."""
+
+    id: str = field(default_factory=_uuid)
+    aspiration_id: str = ""
+    campaign_id: str = ""
+    gate: str = ""
+    outcome: str = "DEFERRED"  # CLEARED | REROUTED | DEFERRED | FALSIFIED
+    evidence_tier: str = "aspiration"
+    external_evidence_refs: List[str] = field(default_factory=list)
+    narrative: str = ""
+    recorded_by: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+# ---------------------------------------------------------------------- #
+# The participant ladder: viewer -> ... -> creator of new infrastructure
+# ---------------------------------------------------------------------- #
+
+
+@dataclass
+class ParticipantRecord:
+    """One person's standing in the network, at the coarsest useful grain.
+
+    Deliberately thin. The temptation with a record like this is to widen it
+    until it becomes a psychological dossier; every field here has to earn
+    its place against a stated purpose."""
+
+    id: str = field(default_factory=_uuid)
+    handle_ref: str = ""            # pseudonymous reference, never raw PII
+    rung: str = "viewer"
+    language: str = ""
+    region: str = ""
+    consent_state: str = "NONE"     # NONE | CONTACT | RESEARCH | WITHDRAWN
+    consent_recorded_at: str = ""
+    purposes: List[str] = field(default_factory=list)
+    retention_until: str = ""
+    rung_history: List[Dict[str, Any]] = field(default_factory=list)
+    advancement_action_ids: List[str] = field(default_factory=list)
+    contribution_notes: List[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AdvancementAction:
+    """Something a person did that left them more capable.
+
+    Only counts when it was voluntary and verified. An unverified claim is
+    kept as a claim, never promoted to the metric."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    action_type: str = ""
+    description: str = ""
+    voluntary: bool = False
+    verification_method: str = ""
+    verification_evidence_ref: str = ""
+    verified: bool = False
+    harm_reported: bool = False
+    occurred_at: str = ""
+    recorded_by: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class OwnedRelationship:
+    """A direct relationship that does not depend on a rented platform.
+
+    Requires recorded consent. Migration off a social platform is offered,
+    never forced and never tricked."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    channel: str = "email"          # email | community | app | event | newsletter
+    destination_ref: str = ""
+    consent_evidence_ref: str = ""
+    source_surface: str = ""
+    migrated_voluntarily: bool = False
+    withdrawn: bool = False
+    withdrawn_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class CommerceRecord:
+    """Money that actually moved and was reconciled.
+
+    A row here is not created by an intent, a projection, or a test. It is
+    created by a reconciled payment."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    offer: str = ""
+    amount: float = 0.0
+    currency: str = "USD"
+    delivered: bool = False
+    accepted: bool = False
+    reconciled: bool = False
+    reconciliation_ref: str = ""
+    direct_cost: float = 0.0
+    repeat: bool = False
+    refunded: bool = False
+    occurred_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class CollaborationLink:
+    """Two participants who found each other and built something.
+
+    The network's value is people finding one another, so this is recorded as
+    an outcome in its own right rather than as a funnel step."""
+
+    id: str = field(default_factory=_uuid)
+    participant_ids: List[str] = field(default_factory=list)
+    kind: str = ""                  # research | build | mentorship | hire | partnership
+    description: str = ""
+    outcome: str = ""
+    verified: bool = False
+    verification_evidence_ref: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class VentureHandoff:
+    """A warm introduction to a venture cell such as PumpStation.
+
+    Six things must exist before a handoff: a detected need, an eligibility
+    check, a disclosure, consent, any required evidence, and a place to
+    record what happened afterwards."""
+
+    id: str = field(default_factory=_uuid)
+    participant_id: str = ""
+    destination: str = ""           # pumpstation | venture_cell | partner
+    need_detected: str = ""
+    eligibility_checked: bool = False
+    eligibility_note: str = ""
+    disclosure_text: str = ""
+    consent_evidence_ref: str = ""
+    evidence_refs: List[str] = field(default_factory=list)
+    status: str = "PREPARED"        # PREPARED | SENT | ACCEPTED | DECLINED | WITHDRAWN
+    outcome: str = ""
+    outcome_recorded_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class AudienceSegment:
+    """Aggregated, lawful segment intelligence.
+
+    Aggregate only. A segment that describes a small enough group to identify
+    a person is not a segment."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    language: str = ""
+    region: str = ""
+    population: int = 0
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    common_problems: List[str] = field(default_factory=list)
+    objections: List[str] = field(default_factory=list)
+    preferred_platforms: List[str] = field(default_factory=list)
+    verified_advancement_count: int = 0
+    purpose: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class TerritoryNode:
+    """One stop in the knowledge and participation graph.
+
+    Every node that makes a claim must also carry the opposing case and a way
+    out. That requirement is what separates a rabbit hole that deepens what
+    someone can do from one that narrows what they can believe."""
+
+    id: str = field(default_factory=_uuid)
+    title: str = ""
+    surface: str = ""
+    depth: int = 0
+    thesis: str = ""
+    counterargument: str = ""
+    off_ramp: str = ""
+    capability_payload: str = ""
+    content_id: str = ""
+    next_node_ids: List[str] = field(default_factory=list)
+    terminal_action: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+# ---------------------------------------------------------------------- #
+# Replaceable dependencies, and the debate that produces research
+# ---------------------------------------------------------------------- #
+
+
+@dataclass
+class DependencyRecord:
+    """One replaceable thing this institution leans on.
+
+    Platform adapters, model providers, production tools, and automations are
+    the same shape: an outside capability with declared bounds, a revocation
+    state, and something to fall back to. Recording them as one kind is what
+    makes the identity survive losing any of them."""
+
+    id: str = field(default_factory=_uuid)
+    kind: str = "platform_adapter"  # platform_adapter|model_provider|production_tool|automation
+    name: str = ""
+    vendor: str = ""
+    version: str = ""
+    role: str = ""
+    status: str = "NOT_CONFIGURED"  # NOT_CONFIGURED|CONFIGURED|ACTIVE|DEGRADED|REVOKED|RETIRED
+    authorized_capabilities: List[str] = field(default_factory=list)
+    permitted_content_classes: List[str] = field(default_factory=list)
+    posting_limit_per_day: Optional[int] = None
+    rate_limit_per_hour: Optional[int] = None
+    risk_class: str = "tier1"
+    credential_owner: str = ""
+    credential_reference: str = ""      # env:/vault:/secret-manager: only
+    revocation_state: str = "NOT_REVOKED"
+    evidence_requirements: List[str] = field(default_factory=list)
+    rollback_mechanism: str = ""
+    freeze_mechanism: str = ""
+    fallback_dependency_id: str = ""
+    reversible: bool = False
+    observable: bool = False
+    owner: str = ""
+    documentation_ref: str = ""
+    failure_modes: List[str] = field(default_factory=list)
+    cost_note: str = ""
+    latency_note: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class DebateRecord:
+    """A public argument, judged by what it produced rather than by its heat.
+
+    A debate that generated only outrage is a weak outcome and is recorded as
+    one. The strongest opposing case is required before it opens."""
+
+    id: str = field(default_factory=_uuid)
+    question: str = ""
+    daleobanks_position: str = ""
+    strongest_counterargument: str = ""
+    evidence_class: str = "PROPOSAL"  # FACT|SUPPORTED_INFERENCE|PROPOSAL|EXPERIMENT|ASPIRATION|SPECULATION
+    content_ids: List[str] = field(default_factory=list)
+    outcomes: List[str] = field(default_factory=list)
+    outcome_refs: Dict[str, Any] = field(default_factory=dict)
+    productive: bool = False
+    closed_at: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class ResearchLead:
+    """An unresolved technical question with somewhere to send it.
+
+    Public discussion is not scientific closure, so a lead carries its
+    verification state explicitly and starts unverified."""
+
+    id: str = field(default_factory=_uuid)
+    debate_id: str = ""
+    question: str = ""
+    primitive_id: str = ""
+    experts_identified: List[str] = field(default_factory=list)
+    hypothesis: str = ""
+    partner_ref: str = ""
+    disposition: str = "UNDECIDED"  # BUILD|PARTNER|FUND|OPEN_SOURCE|POPULARIZE|STANDARDIZE|PURCHASE
+    status: str = "OPEN"  # OPEN|IN_PROGRESS|RESOLVED|FALSIFIED|ABANDONED
+    result: str = ""
+    independently_verified: bool = False
+    verification_ref: str = ""
+    absorbed_capability_ref: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class IncidentRecord:
+    """Something went wrong, what the system did about it, and how it got back.
+
+    A freeze that leaves no trace cannot be audited, cannot be lifted
+    deliberately, and quietly becomes permanent or quietly evaporates. Both
+    failures are worse than the incident."""
+
+    id: str = field(default_factory=_uuid)
+    kind: str = ""  # security|reputational|legal|platform|data|budget|scheduler|other
+    severity: str = "low"  # low | medium | high | critical
+    summary: str = ""
+    detected_by: str = ""
+    detected_at: str = ""
+    posture: str = "RUN"  # RUN|PAUSE|DRAFT_ONLY|READ_ONLY|SILENT
+    posture_reason: str = ""
+    evidence_refs: List[str] = field(default_factory=list)
+    affected_dependency_ids: List[str] = field(default_factory=list)
+    affected_account_ids: List[str] = field(default_factory=list)
+    escalated_to: str = ""
+    status: str = "OPEN"  # OPEN | CONTAINED | RECOVERED | CLOSED_UNRESOLVED
+    recovery_conditions: List[str] = field(default_factory=list)
+    recovery_evidence_refs: List[str] = field(default_factory=list)
+    recovered_at: str = ""
+    posture_history: List[Dict[str, Any]] = field(default_factory=list)
+    learning: str = ""
+    created_at: datetime = field(default_factory=_utcnow)
+
+
 @dataclass
 class ExperimentProposal:
     """A proposed widening of the bandit's action space (new arm values,
@@ -683,6 +1089,57 @@ class PersonaVersion:
     payload: Dict[str, Any]
     created_at: datetime = field(default_factory=_utcnow)
 
+
+
+@dataclass
+class ComponentRecord:
+    """One piece of the larger work, and the deadline on its proof."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    tier: str = "action"
+    dimensions: List[str] = field(default_factory=list)
+    expected_external_consequence: str = ""
+    proof_deadline: Optional[datetime] = None
+    state: str = "PROVISIONAL"
+    maturity: str = "BLUEPRINT"
+    hardening_evidence: List[str] = field(default_factory=list)
+    survived_failure_modes: List[str] = field(default_factory=list)
+    parent_id: Optional[str] = None
+    admitted_proof_count: int = 0
+    rejected_proof_count: int = 0
+    best_evidence_tier: Optional[str] = None
+    harvested: bool = False
+    verdict: Optional[str] = None
+    verdict_reason: Optional[str] = None
+    created_at: datetime = field(default_factory=_utcnow)
+    resolved_at: Optional[datetime] = None
+
+
+@dataclass
+class ProofRecord:
+    """A claim that a component caused something outside this system."""
+
+    id: str = field(default_factory=_uuid)
+    component_id: str = ""
+    evidence_tier: str = "aspiration"
+    external_reference: str = ""
+    description: str = ""
+    admitted: bool = False
+    rejection_reason: Optional[str] = None
+    recorded_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class HarvestRecord:
+    """What was learned, extracted before the thing that taught it is removed."""
+
+    id: str = field(default_factory=_uuid)
+    component_id: str = ""
+    lesson: str = ""
+    transferable_to: List[str] = field(default_factory=list)
+    cost_paid: str = ""
+    recorded_at: datetime = field(default_factory=_utcnow)
 
 __all__ = [
     "Tweet",
@@ -718,6 +1175,26 @@ __all__ = [
     "PublicationReceipt",
     "ContentExperiment",
     "AccountLane",
+    "AspirationRecord",
+    "BackcastPath",
+    "SharedPrimitive",
+    "AspirationCampaign",
+    "AspirationGateEvent",
+    "ParticipantRecord",
+    "AdvancementAction",
+    "OwnedRelationship",
+    "CommerceRecord",
+    "CollaborationLink",
+    "VentureHandoff",
+    "AudienceSegment",
+    "TerritoryNode",
+    "DependencyRecord",
+    "DebateRecord",
+    "ResearchLead",
+    "IncidentRecord",
     "ExperimentProposal",
     "PersonaVersion",
+    "ComponentRecord",
+    "ProofRecord",
+    "HarvestRecord",
 ]

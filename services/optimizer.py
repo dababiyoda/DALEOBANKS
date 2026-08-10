@@ -138,6 +138,14 @@ class Optimizer:
                         stats["mean_reward"], 
                         stats["count"]
                     )
+
+                    # The J-score has no term for whether a human was served,
+                    # so an arm that raises engagement by degrading capability
+                    # or trust scores well and gets sampled harder. Refuse to
+                    # credit its successes when that signature is present.
+                    successes, failures = self._apply_integrity_guard(
+                        dimension, arm, stats, successes, failures
+                    )
                     
                     # Sample from Beta distribution
                     alpha = self.beta_prior[0] + successes
@@ -183,6 +191,87 @@ class Optimizer:
         selected["sampled_prob"] = total_prob
         return selected
     
+    def _apply_integrity_guard(
+        self,
+        dimension: str,
+        arm: str,
+        stats: Dict[str, Any],
+        successes: int,
+        failures: int,
+    ) -> Tuple[int, int]:
+        """Withhold reinforcement from an arm showing the outrage signature.
+
+        Reads optional capability and trust deltas from the arm's stats. When
+        the telemetry is absent the guard is inert and behavior is unchanged,
+        which is stated by ``integrity_guard_status`` rather than left for a
+        reader to assume. A guard that cannot see is not a guard, and saying
+        so is the difference between a control and a decoration.
+        """
+        capability_delta = stats.get("capability_delta")
+        trust_delta = stats.get("trust_delta")
+        if capability_delta is None and trust_delta is None:
+            return successes, failures
+
+        from services.integrity_guard import reward_admissible
+
+        verdict = reward_admissible(
+            engagement_delta=float(stats.get("engagement_delta", 0.0)),
+            capability_delta=float(capability_delta or 0.0),
+            trust_delta=float(trust_delta or 0.0),
+        )
+        if verdict["admissible"]:
+            return successes, failures
+
+        logger.warning(
+            f"integrity guard withheld reinforcement from {dimension}:{arm} — "
+            f"{verdict['reason']}"
+        )
+        try:
+            from services.ledger import get_ledger
+
+            get_ledger().record("reward_withheld_integrity", {
+                "dimension": dimension, "arm": arm,
+                "engagement_delta": verdict["engagement_delta"],
+                "capability_delta": verdict["capability_delta"],
+                "trust_delta": verdict["trust_delta"],
+                "withheld_successes": successes,
+            })
+        except Exception as exc:  # ledger must never block a refusal
+            logger.warning(f"could not ledger integrity refusal: {exc}")
+
+        # The pulls still happened. They just do not count as wins.
+        return 0, successes + failures
+
+    @staticmethod
+    def integrity_guard_status(performance: Dict[str, Any]) -> Dict[str, Any]:
+        """Is the outrage guard actually able to fire on this data?
+
+        Exists so nobody reads the guard's presence as protection. Until
+        capability and trust deltas are collected per arm, it is wired and
+        inert, and this says so out loud.
+        """
+        arms = [
+            stats for dimension in performance.values()
+            if isinstance(dimension, dict) for stats in dimension.values()
+            if isinstance(stats, dict)
+        ]
+        with_signal = [
+            s for s in arms
+            if s.get("capability_delta") is not None or s.get("trust_delta") is not None
+        ]
+        return {
+            "wired": True,
+            "bound_to_telemetry": bool(with_signal),
+            "arms_total": len(arms),
+            "arms_with_quality_signal": len(with_signal),
+            "note": (
+                "capability and trust deltas present; the guard can refuse"
+                if with_signal else
+                "no capability or trust telemetry per arm — the guard is wired "
+                "and inert, and the reward function remains engagement-shaped"
+            ),
+        }
+
     def _convert_to_beta_params(self, mean_reward: float, count: int) -> Tuple[int, int]:
         """Convert J-score performance to Beta distribution parameters"""
         # Normalize J-score to 0-1 range
