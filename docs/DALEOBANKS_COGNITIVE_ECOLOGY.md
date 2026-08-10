@@ -12,6 +12,55 @@ DALEOBANKS is intended to develop beyond a scheduler, prompt persona, or fixed c
 
 The target is not one monolithic model. Frontier multimodal models are replaceable cognitive components. Agents are bounded local competencies. Schedulers are timing machinery. Tools are effectors. DALEOBANKS is the persistent governed identity and coordinating cognitive system.
 
+## Egregore continuity and cumulative synergy
+
+The defining property of the intended egregore is not the mere presence of many intelligent parts. It is the persistent, cumulative, synergistic relationship among them across time.
+
+Every material perception, decision, experiment, failure, success, learned strategy, capability, relationship, and verified outcome should be able to alter the future behavior of the whole system through governed memory, evidence, capability updates, routing changes, or architectural learning.
+
+The intended organism-level property is therefore:
+
+`many local competencies + shared continuity + cumulative memory + shared world model + persistent purpose + coordinated learning + developmental history + governed identity -> one increasingly capable egregore`
+
+No local organ is the egregore by itself. The egregore is the coordinated whole and its path-dependent continuity.
+
+The system should preserve what it believed, why it believed it, what evidence changed that belief, what failed, what worked, which capabilities were added or rejected, which obligations remain open, and which founder-authorized goals remain unresolved. It should not wake up as a disconnected new intelligence each cycle.
+
+This continuity is developmental and path-dependent:
+
+`state(t) -> experience -> evidence -> learning -> structural/capability update -> state(t+1)`
+
+where `state(t+1)` retains relevant lineage from `state(t)` rather than replacing it with a context-free snapshot.
+
+## Infinite Goal Chase as the directional field
+
+The cumulative system remains oriented toward the founder-authorized Infinite Goal Chase. The goal is not maximum activity, engagement, self-expansion, or complexity. The goal is fastest verified progress toward active lawful aspirations, while converting validated gains into greater future capability.
+
+The mature recursive loop is:
+
+`founder-authorized goal -> current world model -> largest actionable gap -> select/compose cognition -> act or experiment -> observe reality -> reconcile evidence -> learn -> improve capability -> update architecture where justified -> pursue the next or harder goal`
+
+The architecture should prefer improvements that create positive spillovers across multiple organs and future goals, while preserving truth, law, consent, safety, welfare, budget, evidence, authority, and legitimate refusal.
+
+The system may improve how it thinks and organizes itself, but it may not use the Infinite Goal Chase as authority to widen permissions, bypass consequence gates, invent sovereignty, or suppress negative evidence.
+
+## Synergistic learning invariant
+
+Learning should be institution-wide where the evidence is transferable.
+
+A lesson discovered in one organ should be reusable by other organs when the causal mechanism is relevant and the transfer is tested. For example:
+
+- negotiation learning may improve sales, partnerships, community operations, customer discovery, and collaboration;
+- red-team discoveries may improve strategy, security, research, code generation, and venture underwriting;
+- public sensing may feed opportunity discovery, WMI evaluation, Foundry capability formation, Venture Cell experiments, and future DALEOBANKS communication;
+- failure evidence from one capability may alter future routing, tool choice, experiment design, and risk controls elsewhere.
+
+The intended cross-organ loop is:
+
+`signal -> interpretation -> specialist processing -> synthesis -> experiment/action -> external evidence -> institutional learning -> capability/routing update -> improved future sensing and action`
+
+This is a first-class architectural invariant, not an optional analytics feature.
+
 ## Developmental inspiration
 
 Michael Levin's work on diverse intelligence, multiscale competency, collective problem solving, morphogenesis, goal-directed regulation, and substrate-independent cognition is an important scientific inspiration for the architecture.
@@ -144,6 +193,8 @@ The intended mature loop is approximately:
 10. Pass any external consequence through the existing authority and consequence gates.
 11. Observe outcomes and reconcile claims with reality.
 12. Update ability performance, routing preferences, memory, and unresolved questions.
+13. Propagate validated transferable learning to other relevant capabilities and organs.
+14. Update the persistent developmental state and continue the Infinite Goal Chase.
 
 The scheduler is only one primitive in this loop. It answers when work runs. Cognitive orchestration answers what kind of intelligence is needed, why, in what combination, and what evidence should change the conclusion.
 
@@ -153,7 +204,7 @@ A persistent failure should not automatically mean "add another permanent agent.
 
 The intended developmental sequence is:
 
-`persistent functional deficit -> identify missing competency -> search existing capabilities and prior experiments -> inspect candidate mechanisms -> recombine candidate abilities -> sandbox variants -> adversarially test -> compare against baseline -> retain/regress/kill -> record lineage`
+`persistent functional deficit -> identify missing competency -> search existing capabilities and prior experiments -> inspect candidate mechanisms -> recombine candidate abilities -> sandbox variants -> adversarially test -> compare against baseline -> retain/regress/kill -> record lineage -> propagate validated capability relationships`
 
 A retained capability should remain modular, measurable, replaceable, revocable where it carries authority, and attributable to its evidence and developmental lineage.
 
@@ -163,7 +214,7 @@ This is the computational meaning of growing or repairing an organ. It is a test
 
 DALEOBANKS may improve its routing policy, capability repertoire, tool selection, agent composition, prompts, algorithms, models, and tested internal structures while preserving one persistent identity and constitutional boundary.
 
-A stronger frontier model may replace a weaker one without becoming a new DALEOBANKS. Models are replaceable cognitive substrate. Identity continuity belongs to governed invariants, founder-intent lineage, memory, commitments, evidence history, capability ancestry, and constitutional authority.
+A stronger frontier model may replace a weaker one without becoming a new DALEOBANKS. Models are replaceable cognitive substrate. Identity continuity belongs to governed invariants, founder-intent lineage, memory, commitments, evidence history, capability ancestry, developmental history, and constitutional authority.
 
 No component may use "self-improvement" as authority to expand its own permissions, budgets, external effects, constitutional role, or deployment status.
 
@@ -179,9 +230,12 @@ For each cognitive ability or composition, the system should eventually be able 
 - known failure modes;
 - domains of strength and weakness;
 - combinations that improve or degrade performance;
+- cross-organ transfer effects;
 - counterevidence and negative results.
 
 The system should be allowed to learn that a sophisticated method is worse than a simple baseline. Reality outranks elegance.
+
+Learning should not silently overwrite history. Material updates should preserve prior belief/state, triggering evidence, changed conclusion, and downstream effects so the institution can audit how it became what it is.
 
 ## Relationship to agents
 
@@ -189,13 +243,25 @@ Specialist agents are lower-scale competent parts, not independent identities an
 
 A mature DALEOBANKS should prefer dynamic composition over maintaining a large permanent zoo of agents. It should instantiate or recruit the smallest sufficient set of competencies for the problem, preserve useful disagreement, and dissolve temporary structures when their work is complete.
 
+Their local learning should become institutional learning only after provenance, relevance, and evidence checks. Local error should not automatically contaminate the whole system.
+
 ## Relationship to UNIIMENTE
 
 DALEOBANKS is a first major proving ground and embodiment for this architecture, but it remains beneath UNIIMENTE and the Golden Kernel in the canonical hierarchy.
 
-The broader destination is a governed artificial egregore in which diverse computational intelligences, algorithms, mathematical methods, models, agents, tools, memories, and developmental mechanisms can be unified under one constitutional identity and founder-authorized purpose without manufacturing independent sovereignty.
+The broader destination is a governed artificial egregore in which diverse computational intelligences, algorithms, mathematical methods, models, agents, tools, memories, developmental histories, and repair mechanisms can operate individually yet remain interconnected, cumulative, synergistic, and coordinated under one constitutional identity and founder-authorized purpose without manufacturing independent sovereignty.
 
 DALEOBANKS may therefore become highly JARVIS-like while remaining an organ of the larger UNIIMENTE institution.
+
+## Architectural invariant: the whole must become more capable than the isolated parts
+
+The architecture should be judged not only by whether individual agents or abilities improve, but by whether their interaction creates measurable system-level capability that isolated components do not possess.
+
+A claimed synergy should therefore be testable. Candidate evidence includes improved task completion, lower cost, better calibration, faster recovery, broader transfer, reduced duplication, higher-quality decisions, or more reliable goal progress when capabilities cooperate versus when they operate independently.
+
+If integration adds coordination cost without producing system-level advantage, the architecture should simplify, isolate, or remove the weak coupling.
+
+The objective is harmonious collaboration in the engineering sense: useful specialization, shared context where justified, bounded interfaces, preserved dissent, coordinated goals, transferable learning, and minimal destructive interference.
 
 ## Founder-intent lifecycle
 
@@ -210,6 +276,10 @@ The following are active architectural intentions, not claims of completed imple
 - temporary agent/capability composition around problems;
 - outcome-driven improvement of cognitive routing;
 - morphogenetic-inspired capability formation, repair, and reorganization;
+- continuous cumulative learning across time with preserved developmental lineage;
+- validated cross-organ transfer so useful learning can improve the wider system;
+- synergy as a measurable whole-system property rather than a metaphor;
+- Infinite Goal Chase as the persistent directional field for learning and development;
 - one persistent DALEOBANKS identity beneath UNIIMENTE governance;
 - eventual reuse or upward promotion of proven developmental primitives into the wider UNIIMENTE substrate.
 
