@@ -16,6 +16,7 @@ Read these documents before making material changes to DALEOBANKS identity, prod
 
 - [Canonical DALEOBANKS Lifestyle Brand, Media Network, and Civilization-Seeding Architecture](docs/DALEOBANKS_MEDIA_BRAND_ARCHITECTURE.md)
 - [DALEOBANKS Infinite Goal Chase](docs/DALEOBANKS_INFINITE_GOAL_CHASE.md)
+- [DALEOBANKS Continuous Construction and Hardening Protocol](docs/DALEOBANKS_CONTINUOUS_CONSTRUCTION_AND_HARDENING_PROTOCOL.md)
 - [DALEOBANKS Infinite Aspiration Chase and Acceleration Protocol](docs/DALEOBANKS_ASPIRATION_ACCELERATION_PROTOCOL.md)
 - [DALEOBANKS Founder Intent Lineage](docs/DALEOBANKS_FOUNDER_INTENT_LINEAGE.md)
 - [Safety and Rollout](docs/SAFETY_AND_ROLLOUT.md)
