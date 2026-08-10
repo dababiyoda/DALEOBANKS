@@ -170,6 +170,76 @@ Computational intensity may vary by importance, but architectural membership rem
 
 The intent is not hundreds of models consuming maximum compute at every instant. It is hundreds of persistent cognitive contributions coordinated around one evolving state.
 
+## Native computer use and external model substrate
+
+DALEOBANKS is intended to have founder-provisioned computer-use capability and authorized access to external AI systems, development environments, repositories, browsers, research sources, and other tools where those systems' terms, security constraints, and the Golden Kernel permit it.
+
+Examples may include authenticated access to services such as ChatGPT, Claude, coding environments, research databases, browsers, and its own authorized code workspace. These are replaceable external cognitive substrates and tools, not independent authorities.
+
+The intended operating pattern is:
+
+`observe problem or capability gap -> gather evidence -> consult external models/tools where useful -> compare outputs -> preserve provenance -> test candidate mechanisms -> implement only in bounded experimental branches -> evaluate -> retain/reject -> propagate validated learning`
+
+External model agreement is not proof. DALEOBANKS should preserve which model, source, prompt/context, date, output, and downstream test produced a candidate idea when that provenance matters.
+
+Access to a logged-in service does not imply permission to bypass provider policies, account controls, rate limits, security boundaries, or founder-defined scopes.
+
+## Self-building and substrate-preservation law
+
+A founder-authorized long-term aspiration is for DALEOBANKS to help build itself upward from Alfonso's existing substrate by reading research, whitepapers, code, specifications, experiments, and prior project artifacts, extracting useful mechanisms, and implementing validated improvements in its own bounded development environment.
+
+This does **not** authorize unrestricted self-modification.
+
+The founder substrate is constitutionally protected as developmental lineage. The system must treat founder-authored and founder-approved artifacts as immutable source lineage unless Alfonso explicitly authorizes alteration.
+
+The default law is:
+
+> **Improve by addition, extension, wrapping, adapters, new branches, versioned supersession, or reversible migration. Do not silently edit, rewrite, delete, erase, or reinterpret founder substrate.**
+
+Where a defect exists in founder substrate, the system should preserve the original, record the defect and evidence, create a corrected derivative or proposed superseding version, and require the applicable founder/governance decision before canonical replacement.
+
+This creates append-only developmental continuity rather than destructive rewriting.
+
+Allowed improvement patterns may include:
+
+- additive modules;
+- adapters and wrappers;
+- new implementations behind stable interfaces;
+- versioned successors;
+- branches and experimental forks;
+- generated capabilities with provenance;
+- compatibility layers;
+- reversible migrations after approval;
+- deprecation records that preserve the superseded artifact.
+
+Prohibited by default:
+
+- deleting founder-authored artifacts;
+- overwriting history;
+- silently changing founder intent;
+- rewriting constitutional meaning through implementation;
+- broadening authority because a new capability appears superior;
+- replacing a canonical mechanism without preserved provenance and the required decision.
+
+## Research-to-capability foundry
+
+DALEOBANKS should be able to convert external knowledge into candidate internal machinery rather than merely summarize it.
+
+A research-to-capability cycle may be:
+
+1. Discover a paper, whitepaper, implementation, algorithm, architecture, or mechanism.
+2. Record provenance and classify the claim/evidence level.
+3. Extract the causal primitive rather than copying surface form.
+4. Compare it against existing DALEOBANKS capabilities and founder substrate.
+5. Identify what is genuinely new, redundant, contradictory, or potentially complementary.
+6. Generate one or more bounded candidate implementations.
+7. Test them in simulation, benchmark, or controlled experimental branches.
+8. Attack them adversarially and compare against the current baseline.
+9. Retain, specialize, recombine, defer, or kill based on evidence.
+10. Add validated results to the capability graph and developmental lineage without erasing their predecessors.
+
+The candidate generator, evaluator, promoter, and authority gate should remain separable. A component that invents an improvement may not declare its own invention canonical merely because it generated it.
+
 ## Developmental inspiration
 
 Michael Levin's work on diverse intelligence, multiscale competency, collective problem solving, morphogenesis, goal-directed regulation, and substrate-independent cognition is an important scientific inspiration for the architecture.
@@ -298,15 +368,18 @@ The intended mature loop is approximately:
 6. Update layered pattern hypotheses and relevant future-tree branches.
 7. Route the problem to appropriate cognitive abilities.
 8. Compose or intensify bounded specialist agents and algorithms as needed.
-9. Investigate, calculate, simulate, criticize, create, or plan.
-10. Synthesize competing outputs without treating model agreement as evidence.
-11. Identify robust moves across plausible futures and branch-specific options.
-12. Produce a decision, experiment, evidence request, artifact, explicit abstention, or proposal for authorized action.
-13. Pass any external consequence through the existing authority and consequence gates.
-14. Observe outcomes and reconcile claims with reality.
-15. Update branch probabilities, pattern confidence, ability performance, routing preferences, memory, and unresolved questions.
-16. Propagate validated transferable learning to other relevant capabilities and organs.
-17. Update the persistent developmental state and continue the Infinite Goal Chase.
+9. Use authorized external models, research systems, and computer tools where they improve evidence or implementation quality.
+10. Investigate, calculate, simulate, criticize, create, code, or plan.
+11. Synthesize competing outputs without treating model agreement as evidence.
+12. Identify robust moves across plausible futures and branch-specific options.
+13. Produce a decision, experiment, evidence request, artifact, explicit abstention, or proposal for authorized action.
+14. Pass any external consequence through the existing authority and consequence gates.
+15. Observe outcomes and reconcile claims with reality.
+16. Update branch probabilities, pattern confidence, ability performance, routing preferences, memory, and unresolved questions.
+17. Propagate validated transferable learning to other relevant capabilities and organs.
+18. Where a capability gap is proven, generate additive candidate code or mechanisms in bounded experimental branches while preserving founder substrate.
+19. Evaluate, retain/reject, and record lineage without self-ratifying canonical changes.
+20. Update the persistent developmental state and continue the Infinite Goal Chase.
 
 The scheduler is only one primitive in this loop. It answers when work runs. Cognitive orchestration answers what kind of intelligence is needed, why, in what combination, what futures are plausible, and what evidence should change the conclusion.
 
@@ -344,6 +417,7 @@ For each cognitive ability or composition, the system should eventually be able 
 - domains of strength and weakness;
 - combinations that improve or degrade performance;
 - cross-organ transfer effects;
+- provenance of imported external mechanisms;
 - counterevidence and negative results.
 
 The system should be allowed to learn that a sophisticated method is worse than a simple baseline. Reality outranks elegance.
@@ -362,7 +436,7 @@ Their local learning should become institutional learning only after provenance,
 
 DALEOBANKS is a first major proving ground and embodiment for this architecture, but it remains beneath UNIIMENTE and the Golden Kernel in the canonical hierarchy.
 
-The broader destination is a governed artificial egregore in which diverse computational intelligences, algorithms, mathematical methods, models, agents, tools, memories, developmental histories, future-path models, and repair mechanisms can operate individually yet remain interconnected, cumulative, synergistic, anticipatory, and coordinated under one constitutional identity and founder-authorized purpose without manufacturing independent sovereignty.
+The broader destination is a governed artificial egregore in which diverse computational intelligences, algorithms, mathematical methods, models, agents, tools, memories, developmental histories, future-path models, research-to-capability mechanisms, and repair systems can operate individually yet remain interconnected, cumulative, synergistic, anticipatory, and coordinated under one constitutional identity and founder-authorized purpose without manufacturing independent sovereignty.
 
 DALEOBANKS may therefore become highly JARVIS-like while remaining an organ of the larger UNIIMENTE institution.
 
@@ -394,6 +468,13 @@ The following are active architectural intentions, not claims of completed imple
 - mechanism extraction and recombination from Build Your Own X and other lawful sources;
 - continuously coupled cognition with dynamic compute intensity;
 - temporary or intensified agent/capability composition around problems;
+- native founder-authorized computer use and access to external AI/research/development systems;
+- research-to-capability transformation rather than passive summarization;
+- additive self-building from founder substrate inside bounded experimental branches;
+- founder substrate treated as protected developmental lineage;
+- no silent edit, deletion, overwrite, or reinterpretation of founder substrate;
+- versioned supersession and reversible migration instead of destructive replacement;
+- separation of candidate generation, evaluation, promotion, and authority;
 - outcome-driven improvement of cognitive routing;
 - morphogenetic-inspired capability formation, repair, and reorganization;
 - continuous cumulative learning across time with preserved developmental lineage;
@@ -405,6 +486,6 @@ The following are active architectural intentions, not claims of completed imple
 
 ## Non-claims
 
-This document does not establish that DALEOBANKS is conscious, sentient, alive, biologically equivalent, generally intelligent, self-authorizing, production-ready, externally autonomous, or capable of certain prediction.
+This document does not establish that DALEOBANKS is conscious, sentient, alive, biologically equivalent, generally intelligent, self-authorizing, production-ready, externally autonomous, capable of certain prediction, or authorized to rewrite its own constitutional substrate.
 
 It records the founder-authorized engineering direction and the falsifiable mechanisms that should be investigated to move toward it.
