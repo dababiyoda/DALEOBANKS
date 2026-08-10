@@ -23,6 +23,64 @@ def _emit(payload: object) -> None:
     print(json.dumps(payload, indent=2, default=str))
 
 
+def _move_component(institution, session, args) -> int:
+    """Operate the ledger from outside it.
+
+    A gate whose only handle is a Python import is a wall. These four verbs
+    are the handle: everything this branch built is now gated on recording a
+    consequence, so recording one has to be something a person can do.
+    """
+    from services.compounding_ledger import CompoundingError
+
+    ledger = institution.opus
+    component = ledger.by_name(session, args.component or "")
+    if component is None:
+        _emit({
+            "ok": False,
+            "error": f"no component named {args.component!r}",
+            "hint": "run `python -m daleobanks opus` for the names",
+        })
+        return 2
+
+    try:
+        if args.command == "advance":
+            record = ledger.advance(
+                session, component.id, to=args.to_level or "", note=args.note
+            )
+            result = {"component": record.name, "maturity": record.maturity}
+        elif args.command == "prove":
+            ledger.record_proof(
+                session,
+                component.id,
+                evidence_tier=args.tier or "",
+                external_reference=args.ref or "",
+                description=args.note,
+            )
+            result = {
+                "component": component.name,
+                "maturity": component.maturity,
+                "state": component.state,
+                "admitted_proofs": component.admitted_proof_count,
+                "next": ledger.next_step(session, component),
+            }
+        elif args.command == "harvest":
+            record = ledger.harvest(
+                session, component.id, lesson=args.lesson or ""
+            )
+            result = {"component": component.name, "lesson": record.lesson}
+        else:
+            record = ledger.kill(session, component.id, reason=args.reason or "")
+            result = {"component": record.name, "state": record.state}
+    except CompoundingError as exc:
+        # The refusal is the useful output. It says what was not paid for.
+        _emit({"ok": False, "refused": str(exc)})
+        return 2
+
+    session.commit()
+    _emit({"ok": True, **result})
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="daleobanks",
@@ -30,13 +88,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "command",
-        choices=["validate", "preflight", "seed", "run", "report", "canon", "opus"],
+        choices=["validate", "preflight", "seed", "run", "report", "canon",
+                 "opus", "advance", "prove", "harvest", "kill"],
         help="validate the declaration, show what is authorized, seed the "
-             "canonical structure, run one shadow cycle, print the report, "
-             "dump the canon the defaults come from, or ask what the work has "
-             "actually done outside itself",
+             "canonical structure and blueprint, run one shadow cycle, print "
+             "the report, dump the canon, ask what the work has done outside "
+             "itself, or move one component along: advance it a level, prove "
+             "it with outside evidence, harvest its lesson, kill it",
     )
     parser.add_argument("--declaration", default=DEFAULT_DECLARATION_PATH)
+    parser.add_argument("--component", help="component name, as `opus` prints it")
+    parser.add_argument("--to", dest="to_level", help="target maturity level")
+    parser.add_argument("--tier", help="evidence tier for `prove`")
+    parser.add_argument(
+        "--ref",
+        help="what happened outside this system: an invoice, a person, a "
+             "settlement. Repository paths and simulations are refused.",
+    )
+    parser.add_argument("--note", default="", help="what was done")
+    parser.add_argument("--lesson", help="what this taught, required to harvest")
+    parser.add_argument("--reason", help="why, required to kill")
     args = parser.parse_args(argv)
 
     try:
@@ -94,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
             # Seeding is idempotent, so this verb works on a cold store.
             institution.seed_opus(session)
             _emit(institution.opus_report(session))
+        elif args.command in ("advance", "prove", "harvest", "kill"):
+            institution.seed_opus(session)
+            return _move_component(institution, session, args)
         elif args.command == "run":
             _emit(institution.run_cycle(session))
         else:
