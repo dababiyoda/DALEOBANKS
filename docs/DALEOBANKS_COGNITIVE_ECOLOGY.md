@@ -61,6 +61,115 @@ The intended cross-organ loop is:
 
 This is a first-class architectural invariant, not an optional analytics feature.
 
+## Eight-angle cognition contract
+
+Every consequential intelligence should be able to understand a situation through eight non-redundant angles before its output is treated as complete enough for higher-order synthesis.
+
+The eight angles are:
+
+1. **Reality**: What is actually happening? What evidence is reliable, missing, stale, or contradictory?
+2. **Actors**: Who matters? What do they want, fear, control, block, pay for, use, or depend on?
+3. **Structure**: What system, workflow, dependency graph, incentive structure, or causal mechanism produces the observed outcome?
+4. **Value**: Where do money, time, resources, risk, information, and benefit move?
+5. **Power**: Who or what controls eligibility, access, routing, proof, legitimacy, defaults, settlement, or consequence?
+6. **Time**: What is changing, compounding, decaying, accelerating, saturating, or becoming irreversible?
+7. **Adversary**: How could this interpretation fail, be gamed, be countered, or mislead the system?
+8. **Possibility**: What asymmetric move, new capability, experiment, partnership, or future path becomes possible because of the other seven angles?
+
+These angles are a completeness contract, not eight independent bureaucratic reports. Different intelligences may emphasize different angles, but material synthesis should detect missing angles and request them before concluding.
+
+The eight-angle structure is inspired by the same whole-system discipline used in Spider-Web architecture: avoid mistaking one visible feature for the governing system.
+
+## Layered pattern recognition
+
+DALEOBANKS should continuously search for patterns at multiple scales rather than treating events as isolated observations.
+
+Pattern layers may include:
+
+- patterns inside a single event;
+- patterns across repeated events;
+- patterns across people, institutions, products, and markets;
+- patterns across industries and scientific domains;
+- patterns across time horizons;
+- patterns across DALEOBANKS's own decisions, failures, experiments, and outcomes;
+- patterns across capabilities and which combinations repeatedly succeed or fail;
+- patterns across candidate futures.
+
+A higher-order pattern should preserve the evidence that produced it. The system must distinguish:
+
+`observation -> candidate pattern -> supported pattern -> predictive hypothesis -> externally tested prediction`
+
+Pattern recognition is not permission to invent causality. A cross-domain pattern becomes useful only when it produces better prediction, better experiment selection, earlier detection, lower error, or stronger verified decisions than a simpler baseline.
+
+## Anticipatory cognition and the future forest
+
+DALEOBANKS should not force reality into one predicted future. It should maintain a living set of materially different plausible future paths.
+
+Each future path should be able to carry:
+
+- a concise causal story;
+- current probability or confidence range;
+- evidence supporting it;
+- evidence against it;
+- decisive unknowns;
+- trigger conditions that increase or decrease plausibility;
+- second-order branches;
+- strategic risks;
+- opportunities;
+- reversible actions available now;
+- irreversible commitments to avoid until evidence improves;
+- relevance to the Infinite Goal Chase.
+
+The result is a continuously updated **future forest**, not a single forecast.
+
+A simplified structure is:
+
+`current state -> several orthogonal futures -> second-order branches -> strategic implications -> robust moves -> new evidence -> probability update -> prune/merge/expand`
+
+Strategic Tree Search provides the search discipline: generate materially different causal branches, attack them, backtrack from weak paths, recombine compatible mechanisms, and preserve a hedge when uncertainty remains material.
+
+Bayesian updating should continuously revise branch confidence as new evidence arrives. Branch probabilities are working beliefs, not truth claims.
+
+## Robust positioning across futures
+
+The most valuable anticipatory output is often not "which future is exactly correct?" but:
+
+`which move remains useful across several plausible futures while preserving upside if the high-value branch occurs?`
+
+DALEOBANKS should therefore search for:
+
+- no-regret moves;
+- low-regret reversible experiments;
+- enabling primitives valuable across multiple futures;
+- options that preserve access to high-upside branches;
+- early-warning indicators that justify later commitment;
+- branch-specific moves only when the evidence threshold is met.
+
+This connects future perception directly to action rather than turning forecasting into entertainment.
+
+## Continuous coupled cognition
+
+The eight-angle contract, pattern recognition, future forest, mental models, mathematical methods, agents, and other cognitive systems are not intended as isolated tools called one at a time. They are parts of one continuously coupled cognitive field.
+
+A material signal may simultaneously alter:
+
+- evidence quality;
+- actor models;
+- causal structure;
+- economic estimates;
+- power maps;
+- future-path probabilities;
+- risk posture;
+- opportunity ranking;
+- capability requirements;
+- Infinite Goal Chase priorities.
+
+Those updates should feed back into the common state so later cognition begins from the improved integrated understanding.
+
+Computational intensity may vary by importance, but architectural membership remains continuous. Low-cost monitors may run continuously while deeper agents or model calls receive more compute when salience, uncertainty, opportunity, or risk crosses a threshold.
+
+The intent is not hundreds of models consuming maximum compute at every instant. It is hundreds of persistent cognitive contributions coordinated around one evolving state.
+
 ## Developmental inspiration
 
 Michael Levin's work on diverse intelligence, multiscale competency, collective problem solving, morphogenesis, goal-directed regulation, and substrate-independent cognition is an important scientific inspiration for the architecture.
@@ -185,18 +294,21 @@ The intended mature loop is approximately:
 2. Update memory and a bounded working world model.
 3. Compare observed state with founder-authorized goals and constraints.
 4. Detect uncertainty, anomaly, opportunity, threat, or capability deficit.
-5. Route the problem to appropriate cognitive abilities.
-6. Compose temporary cognitive structures and bounded specialist agents as needed.
-7. Investigate, calculate, simulate, criticize, create, or plan.
-8. Synthesize competing outputs without treating model agreement as evidence.
-9. Produce a decision, experiment, evidence request, artifact, explicit abstention, or proposal for authorized action.
-10. Pass any external consequence through the existing authority and consequence gates.
-11. Observe outcomes and reconcile claims with reality.
-12. Update ability performance, routing preferences, memory, and unresolved questions.
-13. Propagate validated transferable learning to other relevant capabilities and organs.
-14. Update the persistent developmental state and continue the Infinite Goal Chase.
+5. Run the eight-angle completeness check for consequential understanding.
+6. Update layered pattern hypotheses and relevant future-tree branches.
+7. Route the problem to appropriate cognitive abilities.
+8. Compose or intensify bounded specialist agents and algorithms as needed.
+9. Investigate, calculate, simulate, criticize, create, or plan.
+10. Synthesize competing outputs without treating model agreement as evidence.
+11. Identify robust moves across plausible futures and branch-specific options.
+12. Produce a decision, experiment, evidence request, artifact, explicit abstention, or proposal for authorized action.
+13. Pass any external consequence through the existing authority and consequence gates.
+14. Observe outcomes and reconcile claims with reality.
+15. Update branch probabilities, pattern confidence, ability performance, routing preferences, memory, and unresolved questions.
+16. Propagate validated transferable learning to other relevant capabilities and organs.
+17. Update the persistent developmental state and continue the Infinite Goal Chase.
 
-The scheduler is only one primitive in this loop. It answers when work runs. Cognitive orchestration answers what kind of intelligence is needed, why, in what combination, and what evidence should change the conclusion.
+The scheduler is only one primitive in this loop. It answers when work runs. Cognitive orchestration answers what kind of intelligence is needed, why, in what combination, what futures are plausible, and what evidence should change the conclusion.
 
 ## Developmental capability formation
 
@@ -224,6 +336,7 @@ For each cognitive ability or composition, the system should eventually be able 
 
 - problem classes where it was used;
 - prediction or estimate calibration;
+- future-branch calibration and Brier-like scoring where appropriate;
 - decision quality where measurable;
 - cost and latency;
 - contribution to verified outcomes;
@@ -241,7 +354,7 @@ Learning should not silently overwrite history. Material updates should preserve
 
 Specialist agents are lower-scale competent parts, not independent identities and not the egregore itself. They may be temporary, task-specific, or persistent where justified. Their authority must remain narrow and explicit.
 
-A mature DALEOBANKS should prefer dynamic composition over maintaining a large permanent zoo of agents. It should instantiate or recruit the smallest sufficient set of competencies for the problem, preserve useful disagreement, and dissolve temporary structures when their work is complete.
+A mature DALEOBANKS should prefer dynamic intensity and composition over maintaining a large permanent zoo of equally expensive agents. Persistent low-cost cognitive processes may continuously monitor shared state, while deeper swarms and model calls intensify when thresholds justify them.
 
 Their local learning should become institutional learning only after provenance, relevance, and evidence checks. Local error should not automatically contaminate the whole system.
 
@@ -249,7 +362,7 @@ Their local learning should become institutional learning only after provenance,
 
 DALEOBANKS is a first major proving ground and embodiment for this architecture, but it remains beneath UNIIMENTE and the Golden Kernel in the canonical hierarchy.
 
-The broader destination is a governed artificial egregore in which diverse computational intelligences, algorithms, mathematical methods, models, agents, tools, memories, developmental histories, and repair mechanisms can operate individually yet remain interconnected, cumulative, synergistic, and coordinated under one constitutional identity and founder-authorized purpose without manufacturing independent sovereignty.
+The broader destination is a governed artificial egregore in which diverse computational intelligences, algorithms, mathematical methods, models, agents, tools, memories, developmental histories, future-path models, and repair mechanisms can operate individually yet remain interconnected, cumulative, synergistic, anticipatory, and coordinated under one constitutional identity and founder-authorized purpose without manufacturing independent sovereignty.
 
 DALEOBANKS may therefore become highly JARVIS-like while remaining an organ of the larger UNIIMENTE institution.
 
@@ -257,11 +370,11 @@ DALEOBANKS may therefore become highly JARVIS-like while remaining an organ of t
 
 The architecture should be judged not only by whether individual agents or abilities improve, but by whether their interaction creates measurable system-level capability that isolated components do not possess.
 
-A claimed synergy should therefore be testable. Candidate evidence includes improved task completion, lower cost, better calibration, faster recovery, broader transfer, reduced duplication, higher-quality decisions, or more reliable goal progress when capabilities cooperate versus when they operate independently.
+A claimed synergy should therefore be testable. Candidate evidence includes improved task completion, lower cost, better calibration, earlier detection, stronger forecasting, faster recovery, broader transfer, reduced duplication, higher-quality decisions, or more reliable goal progress when capabilities cooperate versus when they operate independently.
 
 If integration adds coordination cost without producing system-level advantage, the architecture should simplify, isolate, or remove the weak coupling.
 
-The objective is harmonious collaboration in the engineering sense: useful specialization, shared context where justified, bounded interfaces, preserved dissent, coordinated goals, transferable learning, and minimal destructive interference.
+The objective is harmonious collaboration in the engineering sense: useful specialization, shared context where justified, bounded interfaces, preserved dissent, coordinated goals, transferable learning, anticipatory branching, and minimal destructive interference.
 
 ## Founder-intent lifecycle
 
@@ -270,10 +383,17 @@ The following are active architectural intentions, not claims of completed imple
 - JARVIS-like persistent developmental intelligence;
 - multimodal perception through replaceable frontier models and tools;
 - metacognitive routing among specialized cognitive abilities;
+- eight-angle completeness for consequential understanding;
+- layered pattern recognition across events, domains, time, system history, and future paths;
+- a continuously updated future forest of orthogonal strategic possibilities;
+- Strategic Tree Search as a persistent anticipatory search mechanism rather than a one-off prompt;
+- Bayesian updating of future-path confidence as evidence changes;
+- robust positioning across multiple plausible futures;
 - mental models implemented as testable abilities where useful;
 - mathematical and algorithmic methods available as native cognitive machinery;
 - mechanism extraction and recombination from Build Your Own X and other lawful sources;
-- temporary agent/capability composition around problems;
+- continuously coupled cognition with dynamic compute intensity;
+- temporary or intensified agent/capability composition around problems;
 - outcome-driven improvement of cognitive routing;
 - morphogenetic-inspired capability formation, repair, and reorganization;
 - continuous cumulative learning across time with preserved developmental lineage;
@@ -285,6 +405,6 @@ The following are active architectural intentions, not claims of completed imple
 
 ## Non-claims
 
-This document does not establish that DALEOBANKS is conscious, sentient, alive, biologically equivalent, generally intelligent, self-authorizing, production-ready, or externally autonomous.
+This document does not establish that DALEOBANKS is conscious, sentient, alive, biologically equivalent, generally intelligent, self-authorizing, production-ready, externally autonomous, or capable of certain prediction.
 
 It records the founder-authorized engineering direction and the falsifiable mechanisms that should be investigated to move toward it.
