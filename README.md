@@ -17,13 +17,14 @@ Read these documents before making material changes to DALEOBANKS identity, prod
 - [Canonical DALEOBANKS Lifestyle Brand, Media Network, and Civilization-Seeding Architecture](docs/DALEOBANKS_MEDIA_BRAND_ARCHITECTURE.md)
 - [DALEOBANKS Infinite Goal Chase](docs/DALEOBANKS_INFINITE_GOAL_CHASE.md)
 - [DALEOBANKS Continuous Construction and Hardening Protocol](docs/DALEOBANKS_CONTINUOUS_CONSTRUCTION_AND_HARDENING_PROTOCOL.md)
+- [DALEOBANKS Implementation Truth Register](docs/DALEOBANKS_IMPLEMENTATION_TRUTH_REGISTER.md)
 - [DALEOBANKS Infinite Aspiration Chase and Acceleration Protocol](docs/DALEOBANKS_ASPIRATION_ACCELERATION_PROTOCOL.md)
 - [DALEOBANKS Founder Intent Lineage](docs/DALEOBANKS_FOUNDER_INTENT_LINEAGE.md)
 - [Safety and Rollout](docs/SAFETY_AND_ROLLOUT.md)
 - [Idea Refinery and Venture Cockpit](docs/IDEA_REFINERY.md)
 - [Constitution](constitution.md)
 
-The architecture docs preserve the intended destination. The code and tests remain the source of truth for what the current runtime demonstrably does.
+The architecture docs preserve the intended destination. The implementation truth register states what evidence currently supports. The code and tests remain the source of truth for what the current runtime demonstrably does.
 
 ## Features
 - 24/7 autonomous operation with persona-driven content generation
