@@ -252,149 +252,244 @@ PORTFOLIO_MIX = (
 
 
 # --------------------------------------------------------------------- #
-# The components of the larger work, and what each one owes
+# The complete blueprint
 # --------------------------------------------------------------------- #
 
-# Action → Asset → System → Business → Network → Infrastructure. Opus
+# Action -> Asset -> System -> Business -> Network -> Infrastructure. Opus
 # Maximus is not on this list because it is not a component: it is what the
 # components add up to, and only if they compound.
 #
+# This map is deliberately complete rather than deliberately small. A thing
+# with no map has nowhere to grow, and future work needs a target to build
+# against instead of rediscovering the shape each time. Mapping costs
+# nothing and claims nothing: BLUEPRINT is a coordinate, not an achievement.
+#
+# `maturity` records what is true today, not what is intended. The entries
+# marked BUILT have implementation and tests and have still never touched
+# the world, which is exactly the distinction this exists to keep visible.
+#
 # Every entry names the external consequence that would prove it earned its
-# place. The deadlines are short on purpose. A component that cannot touch
-# the world inside a quarter is not being built, it is being admired.
+# place. Deadlines are short on purpose: a component that cannot touch the
+# world inside two quarters is not being built, it is being admired.
+
+def _c(name, tier, dimensions, consequence, days, maturity="BLUEPRINT",
+       parent=None):
+    return {
+        "name": name,
+        "tier": tier,
+        "dimensions": list(dimensions),
+        "expected_external_consequence": consequence,
+        "proof_deadline_days": days,
+        "maturity": maturity,
+        "parent": parent,
+    }
+
+
 OPUS_COMPONENTS = (
-    # Infrastructure: the four super-nodes everything else routes through.
-    {
-        "name": "eligibility super-node",
-        "tier": "infrastructure",
-        "dimensions": ["autonomy", "infrastructure"],
-        "expected_external_consequence":
-            "an outside party accepts a DALEOBANKS eligibility determination "
-            "for a decision it would otherwise have made itself",
-        "proof_deadline_days": 180,
-        "parent": None,
-    },
-    {
-        "name": "default routing super-node",
-        "tier": "infrastructure",
-        "dimensions": ["distribution", "infrastructure"],
-        "expected_external_consequence":
-            "a person outside the org reaches an opportunity through this "
-            "routing rather than through search",
-        "proof_deadline_days": 180,
-        "parent": None,
-    },
-    {
-        "name": "proof and truth super-node",
-        "tier": "infrastructure",
-        "dimensions": ["proof", "knowledge", "infrastructure"],
-        "expected_external_consequence":
-            "someone outside cites a DALEOBANKS claim record as their reason "
-            "for changing a position",
-        "proof_deadline_days": 180,
-        "parent": None,
-    },
-    {
-        "name": "cashflow and settlement super-node",
-        "tier": "infrastructure",
-        "dimensions": ["capital", "infrastructure"],
-        "expected_external_consequence":
-            "money moves in and is reconciled against a bank record",
-        "proof_deadline_days": 180,
-        "parent": None,
-    },
-    # Network: capable people who find each other here.
-    {
-        "name": "immigrant capability community",
-        "tier": "network",
-        "dimensions": ["capability", "distribution"],
-        "expected_external_consequence":
-            "two members who met here complete something neither would have "
-            "completed alone",
-        "proof_deadline_days": 120,
-        "parent": "default routing super-node",
-    },
-    {
-        "name": "collaboration and expert network",
-        "tier": "network",
-        "dimensions": ["capability", "knowledge"],
-        "expected_external_consequence":
-            "an expert with no prior relationship contributes to a research "
-            "lead and lets their name stand behind it",
-        "proof_deadline_days": 120,
-        "parent": "proof and truth super-node",
-    },
-    # Business: the thing that has to pay for the rest.
-    {
-        "name": "early cash engine",
-        "tier": "business",
-        "dimensions": ["capital", "autonomy"],
-        "expected_external_consequence":
-            "one real buyer pays for one real delivery and accepts it",
-        "proof_deadline_days": 90,
-        "parent": "cashflow and settlement super-node",
-    },
-    # Systems: the machinery that runs without being watched.
-    {
-        "name": "media operating system",
-        "tier": "system",
-        "dimensions": ["distribution", "knowledge"],
-        "expected_external_consequence":
-            "a published piece produces a reply from someone who was not "
-            "already in the audience",
-        "proof_deadline_days": 90,
-        "parent": "immigrant capability community",
-    },
-    {
-        "name": "opportunity router",
-        "tier": "system",
-        "dimensions": ["capital", "proof"],
-        "expected_external_consequence":
-            "WMI returns an assessment on a packet this system produced, "
-            "through the real intake and not the mock",
-        "proof_deadline_days": 90,
-        "parent": "early cash engine",
-    },
-    {
-        "name": "infinite goal chase",
-        "tier": "system",
-        "dimensions": ["capability", "proof"],
-        "expected_external_consequence":
-            "one aspiration gate clears on evidence from outside this process",
-        "proof_deadline_days": 90,
-        "parent": "proof and truth super-node",
-    },
-    # Assets: things that keep their value when the machinery stops.
-    {
-        "name": "owned audience list",
-        "tier": "asset",
-        "dimensions": ["distribution"],
-        "expected_external_consequence":
-            "one person consents to be reached off-platform and is reached",
-        "proof_deadline_days": 60,
-        "parent": "media operating system",
-    },
-    {
-        "name": "claim and evidence library",
-        "tier": "asset",
-        "dimensions": ["knowledge", "proof"],
-        "expected_external_consequence":
-            "an outside reader corrects a claim and the correction is published",
-        "proof_deadline_days": 60,
-        "parent": "media operating system",
-    },
-    # Action: the smallest unit that can actually be done today.
-    {
-        "name": "one daily edition",
-        "tier": "action",
-        "dimensions": ["distribution"],
-        "expected_external_consequence":
-            "one edition reaches one reader who did not ask for it and who "
-            "comes back for the next one",
-        "proof_deadline_days": 30,
-        "parent": "owned audience list",
-    },
+    # ---------------- infrastructure: what everything routes through ----
+    _c("eligibility super-node", "infrastructure", ["autonomy", "infrastructure"],
+       "an outside party accepts a DALEOBANKS eligibility determination for a "
+       "decision it would otherwise have made itself", 180),
+    _c("default routing super-node", "infrastructure",
+       ["distribution", "infrastructure"],
+       "a person outside the org reaches an opportunity through this routing "
+       "rather than through search", 180),
+    _c("proof and truth super-node", "infrastructure",
+       ["proof", "knowledge", "infrastructure"],
+       "someone outside cites a DALEOBANKS claim record as their reason for "
+       "changing a position", 180),
+    _c("cashflow and settlement super-node", "infrastructure",
+       ["capital", "infrastructure"],
+       "money moves in and is reconciled against a bank record", 180),
+    _c("owned distribution rails", "infrastructure",
+       ["distribution", "autonomy", "infrastructure"],
+       "an audience is reached during a platform outage or ban", 180),
+    _c("institutional evidence spine", "infrastructure",
+       ["proof", "knowledge", "infrastructure"],
+       "an external auditor reconstructs a decision from the ledger alone",
+       180, maturity="BUILT"),
+    _c("civilization-seeding program", "infrastructure",
+       ["knowledge", "capability", "infrastructure"],
+       "a primitive DALEOBANKS made legible is built by someone with no "
+       "relationship to DALEOBANKS", 180),
+
+    # ---------------- network: capable people who find each other -------
+    _c("immigrant capability community", "network",
+       ["capability", "distribution"],
+       "two members who met here complete something neither would have "
+       "completed alone", 120, parent="default routing super-node"),
+    _c("collaboration and expert network", "network",
+       ["capability", "knowledge"],
+       "an expert with no prior relationship contributes to a research lead "
+       "and lets their name stand behind it", 120,
+       parent="proof and truth super-node"),
+    _c("creator and contributor network", "network",
+       ["capability", "distribution"],
+       "someone outside publishes under the standard and is read", 120,
+       parent="default routing super-node"),
+    _c("partner and venture network", "network", ["capital", "capability"],
+       "a partner commits resources to a jointly-run program", 150,
+       parent="eligibility super-node"),
+    _c("customer network", "network", ["capital", "distribution"],
+       "a customer buys a second time without being asked", 150,
+       parent="cashflow and settlement super-node"),
+    _c("research and scientific network", "network", ["knowledge", "proof"],
+       "an independent group reproduces a result DALEOBANKS surfaced", 180,
+       parent="proof and truth super-node"),
+
+    # ---------------- business: the part that pays for the rest ---------
+    _c("early cash engine", "business", ["capital", "autonomy"],
+       "one real buyer pays for one real delivery and accepts it", 90,
+       parent="cashflow and settlement super-node"),
+    _c("membership and community subscription", "business",
+       ["capital", "distribution"],
+       "a member renews after the first period without a discount", 120,
+       parent="early cash engine"),
+    _c("education and learning products", "business",
+       ["capital", "capability"],
+       "a learner pays, completes, and reports a capability they did not have",
+       120, parent="early cash engine"),
+    _c("sponsorship and brand partnerships", "business",
+       ["capital", "distribution"],
+       "a sponsor pays under disclosed terms and renews", 150,
+       parent="early cash engine"),
+    _c("digital products and commerce", "business", ["capital"],
+       "a product is delivered, accepted, and not refunded", 120,
+       parent="early cash engine"),
+    _c("events and experiences", "business", ["capital", "capability"],
+       "attendees pay, show up, and one collaboration forms that outlives the "
+       "event", 180, parent="early cash engine"),
+    _c("licensing and media services", "business", ["capital", "distribution"],
+       "an outside organization licenses DALEOBANKS work and ships it", 180,
+       parent="early cash engine"),
+    _c("free cash flow to UNIIMENTE", "business", ["capital", "autonomy"],
+       "founder-authorized cash moves from DALEOBANKS to UNIIMENTE "
+       "development and is reconciled", 180,
+       parent="cashflow and settlement super-node"),
+
+    # ---------------- system: machinery that runs unwatched -------------
+    _c("media operating system", "system", ["distribution", "knowledge"],
+       "a published piece produces a reply from someone who was not already "
+       "in the audience", 90, maturity="BUILT",
+       parent="immigrant capability community"),
+    _c("content factory", "system", ["distribution", "capability"],
+       "one researched thesis becomes artifacts on three surfaces and one "
+       "outperforms the others for a reason that was predicted", 90,
+       maturity="BUILT", parent="media operating system"),
+    _c("localization engine", "system", ["distribution", "knowledge"],
+       "a non-English reader acts on a localized artifact", 120,
+       maturity="BUILT", parent="media operating system"),
+    _c("daily news operation", "system", ["distribution", "knowledge"],
+       "a reader changes a decision because of an edition and says so", 90,
+       maturity="SKETCHED", parent="media operating system"),
+    _c("source and evidence pipeline", "system", ["knowledge", "proof"],
+       "a consequential claim survives an outside challenge on its sources",
+       90, maturity="BUILT", parent="proof and truth super-node"),
+    _c("correction ledger", "system", ["proof", "knowledge"],
+       "a published correction is acknowledged by someone who saw the "
+       "original", 120, maturity="BUILT", parent="proof and truth super-node"),
+    _c("analytics and experiment engine", "system", ["knowledge", "proof"],
+       "an experiment falsifies a belief DALEOBANKS held and the strategy "
+       "changes", 90, maturity="BUILT", parent="media operating system"),
+    _c("audience intelligence ledger", "system", ["knowledge", "distribution"],
+       "a segment prediction is confirmed by behavior nobody prompted", 120,
+       maturity="BUILT", parent="media operating system"),
+    _c("opportunity router", "system", ["capital", "proof"],
+       "WMI returns an assessment on a packet this system produced, through "
+       "the real intake and not the mock", 90, maturity="BUILT",
+       parent="early cash engine"),
+    _c("infinite goal chase", "system", ["capability", "proof"],
+       "one aspiration gate clears on evidence from outside this process", 90,
+       maturity="BUILT", parent="proof and truth super-node"),
+    _c("participant ladder", "system", ["capability", "distribution"],
+       "one person advances a rung by a verified voluntary action", 90,
+       maturity="BUILT", parent="immigrant capability community"),
+    _c("debate engine", "system", ["knowledge", "capability"],
+       "a public debate produces a research lead an outside expert takes up",
+       120, maturity="BUILT", parent="collaboration and expert network"),
+    _c("relationship memory", "system", ["capability", "knowledge"],
+       "a returning collaborator is recognized and served better because of "
+       "it, with consent on record", 120, maturity="SKETCHED",
+       parent="collaboration and expert network"),
+    _c("community operating system", "system", ["capability", "distribution"],
+       "a cohort completes a learning path without staff intervention", 150,
+       parent="immigrant capability community"),
+    _c("automation loom", "system", ["autonomy", "capability"],
+       "a routine workflow runs unattended for a month and its failures were "
+       "all caught by its own guards", 150, maturity="SKETCHED",
+       parent="owned distribution rails"),
+    _c("incident and failure posture", "system", ["autonomy", "proof"],
+       "a real incident degrades the system toward pause rather than toward "
+       "publishing", 120, maturity="BUILT",
+       parent="institutional evidence spine"),
+    _c("dependency and portability registry", "system",
+       ["autonomy", "infrastructure"],
+       "a vendor is replaced without an outage", 150, maturity="BUILT",
+       parent="institutional evidence spine"),
+    _c("compounding ledger", "system", ["proof", "knowledge"],
+       "a component is killed or reshaped because this ledger refused it, and "
+       "the resources go somewhere that works", 90, maturity="BUILT",
+       parent="institutional evidence spine"),
+    _c("pumpstation handoff", "system", ["capital", "capability"],
+       "one person is handed off with disclosure and consent and reports the "
+       "outcome", 150, parent="eligibility super-node"),
+
+    # ---------------- asset: value that survives the machinery ----------
+    _c("owned audience list", "asset", ["distribution"],
+       "one person consents to be reached off-platform and is reached", 60,
+       parent="owned distribution rails"),
+    _c("claim and evidence library", "asset", ["knowledge", "proof"],
+       "an outside reader corrects a claim and the correction is published",
+       60, maturity="BUILT", parent="proof and truth super-node"),
+    _c("content archive", "asset", ["knowledge", "distribution"],
+       "someone finds and uses an old piece without being pointed at it", 90,
+       parent="owned distribution rails"),
+    _c("account registry", "asset", ["infrastructure", "autonomy"],
+       "an official surface is verified against the registry by someone "
+       "outside", 90, maturity="BUILT", parent="owned distribution rails"),
+    _c("persona and brand genome", "asset", ["knowledge", "distribution"],
+       "a stranger identifies DALEOBANKS work without the name on it", 120,
+       maturity="BUILT", parent="content archive"),
+    _c("territory and rabbit hole graph", "asset",
+       ["capability", "distribution"],
+       "one person walks from a public surface to a capability payload and "
+       "takes the terminal action", 90, maturity="BUILT",
+       parent="immigrant capability community"),
+    _c("aspiration registry", "asset", ["proof", "capability"],
+       "a blocked aspiration is unblocked by something built outside", 120,
+       maturity="BUILT", parent="infinite goal chase"),
+    _c("shared primitive registry", "asset", ["knowledge", "capability"],
+       "an outside builder picks up a primitive from this registry", 150,
+       maturity="BUILT", parent="civilization-seeding program"),
+
+    # ---------------- action: the smallest thing doable today -----------
+    _c("one daily edition", "action", ["distribution"],
+       "one edition reaches one reader who did not ask for it and who comes "
+       "back for the next one", 30, parent="owned audience list"),
+    _c("one researched thesis", "action", ["knowledge", "proof"],
+       "one thesis is challenged from outside and holds", 30,
+       maturity="SKETCHED", parent="claim and evidence library"),
+    _c("one verified advancement action", "action", ["capability"],
+       "one participant voluntarily completes a defined action and it is "
+       "verified", 45, parent="participant ladder"),
+    _c("one reconciled sale", "action", ["capital"],
+       "one payment clears, one delivery is accepted, and the margin is "
+       "positive", 45, parent="early cash engine"),
+    _c("one qualified opportunity packet", "action", ["capital", "proof"],
+       "one packet is assessed by WMI through the real intake", 45,
+       maturity="SKETCHED", parent="opportunity router"),
+    _c("one published correction", "action", ["proof"],
+       "one material correction is published and reaches the original "
+       "audience", 45, parent="correction ledger"),
+    _c("one warm handoff", "action", ["capability"],
+       "one person is routed onward with disclosure and consent", 60,
+       parent="pumpstation handoff"),
+    _c("one localized artifact", "action", ["distribution"],
+       "one artifact is acted on in a language that is not English", 60,
+       maturity="SKETCHED", parent="localization engine"),
 )
+
+
 
 def default_declaration(founder: str = "Alfonso Lopez",
                         timezone: str = "America/New_York") -> Dict[str, Any]:

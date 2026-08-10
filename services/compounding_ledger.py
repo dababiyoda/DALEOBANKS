@@ -99,7 +99,31 @@ VERDICTS = ("INTEGRATE",) + FORCED_VERDICTS
 # bar: a component cannot be easier to prove than a goal.
 MINIMUM_PROOF_TIER = MINIMUM_GATE_CLEARANCE_TIER
 
-# How many unproven components may exist before construction stops.
+# The growth path of a single component. The blueprint is free; every step
+# above it is earned, and the last two cannot be taken from inside.
+MATURITY_LEVELS = (
+    "BLUEPRINT",   # mapped, nothing built — always permitted, never a claim
+    "SKETCHED",    # partial implementation exists
+    "BUILT",       # implemented and covered by tests inside the building
+    "EXERCISED",   # ran end to end, in shadow or pilot, on real inputs
+    "PROVEN",      # one external consequence recorded
+    "HARDENED",    # repeated external proof, and it survived being attacked
+)
+
+# Everything from here up requires evidence from outside this system.
+FIRST_EXTERNAL_LEVEL = "PROVEN"
+
+# The levels that mean active construction: started, not finished, not proven.
+IN_CONSTRUCTION = ("SKETCHED", "BUILT", "EXERCISED")
+
+# What HARDENED costs: repeated proof, plus surviving attack.
+HARDENING_PROOF_COUNT = 3
+HARDENING_FAILURE_MODES = 1
+
+# How many components may be in active construction at once. This does not
+# limit the blueprint — the map should be complete, because a thing with no
+# map has nowhere to grow. It limits how much may be half-finished while
+# nothing has been proven.
 ARCHITECTURE_DEBT_CEILING = 12
 
 # References that describe this system rather than the world.
@@ -147,6 +171,10 @@ class InsufficientProofError(CompoundingError):
     """The evidence is real but too weak to count as external consequence."""
 
 
+class PrematureMaturityError(CompoundingError):
+    """A component was claimed at a level it has not paid for."""
+
+
 class UnharvestedKillError(CompoundingError):
     """Something is about to be discarded along with what it taught."""
 
@@ -169,6 +197,19 @@ def tier_rank(tier: str) -> int:
         return TIERS.index(tier)
     except ValueError:
         return -1
+
+
+def maturity_rank(level: str) -> int:
+    """Position on the growth path, or -1 when the level is not one of ours."""
+    try:
+        return MATURITY_LEVELS.index(level)
+    except ValueError:
+        return -1
+
+
+def requires_external_evidence(level: str) -> bool:
+    """True for the levels that cannot be reached from inside the building."""
+    return maturity_rank(level) >= maturity_rank(FIRST_EXTERNAL_LEVEL)
 
 
 def is_internal_reference(reference: str) -> bool:
@@ -196,18 +237,41 @@ class CompoundingLedger:
         """Components still carrying a promise they have not kept."""
         return [c for c in self._components(session) if c.state == "PROVISIONAL"]
 
-    def architecture_debt(self, session: Any) -> int:
-        """How many components exist that the world has not yet confirmed."""
-        return len(self.unproven(session))
+    def blueprint(self, session: Any) -> List[ComponentRecord]:
+        """Everything mapped but not yet started. Always free to grow."""
+        return [
+            c
+            for c in self._components(session)
+            if c.maturity == "BLUEPRINT" and c.state != "KILLED"
+        ]
 
-    def assert_may_add_component(self, session: Any) -> None:
-        """Refuse new construction while unproven construction is piled up."""
+    def in_construction(self, session: Any) -> List[ComponentRecord]:
+        """Started, unfinished, unproven. The only thing that is rationed."""
+        return [
+            c
+            for c in self._components(session)
+            if c.maturity in IN_CONSTRUCTION and c.state != "KILLED"
+        ]
+
+    def architecture_debt(self, session: Any) -> int:
+        """How much is half-built while nothing it promised has happened."""
+        return len(self.in_construction(session))
+
+    def assert_may_construct(self, session: Any) -> None:
+        """Refuse to start more while too much is already started and unproven.
+
+        This never blocks the blueprint. Mapping a component is free and
+        should be: a thing with no map has nowhere to grow, and the map is
+        what future work builds against. What is rationed is construction —
+        how many components may sit half-finished while none of them has
+        produced a consequence.
+        """
         debt = self.architecture_debt(session)
         if debt >= ARCHITECTURE_DEBT_CEILING:
             raise ArchitectureDebtError(
-                f"{debt} components are unproven, ceiling is "
-                f"{ARCHITECTURE_DEBT_CEILING}: prove, modify, harvest, or kill "
-                "before building more"
+                f"{debt} components are in construction and unproven, ceiling "
+                f"is {ARCHITECTURE_DEBT_CEILING}: prove, harden, harvest, or "
+                "kill one before starting another (the blueprint stays open)"
             )
 
     def register(
@@ -219,6 +283,7 @@ class CompoundingLedger:
         dimensions: Sequence[str],
         expected_external_consequence: str,
         proof_deadline_days: int,
+        maturity: str = "BLUEPRINT",
         parent_id: Optional[str] = None,
     ) -> ComponentRecord:
         """Admit a component only once it has said what it owes and by when."""
@@ -263,8 +328,15 @@ class CompoundingLedger:
                     f"{name}: a {tier} cannot compose into a {parent.tier}"
                 )
 
-        self.assert_may_add_component(session)
-
+        if maturity_rank(maturity) < 0:
+            raise PrematureMaturityError(
+                f"{name}: {maturity!r} is not on the growth path"
+            )
+        if requires_external_evidence(maturity):
+            raise PrematureMaturityError(
+                f"{name}: cannot be registered at {maturity} — that level is "
+                "reached by recording external proof, never by declaring it"
+            )
         record = ComponentRecord(
             name=name,
             tier=tier,
@@ -272,6 +344,7 @@ class CompoundingLedger:
             expected_external_consequence=expected_external_consequence.strip(),
             proof_deadline=_now() + timedelta(days=int(proof_deadline_days)),
             state="PROVISIONAL",
+            maturity=maturity,
             parent_id=parent_id,
         )
         session.add(record)
@@ -388,6 +461,8 @@ class CompoundingLedger:
             component.best_evidence_tier or ""
         ):
             component.best_evidence_tier = evidence_tier
+        if maturity_rank(component.maturity) < maturity_rank("PROVEN"):
+            component.maturity = "PROVEN"
         if component.state == "PROVISIONAL":
             component.state = "PROVEN"
             component.verdict = "INTEGRATE"
@@ -408,6 +483,129 @@ class CompoundingLedger:
             for p in session.query(ProofRecord).all()
             if p.component_id == component_id
         ]
+
+    # ----------------------------------------------------------------- #
+    # Growth: blueprint → sketched → built → exercised → proven → hardened
+    # ----------------------------------------------------------------- #
+
+    def advance(
+        self,
+        session: Any,
+        component_id: str,
+        *,
+        to: str,
+        note: str = "",
+    ) -> ComponentRecord:
+        """Move a component one step up its growth path.
+
+        Three refusals shape this. A level may not be skipped, because the
+        skipped step is exactly the work nobody did. The top two levels may
+        not be reached through this method at all: PROVEN comes from
+        record_proof and HARDENED from harden, both of which need evidence
+        from outside. And starting construction counts against the ceiling,
+        so a component cannot be quietly nudged into being half-built while
+        a dozen other half-built things wait on proof.
+        """
+        component = self.get(session, component_id)
+        if component is None:
+            raise CompoundingError(f"unknown component {component_id}")
+
+        target, current = maturity_rank(to), maturity_rank(component.maturity)
+        if target < 0:
+            raise PrematureMaturityError(f"{to!r} is not on the growth path")
+        if requires_external_evidence(to):
+            raise PrematureMaturityError(
+                f"{component.name}: {to} is earned by evidence from outside "
+                "this system, not by advancing into it"
+            )
+        if target <= current:
+            raise PrematureMaturityError(
+                f"{component.name}: already at {component.maturity}, and this "
+                "path does not run backwards"
+            )
+        if target > current + 1:
+            raise PrematureMaturityError(
+                f"{component.name}: {component.maturity} to {to} skips "
+                f"{MATURITY_LEVELS[current + 1]}, which is the step that "
+                "would have been the work"
+            )
+        if to in IN_CONSTRUCTION and component.maturity not in IN_CONSTRUCTION:
+            self.assert_may_construct(session)
+
+        component.maturity = to
+        if note:
+            component.hardening_evidence.append(f"{to}: {note}")
+        logger.info(
+            "component_advanced",
+            extra={"component": component.name, "maturity": to},
+        )
+        return component
+
+    def harden(
+        self,
+        session: Any,
+        component_id: str,
+        *,
+        survived_failure_mode: str,
+    ) -> ComponentRecord:
+        """The last level: proven repeatedly, and it held when attacked.
+
+        A feature that worked once worked once. HARDENED means the external
+        consequence repeated, and that the component was put under a named
+        failure condition and did not collapse. Both halves are required:
+        repetition without adversity is luck, and adversity without
+        repetition is an anecdote.
+        """
+        component = self.get(session, component_id)
+        if component is None:
+            raise CompoundingError(f"unknown component {component_id}")
+        if component.maturity != "PROVEN":
+            raise PrematureMaturityError(
+                f"{component.name}: hardening starts from PROVEN, not "
+                f"{component.maturity}"
+            )
+        if not (survived_failure_mode or "").strip():
+            raise PrematureMaturityError(
+                f"{component.name}: name the failure mode it survived, or "
+                "this is a claim that nothing was ever tried against it"
+            )
+
+        admitted = [p for p in self.proofs_for(session, component_id) if p.admitted]
+        if len(admitted) < HARDENING_PROOF_COUNT:
+            raise PrematureMaturityError(
+                f"{component.name}: {len(admitted)} external proof(s), "
+                f"{HARDENING_PROOF_COUNT} required — once is luck"
+            )
+
+        component.survived_failure_modes.append(survived_failure_mode.strip())
+        if len(component.survived_failure_modes) < HARDENING_FAILURE_MODES:
+            raise PrematureMaturityError(
+                f"{component.name}: needs {HARDENING_FAILURE_MODES} survived "
+                "failure mode(s)"
+            )
+        component.maturity = "HARDENED"
+        logger.info("component_hardened", extra={"component": component.name})
+        return component
+
+    def next_step(self, session: Any, component: ComponentRecord) -> Dict[str, Any]:
+        """What this component would have to do to grow one level."""
+        rank = maturity_rank(component.maturity)
+        if component.maturity == "HARDENED":
+            return {"level": None, "requires": "nothing: this one is finished"}
+        nxt = MATURITY_LEVELS[rank + 1]
+        if nxt == "PROVEN":
+            requires = component.expected_external_consequence
+        elif nxt == "HARDENED":
+            admitted = len(
+                [p for p in self.proofs_for(session, component.id) if p.admitted]
+            )
+            requires = (
+                f"{HARDENING_PROOF_COUNT - admitted} more external proof(s), "
+                "and one named failure mode survived"
+            )
+        else:
+            requires = f"build it to {nxt.lower()}"
+        return {"level": nxt, "requires": requires}
 
     # ----------------------------------------------------------------- #
     # Verdicts
@@ -573,14 +771,36 @@ class CompoundingLedger:
         else:
             verdict = "COMPOUNDING"
 
+        by_maturity = {
+            level: len([c for c in live if c.maturity == level])
+            for level in MATURITY_LEVELS
+        }
+        frontier = sorted(
+            (c for c in live if c.maturity != "HARDENED"),
+            key=lambda c: (-maturity_rank(c.maturity), tier_rank(c.tier)),
+        )[:5]
+
         return {
             "verdict": verdict,
             "components": len(live),
+            "blueprint_size": len(live),
             "proven": len(proven),
+            "by_maturity": by_maturity,
+            "in_construction": self.architecture_debt(session),
+            "may_construct": self.architecture_debt(session)
+            < ARCHITECTURE_DEBT_CEILING,
+            "growth_frontier": [
+                {
+                    "component": c.name,
+                    "tier": c.tier,
+                    "at": c.maturity,
+                    "next": self.next_step(session, c),
+                }
+                for c in frontier
+            ],
             "proof_ratio": round(ratio, 3),
             "architecture_debt": self.architecture_debt(session),
             "architecture_debt_ceiling": ARCHITECTURE_DEBT_CEILING,
-            "may_add_component": self.architecture_debt(session) < ARCHITECTURE_DEBT_CEILING,
             "by_tier": by_tier,
             "highest_proven_tier": max(
                 (c.tier for c in proven), key=tier_rank, default=None
@@ -599,6 +819,14 @@ class CompoundingLedger:
 __all__ = [
     "ARCHITECTURE_DEBT_CEILING",
     "COMPONENT_STATES",
+    "FIRST_EXTERNAL_LEVEL",
+    "HARDENING_FAILURE_MODES",
+    "HARDENING_PROOF_COUNT",
+    "IN_CONSTRUCTION",
+    "MATURITY_LEVELS",
+    "PrematureMaturityError",
+    "maturity_rank",
+    "requires_external_evidence",
     "COMPOUNDING_DIMENSIONS",
     "CompoundingError",
     "CompoundingLedger",

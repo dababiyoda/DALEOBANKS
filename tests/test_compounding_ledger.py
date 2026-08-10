@@ -20,15 +20,19 @@ from services.compounding_ledger import (
     ARCHITECTURE_DEBT_CEILING,
     COMPOUNDING_DIMENSIONS,
     FORCED_VERDICTS,
+    HARDENING_PROOF_COUNT,
+    MATURITY_LEVELS,
     MINIMUM_PROOF_TIER,
     TIERS,
     ArchitectureDebtError,
     CompoundingLedger,
     InsufficientProofError,
+    PrematureMaturityError,
     SelfReferentialProofError,
     UndeclaredCompoundingError,
     UnharvestedKillError,
     is_internal_reference,
+    requires_external_evidence,
     tier_rank,
 )
 
@@ -387,37 +391,60 @@ def test_the_lesson_outlives_the_component(ledger, session):
 # ------------------------------------------------------------------ #
 
 
-def test_debt_ceiling_stops_further_building(ledger, session):
-    for index in range(ARCHITECTURE_DEBT_CEILING):
-        _register(ledger, session, name=f"component {index}", tier="asset")
-    with pytest.raises(ArchitectureDebtError, match="before building more"):
-        _register(ledger, session, name="one more clever idea", tier="asset")
-
-
-def test_proving_something_reopens_the_ceiling(ledger, session):
-    """Negative control: the way past the ceiling is proof, and it works."""
+def _fill_construction(ledger, session):
     first = None
     for index in range(ARCHITECTURE_DEBT_CEILING):
-        record = _register(ledger, session, name=f"component {index}", tier="asset")
+        record = _register(
+            ledger, session, name=f"component {index}", tier="asset",
+            maturity="BUILT",
+        )
         first = first or record
+    return first
+
+
+def test_the_blueprint_is_never_rationed(ledger, session):
+    """The map must be completable: a thing with no map has nowhere to grow."""
+    _fill_construction(ledger, session)
+    for index in range(20):
+        assert _register(ledger, session, name=f"mapped {index}", tier="system")
+    assert len(ledger.blueprint(session)) == 20
+
+
+def test_recording_what_is_already_built_is_never_refused(ledger, session):
+    """A ledger that refuses facts is worse than no ledger."""
+    _fill_construction(ledger, session)
+    assert _register(
+        ledger, session, name="already exists", tier="asset", maturity="BUILT"
+    )
+
+
+def test_ceiling_stops_further_construction(ledger, session):
+    _fill_construction(ledger, session)
+    mapped = _register(ledger, session, name="the next thing", tier="asset")
+    with pytest.raises(ArchitectureDebtError, match="blueprint stays open"):
+        ledger.advance(session, mapped.id, to="SKETCHED")
+
+
+def test_proving_something_reopens_construction(ledger, session):
+    """Negative control: the way past the ceiling is proof, and it works."""
+    first = _fill_construction(ledger, session)
+    mapped = _register(ledger, session, name="the next thing", tier="asset")
     ledger.record_proof(
         session,
         first.id,
         evidence_tier="real_payment",
         external_reference="invoice 4471 settled by Banco Santander",
     )
-    admitted = _register(ledger, session, name="one earned idea", tier="asset")
-    assert admitted.state == "PROVISIONAL"
+    assert ledger.advance(session, mapped.id, to="SKETCHED").maturity == "SKETCHED"
 
 
-def test_harvesting_also_reopens_the_ceiling(ledger, session):
+def test_harvesting_also_reopens_construction(ledger, session):
     """Killing your own work is a legitimate way to earn the right to build."""
-    first = None
-    for index in range(ARCHITECTURE_DEBT_CEILING):
-        record = _register(ledger, session, name=f"component {index}", tier="asset")
-        first = first or record
+    first = _fill_construction(ledger, session)
+    mapped = _register(ledger, session, name="the next thing", tier="asset")
     ledger.harvest(session, first.id, lesson="this tier was never the constraint")
-    assert _register(ledger, session, name="a replacement", tier="asset")
+    ledger.kill(session, first.id, reason="wrong tier")
+    assert ledger.advance(session, mapped.id, to="SKETCHED")
 
 
 # ------------------------------------------------------------------ #
@@ -520,3 +547,118 @@ def test_a_component_cannot_compose_into_itself(ledger, session):
     record = _register(ledger, session)
     with pytest.raises(UndeclaredCompoundingError, match="into itself"):
         ledger.compose(session, record.id, record.id)
+
+
+# ------------------------------------------------------------------ #
+# The growth path: slightly built, then maximized into hardened
+# ------------------------------------------------------------------ #
+
+
+def test_growth_path_runs_blueprint_to_hardened():
+    assert MATURITY_LEVELS[0] == "BLUEPRINT"
+    assert MATURITY_LEVELS[-1] == "HARDENED"
+    assert requires_external_evidence("PROVEN") is True
+    assert requires_external_evidence("BUILT") is False
+
+
+def test_a_component_starts_as_a_coordinate_not_an_achievement(ledger, session):
+    assert _register(ledger, session).maturity == "BLUEPRINT"
+
+
+def test_skipping_a_level_is_refused(ledger, session):
+    record = _register(ledger, session)
+    with pytest.raises(PrematureMaturityError, match="would have been the work"):
+        ledger.advance(session, record.id, to="EXERCISED")
+
+
+def test_one_level_at_a_time_is_permitted(ledger, session):
+    """Negative control: the ladder is climbable."""
+    record = _register(ledger, session)
+    for level in ("SKETCHED", "BUILT", "EXERCISED"):
+        assert ledger.advance(session, record.id, to=level).maturity == level
+
+
+def test_the_path_does_not_run_backwards(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    with pytest.raises(PrematureMaturityError, match="does not run backwards"):
+        ledger.advance(session, record.id, to="SKETCHED")
+
+
+def test_proven_cannot_be_declared_at_registration(ledger, session):
+    with pytest.raises(PrematureMaturityError, match="never by declaring it"):
+        _register(ledger, session, maturity="PROVEN")
+
+
+def test_proven_cannot_be_reached_by_advancing(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    ledger.advance(session, record.id, to="EXERCISED")
+    with pytest.raises(PrematureMaturityError, match="outside this system"):
+        ledger.advance(session, record.id, to="PROVEN")
+
+
+def test_external_proof_is_the_only_door_to_proven(ledger, session):
+    """Negative control: the door exists and opens."""
+    record = _register(ledger, session, maturity="BUILT")
+    ledger.record_proof(
+        session,
+        record.id,
+        evidence_tier="real_payment",
+        external_reference="invoice 4471 settled by Banco Santander",
+    )
+    assert record.maturity == "PROVEN"
+
+
+def _prove(ledger, session, record, n):
+    for index in range(n):
+        ledger.record_proof(
+            session,
+            record.id,
+            evidence_tier="real_payment",
+            external_reference=f"invoice 447{index} settled by Banco Santander",
+        )
+
+
+def test_hardening_requires_more_than_one_success(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    _prove(ledger, session, record, 1)
+    with pytest.raises(PrematureMaturityError, match="once is luck"):
+        ledger.harden(session, record.id, survived_failure_mode="a payment reversed")
+
+
+def test_hardening_requires_surviving_something(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    _prove(ledger, session, record, HARDENING_PROOF_COUNT)
+    with pytest.raises(PrematureMaturityError, match="name the failure mode"):
+        ledger.harden(session, record.id, survived_failure_mode="")
+
+
+def test_hardening_cannot_start_below_proven(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    with pytest.raises(PrematureMaturityError, match="starts from PROVEN"):
+        ledger.harden(session, record.id, survived_failure_mode="an outage")
+
+
+def test_repeated_proof_plus_survived_attack_hardens(ledger, session):
+    """Negative control: the top of the ladder is reachable, and only so."""
+    record = _register(ledger, session, maturity="BUILT")
+    _prove(ledger, session, record, HARDENING_PROOF_COUNT)
+    hardened = ledger.harden(
+        session, record.id, survived_failure_mode="the payment processor went down"
+    )
+    assert hardened.maturity == "HARDENED"
+    assert hardened.survived_failure_modes == ["the payment processor went down"]
+
+
+def test_next_step_names_the_external_consequence_at_the_wall(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    ledger.advance(session, record.id, to="EXERCISED")
+    step = ledger.next_step(session, record)
+    assert step["level"] == "PROVEN"
+    assert step["requires"] == record.expected_external_consequence
+
+
+def test_next_step_is_empty_at_the_top(ledger, session):
+    record = _register(ledger, session, maturity="BUILT")
+    _prove(ledger, session, record, HARDENING_PROOF_COUNT)
+    ledger.harden(session, record.id, survived_failure_mode="an outage")
+    assert ledger.next_step(session, record)["level"] is None

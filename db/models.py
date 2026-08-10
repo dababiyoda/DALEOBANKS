@@ -1102,6 +1102,9 @@ class ComponentRecord:
     expected_external_consequence: str = ""
     proof_deadline: Optional[datetime] = None
     state: str = "PROVISIONAL"
+    maturity: str = "BLUEPRINT"
+    hardening_evidence: List[str] = field(default_factory=list)
+    survived_failure_modes: List[str] = field(default_factory=list)
     parent_id: Optional[str] = None
     admitted_proof_count: int = 0
     rejected_proof_count: int = 0

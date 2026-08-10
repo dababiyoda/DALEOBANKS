@@ -403,6 +403,7 @@ class DaleoBanks:
                         spec["expected_external_consequence"]
                     ),
                     proof_deadline_days=spec["proof_deadline_days"],
+                    maturity=spec.get("maturity", "BLUEPRINT"),
                 )
             except ArchitectureDebtError as exc:
                 refused.append({"name": spec["name"], "reason": str(exc)})
