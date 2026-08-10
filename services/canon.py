@@ -250,6 +250,152 @@ PORTFOLIO_MIX = (
 )
 
 
+
+# --------------------------------------------------------------------- #
+# The components of the larger work, and what each one owes
+# --------------------------------------------------------------------- #
+
+# Action → Asset → System → Business → Network → Infrastructure. Opus
+# Maximus is not on this list because it is not a component: it is what the
+# components add up to, and only if they compound.
+#
+# Every entry names the external consequence that would prove it earned its
+# place. The deadlines are short on purpose. A component that cannot touch
+# the world inside a quarter is not being built, it is being admired.
+OPUS_COMPONENTS = (
+    # Infrastructure: the four super-nodes everything else routes through.
+    {
+        "name": "eligibility super-node",
+        "tier": "infrastructure",
+        "dimensions": ["autonomy", "infrastructure"],
+        "expected_external_consequence":
+            "an outside party accepts a DALEOBANKS eligibility determination "
+            "for a decision it would otherwise have made itself",
+        "proof_deadline_days": 180,
+        "parent": None,
+    },
+    {
+        "name": "default routing super-node",
+        "tier": "infrastructure",
+        "dimensions": ["distribution", "infrastructure"],
+        "expected_external_consequence":
+            "a person outside the org reaches an opportunity through this "
+            "routing rather than through search",
+        "proof_deadline_days": 180,
+        "parent": None,
+    },
+    {
+        "name": "proof and truth super-node",
+        "tier": "infrastructure",
+        "dimensions": ["proof", "knowledge", "infrastructure"],
+        "expected_external_consequence":
+            "someone outside cites a DALEOBANKS claim record as their reason "
+            "for changing a position",
+        "proof_deadline_days": 180,
+        "parent": None,
+    },
+    {
+        "name": "cashflow and settlement super-node",
+        "tier": "infrastructure",
+        "dimensions": ["capital", "infrastructure"],
+        "expected_external_consequence":
+            "money moves in and is reconciled against a bank record",
+        "proof_deadline_days": 180,
+        "parent": None,
+    },
+    # Network: capable people who find each other here.
+    {
+        "name": "immigrant capability community",
+        "tier": "network",
+        "dimensions": ["capability", "distribution"],
+        "expected_external_consequence":
+            "two members who met here complete something neither would have "
+            "completed alone",
+        "proof_deadline_days": 120,
+        "parent": "default routing super-node",
+    },
+    {
+        "name": "collaboration and expert network",
+        "tier": "network",
+        "dimensions": ["capability", "knowledge"],
+        "expected_external_consequence":
+            "an expert with no prior relationship contributes to a research "
+            "lead and lets their name stand behind it",
+        "proof_deadline_days": 120,
+        "parent": "proof and truth super-node",
+    },
+    # Business: the thing that has to pay for the rest.
+    {
+        "name": "early cash engine",
+        "tier": "business",
+        "dimensions": ["capital", "autonomy"],
+        "expected_external_consequence":
+            "one real buyer pays for one real delivery and accepts it",
+        "proof_deadline_days": 90,
+        "parent": "cashflow and settlement super-node",
+    },
+    # Systems: the machinery that runs without being watched.
+    {
+        "name": "media operating system",
+        "tier": "system",
+        "dimensions": ["distribution", "knowledge"],
+        "expected_external_consequence":
+            "a published piece produces a reply from someone who was not "
+            "already in the audience",
+        "proof_deadline_days": 90,
+        "parent": "immigrant capability community",
+    },
+    {
+        "name": "opportunity router",
+        "tier": "system",
+        "dimensions": ["capital", "proof"],
+        "expected_external_consequence":
+            "WMI returns an assessment on a packet this system produced, "
+            "through the real intake and not the mock",
+        "proof_deadline_days": 90,
+        "parent": "early cash engine",
+    },
+    {
+        "name": "infinite goal chase",
+        "tier": "system",
+        "dimensions": ["capability", "proof"],
+        "expected_external_consequence":
+            "one aspiration gate clears on evidence from outside this process",
+        "proof_deadline_days": 90,
+        "parent": "proof and truth super-node",
+    },
+    # Assets: things that keep their value when the machinery stops.
+    {
+        "name": "owned audience list",
+        "tier": "asset",
+        "dimensions": ["distribution"],
+        "expected_external_consequence":
+            "one person consents to be reached off-platform and is reached",
+        "proof_deadline_days": 60,
+        "parent": "media operating system",
+    },
+    {
+        "name": "claim and evidence library",
+        "tier": "asset",
+        "dimensions": ["knowledge", "proof"],
+        "expected_external_consequence":
+            "an outside reader corrects a claim and the correction is published",
+        "proof_deadline_days": 60,
+        "parent": "media operating system",
+    },
+    # Action: the smallest unit that can actually be done today.
+    {
+        "name": "one daily edition",
+        "tier": "action",
+        "dimensions": ["distribution"],
+        "expected_external_consequence":
+            "one edition reaches one reader who did not ask for it and who "
+            "comes back for the next one",
+        "proof_deadline_days": 30,
+        "parent": "owned audience list",
+    },
+)
+
 def default_declaration(founder: str = "Alfonso Lopez",
                         timezone: str = "America/New_York") -> Dict[str, Any]:
     """A declaration carrying the mandate's canon, missing only what is owned.
@@ -307,5 +453,5 @@ def default_declaration(founder: str = "Alfonso Lopez",
 __all__ = [
     "FLAGSHIP_CHANNEL", "COMMUNITY", "PILLARS", "RABBIT_HOLE", "DAILY_NEWS",
     "LANGUAGE_LANES", "CANDIDATE_PRIMITIVES", "DISPOSITION_GUIDANCE",
-    "PORTFOLIO_MIX", "default_declaration",
+    "PORTFOLIO_MIX", "OPUS_COMPONENTS", "default_declaration",
 ]

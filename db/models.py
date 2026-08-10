@@ -1090,6 +1090,54 @@ class PersonaVersion:
     created_at: datetime = field(default_factory=_utcnow)
 
 
+
+@dataclass
+class ComponentRecord:
+    """One piece of the larger work, and the deadline on its proof."""
+
+    id: str = field(default_factory=_uuid)
+    name: str = ""
+    tier: str = "action"
+    dimensions: List[str] = field(default_factory=list)
+    expected_external_consequence: str = ""
+    proof_deadline: Optional[datetime] = None
+    state: str = "PROVISIONAL"
+    parent_id: Optional[str] = None
+    admitted_proof_count: int = 0
+    rejected_proof_count: int = 0
+    best_evidence_tier: Optional[str] = None
+    harvested: bool = False
+    verdict: Optional[str] = None
+    verdict_reason: Optional[str] = None
+    created_at: datetime = field(default_factory=_utcnow)
+    resolved_at: Optional[datetime] = None
+
+
+@dataclass
+class ProofRecord:
+    """A claim that a component caused something outside this system."""
+
+    id: str = field(default_factory=_uuid)
+    component_id: str = ""
+    evidence_tier: str = "aspiration"
+    external_reference: str = ""
+    description: str = ""
+    admitted: bool = False
+    rejection_reason: Optional[str] = None
+    recorded_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass
+class HarvestRecord:
+    """What was learned, extracted before the thing that taught it is removed."""
+
+    id: str = field(default_factory=_uuid)
+    component_id: str = ""
+    lesson: str = ""
+    transferable_to: List[str] = field(default_factory=list)
+    cost_paid: str = ""
+    recorded_at: datetime = field(default_factory=_utcnow)
+
 __all__ = [
     "Tweet",
     "Action",
@@ -1143,4 +1191,7 @@ __all__ = [
     "IncidentRecord",
     "ExperimentProposal",
     "PersonaVersion",
+    "ComponentRecord",
+    "ProofRecord",
+    "HarvestRecord",
 ]

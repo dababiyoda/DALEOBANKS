@@ -29,10 +29,12 @@ def main(argv: list[str] | None = None) -> int:
         description="Run the DALEOBANKS institution from a founder declaration.",
     )
     parser.add_argument(
-        "command", choices=["validate", "preflight", "seed", "run", "report", "canon"],
+        "command",
+        choices=["validate", "preflight", "seed", "run", "report", "canon", "opus"],
         help="validate the declaration, show what is authorized, seed the "
              "canonical structure, run one shadow cycle, print the report, "
-             "or dump the canon the defaults come from",
+             "dump the canon the defaults come from, or ask what the work has "
+             "actually done outside itself",
     )
     parser.add_argument("--declaration", default=DEFAULT_DECLARATION_PATH)
     args = parser.parse_args(argv)
@@ -84,7 +86,14 @@ def main(argv: list[str] | None = None) -> int:
     init_db()
     with get_db_session() as session:
         if args.command == "seed":
-            _emit(institution.seed_canon(session))
+            _emit({
+                "canon": institution.seed_canon(session),
+                "opus": institution.seed_opus(session),
+            })
+        elif args.command == "opus":
+            # Seeding is idempotent, so this verb works on a cold store.
+            institution.seed_opus(session)
+            _emit(institution.opus_report(session))
         elif args.command == "run":
             _emit(institution.run_cycle(session))
         else:

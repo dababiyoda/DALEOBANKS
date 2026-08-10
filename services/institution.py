@@ -47,6 +47,9 @@ REQUIRED_CAMPAIGN_FIELDS = (
 REQUIRED_TOP_LEVEL = ("founder", "timezone", "campaign", "accounts")
 
 
+from db.models import ComponentRecord
+
+
 class DeclarationError(ValueError):
     """The declaration is incomplete or asks for authority it cannot grant."""
 
@@ -180,6 +183,7 @@ class DaleoBanks:
         from services.goal_chase import GoalChaseScheduler
         from services.incident_posture import IncidentPosture
         from services.media_operating_system import MediaOperatingSystem
+        from services.compounding_ledger import CompoundingLedger
         from services.participant_ladder import ParticipantLadder
 
         self.accounts = AccountRegistry()
@@ -189,6 +193,7 @@ class DaleoBanks:
         self.ladder = ParticipantLadder()
         self.dependencies = DependencyRegistry()
         self.incidents = IncidentPosture()
+        self.opus = CompoundingLedger()
 
     @classmethod
     def from_declaration(cls, path: str = DEFAULT_DECLARATION_PATH) -> "DaleoBanks":
@@ -359,6 +364,106 @@ class DaleoBanks:
                 "structure only; no handle, credential, authority, or claim "
                 "that anyone has walked it"
             ),
+        }
+
+    def seed_opus(self, session: Any) -> Dict[str, Any]:
+        """Register the components of the larger work, and let the ceiling bite.
+
+        The canon lists thirteen components. The debt ceiling admits twelve
+        unproven ones. That is not a sizing mistake to be tuned away: the
+        thirteenth is refused, in the first second of the first run, before
+        anything has been built badly. Construction is rationed by proof from
+        the beginning, and the refusal is in the output where it can be read.
+        """
+        from services.canon import OPUS_COMPONENTS
+        from services.compounding_ledger import ArchitectureDebtError, tier_rank
+
+        by_name: Dict[str, str] = {
+            c.name: c.id for c in session.query(ComponentRecord).all()
+        }
+        registered: List[str] = []
+        refused: List[Dict[str, str]] = []
+
+        # Cheapest first. When the ceiling bites it must refuse the most
+        # abstract component, never the one closest to a real consequence:
+        # the failure mode being guarded against is a finished cathedral with
+        # no door.
+        ordered = sorted(OPUS_COMPONENTS, key=lambda spec: tier_rank(spec["tier"]))
+
+        for spec in ordered:
+            if spec["name"] in by_name:
+                continue
+            try:
+                record = self.opus.register(
+                    session,
+                    name=spec["name"],
+                    tier=spec["tier"],
+                    dimensions=spec["dimensions"],
+                    expected_external_consequence=(
+                        spec["expected_external_consequence"]
+                    ),
+                    proof_deadline_days=spec["proof_deadline_days"],
+                )
+            except ArchitectureDebtError as exc:
+                refused.append({"name": spec["name"], "reason": str(exc)})
+                continue
+            by_name[record.name] = record.id
+            registered.append(record.name)
+
+        # Composition runs after, upward, and only between components that
+        # both survived the ceiling.
+        composed = 0
+        for spec in ordered:
+            parent = spec.get("parent")
+            if not parent:
+                continue
+            child_id, parent_id = by_name.get(spec["name"]), by_name.get(parent)
+            if child_id and parent_id:
+                self.opus.compose(session, child_id, parent_id)
+                composed += 1
+
+        session.commit()
+        return {
+            "registered": len(registered),
+            "composed": composed,
+            "refused": refused,
+            "note": (
+                "each component owes one external consequence by a deadline; "
+                "refusals here are the ceiling working, not a failure to seed"
+            ),
+        }
+
+    def opus_report(self, session: Any) -> Dict[str, Any]:
+        """What the larger work has actually done outside itself.
+
+        This is the report that is allowed to be unflattering about the rest
+        of the repository, including the parts that were hardest to build.
+        """
+        report = self.opus.compounding_report(session)
+        report["local_optimum_warning"] = report["verdict"] in (
+            "ARCHITECTURE_ONLY",
+            "MOSTLY_UNPROVEN",
+        )
+        report["cheapest_real_world_test"] = self._cheapest_real_test(session)
+        return report
+
+    def _cheapest_real_test(self, session: Any) -> Dict[str, Any]:
+        """The lowest-tier unproven component: the shortest path to reality."""
+        from services.compounding_ledger import tier_rank
+
+        candidates = [
+            c for c in self.opus.unproven(session)
+        ]
+        if not candidates:
+            return {"component": None, "action": "nothing unproven is pending"}
+        cheapest = min(candidates, key=lambda c: tier_rank(c.tier))
+        return {
+            "component": cheapest.name,
+            "tier": cheapest.tier,
+            "action": cheapest.expected_external_consequence,
+            "due": cheapest.proof_deadline.isoformat()
+            if cheapest.proof_deadline
+            else None,
         }
 
     def daily_edition(
@@ -618,6 +723,7 @@ class DaleoBanks:
             "GAP_MAP": self.chase.gap_map(session),
             "DECLARATION_GAPS": self.declaration.gaps(),
             "NEXT_ACTION": self._chase_step(session),
+            "OPUS_COMPOUNDING": self.opus_report(session),
             "FOUNDER_INTENT_PRESERVED": True,
             "generated_at": _now().isoformat(),
             "generated_from": "durable store and registries, not hand-entered",
