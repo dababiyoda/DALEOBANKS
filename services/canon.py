@@ -434,6 +434,30 @@ OPUS_COMPONENTS = (
        "one person is handed off with disclosure and consent and reports the "
        "outcome", 150, parent="eligibility super-node"),
 
+    _c("campaign planner", "system", ["distribution", "proof"],
+       "a campaign hits a predeclared threshold it could have missed", 120,
+       maturity="BUILT", parent="media operating system"),
+    _c("scheduler", "system", ["autonomy", "distribution"],
+       "a scheduled action fires unattended and its failure is caught by its "
+       "own liveness guard rather than by a person noticing", 120,
+       maturity="BUILT", parent="automation loom"),
+    _c("risk classifier", "system", ["proof", "capability"],
+       "a high-risk draft is stopped before publication by the classifier and "
+       "an outside reviewer agrees it should have been", 120, maturity="BUILT",
+       parent="media operating system"),
+    _c("standing authority interface", "system",
+       ["autonomy", "infrastructure"],
+       "a routine action executes under standing authority with no founder in "
+       "the loop, and the audit reconstructs why it was permitted", 150,
+       maturity="BUILT", parent="institutional evidence spine"),
+    _c("publication receipt", "asset", ["proof"],
+       "a receipt is used to settle a dispute about what was published and "
+       "when", 90, maturity="BUILT", parent="institutional evidence spine"),
+    _c("operating work packet", "asset", ["knowledge", "autonomy"],
+       "a fresh operator resumes the work from the packet alone, without "
+       "asking what was happening", 90, maturity="BUILT",
+       parent="institutional evidence spine"),
+
     # ---------------- asset: value that survives the machinery ----------
     _c("owned audience list", "asset", ["distribution"],
        "one person consents to be reached off-platform and is reached", 60,

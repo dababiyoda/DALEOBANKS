@@ -1,0 +1,361 @@
+{
+  "decision_id": "DB-DEC-006",
+  "title": "Build the layer that refuses to call construction progress",
+  "problem": "Fifteen services, five hundred and ninety tests, twenty-three adversarial controls with negative controls, thirty-one section 84 deliverables, and a composition root that runs a full cycle from a cold store. Zero consequences outside the repository. Section 79 names this failure and asks for a LOCAL_OPTIMUM_WARNING, but a warning that a human has to read and act on is a warning that competes with the pleasure of building. Nothing in the system was structurally capable of refusing more construction.",
+  "founder_intent_refs": [
+    "Master mandate section 79 anti-cathedral rule",
+    "Master mandate section 80 business reality outranks internal sophistication",
+    "Master mandate section 70 implemented versus intended destination",
+    "Master mandate section 48 commercial proof",
+    "Master mandate section 78 priority rule",
+    "Founder message: Opus Maximus should never become an excuse for endless architecture",
+    "Founder message: every layer should eventually produce measurable consequences outside your own conceptual system",
+    "Founder message: Action to Asset to System to Business to Network to Infrastructure",
+    "Founder message: does this increase capability, knowledge, capital, proof, distribution, autonomy, or infrastructure",
+    "Founder message: if yes integrate it, if no modify it, harvest what was learned, or kill it",
+    "Founder message: at least its complete blueprint is available, for future building",
+    "Founder message: features that are slightly built then get maximized into fully hardened level"
+  ],
+  "baseline": "Branch claude/daleobanks-complete-build-arqtg5 at 6f77db7. 547 tests. Section 84 list closed, 23 of 23 adversarial controls carrying negative controls, python -m daleobanks runnable with zero configuration. Participants 0, owned relationships 0, reconciled revenue 0, advancement actions 0, aspiration gates cleared 0, accounts ACTIVE 0.",
+  "alternatives": [
+    {
+      "name": "Raise LOCAL_OPTIMUM_WARNING as a report field",
+      "description": "Compute the section 79 condition and surface it in the report, leaving the decision to a human reader.",
+      "advantages": [
+        "No new refusal path that could block legitimate work",
+        "Smallest possible change to an already large branch"
+      ],
+      "disadvantages": [
+        "A warning competes with the pleasure of building and loses",
+        "The existing report already showed six zeros and construction continued through all of them"
+      ],
+      "revival_evidence": "A human demonstrably changes course on the warning alone, without a gate."
+    },
+    {
+      "name": "Stop building and wait for founder inputs",
+      "description": "Declare the work complete and hold until a handle, destination, budget ceiling, and source packet arrive.",
+      "advantages": [
+        "Adds nothing to a system that has produced nothing",
+        "Respects the founder's correction in the most literal way available"
+      ],
+      "disadvantages": [
+        "Leaves the failure mode intact for the next session",
+        "The absence of construction is not a mechanism against construction"
+      ],
+      "revival_evidence": "Founder instruction to halt."
+    },
+    {
+      "name": "Track maturity per component with no ceiling",
+      "description": "Record how far along each component is and report the distribution honestly, with no refusal.",
+      "advantages": [
+        "Honest and never obstructs work",
+        "Gives future operators the map without the friction"
+      ],
+      "disadvantages": [
+        "A more precise description of the same failure",
+        "Measurement without a gate has already been tried, in the report"
+      ],
+      "revival_evidence": "Evidence that the ceiling blocks more real proof than it forces."
+    },
+    {
+      "name": "Ceiling on registration",
+      "description": "Refuse to record new components once unproven ones accumulate past a limit.",
+      "advantages": [
+        "Simplest possible implementation of the founder's correction",
+        "Bites immediately and cannot be ignored"
+      ],
+      "disadvantages": [
+        "Refuses the map rather than the building, leaving future work nothing to build toward",
+        "Empirically refused the most concrete component while admitting the most abstract"
+      ],
+      "revival_evidence": "Evidence that a complete map causes more harm than an incomplete one."
+    },
+    {
+      "name": "Ceiling on advancement, blueprint unrationed",
+      "description": "Map freely, record what is already true freely, and ration only the act of moving a component further along while nothing has been proven.",
+      "advantages": [
+        "Keeps the blueprint complete, which the founder required",
+        "Rations the exact action that constitutes endless architecture",
+        "Leaves proof ungated, so the door out of the ceiling is always open"
+      ],
+      "disadvantages": [
+        "The ceiling number has no empirical basis",
+        "A complete sixty-two-component map can make an empty territory feel occupied"
+      ],
+      "revival_evidence": "Selected. Revisit if advancement refusals block work that would have produced proof."
+    }
+  ],
+  "do_nothing_option": {
+    "expected_outcome": "Construction continues at the current rate. Each new service is individually defensible, tested, and guarded. The count of external consequences stays at zero and the system becomes more expensive to abandon with every commit.",
+    "advantages": [
+      "No new surface, no new refusal path that could block legitimate work",
+      "The existing report already states the zeros truthfully"
+    ],
+    "disadvantages": [
+      "The named failure mode has no mechanism opposing it",
+      "Sunk cost grows monotonically while proof stays at zero",
+      "A future operator inherits sophistication with no way to tell which parts were ever needed"
+    ]
+  },
+  "roles": [
+    {
+      "role": "Founder-Intent Steward",
+      "position": "The founder's correction was specific and it was not a request for a report field. Opus Maximus is the accumulation, the components are not the destination, and the test named seven dimensions and three disposals: modify, harvest, kill. Encoding that test as a gate is the literal instruction. The hierarchy given is a tier system and belongs in the code as one.",
+      "concessions": "The founder also said the blueprint must be complete and available for future building, which the first ceiling design violated."
+    },
+    {
+      "role": "Adversarial Reviewer",
+      "position": "Attack the obvious bypass first: a component citing another component as evidence it worked. That is how a closed system proves itself and it is the exact mechanism that produced the current state. Second bypass: declaring a maturity level rather than earning it. Third: killing something quietly to reduce the count.",
+      "concessions": "A ceiling is a blunt instrument and a wrong ceiling number blocks legitimate work. It must gate the narrowest possible action."
+    },
+    {
+      "role": "Evidence and Welfare Guardian",
+      "position": "The evidence hierarchy already exists in the aspiration registry and must not be forked. A component may not be easier to prove than a goal. Repository paths, simulations, shadow receipts, and dry runs are not consequences and the refusal must name which one it caught.",
+      "concessions": "Recording something as already built is a fact and refusing facts would make the ledger less truthful, not more."
+    },
+    {
+      "role": "Operating Engineer",
+      "position": "Everything downstream of this gate becomes unreachable unless a person can operate it from outside. If the only way to record proof is a Python import, the gate is a wall and the first real consequence never gets recorded because recording it was inconvenient.",
+      "concessions": "Command-line verbs widen the surface and each needs its refusal path tested."
+    },
+    {
+      "role": "Institutional Historian",
+      "position": "Killing without harvesting destroys the one asset a failure reliably produces. The lesson must outlive its source or the tuition is paid twice, and section 77 forbids rewriting history as though only the latest phrase existed.",
+      "concessions": "Requiring a lesson before a kill adds friction to the act of stopping, which is already the hardest act to take."
+    }
+  ],
+  "evidence": [
+    {
+      "claim": "The system has produced no external consequence.",
+      "tier": "primary_source",
+      "reference": "governance/operating_work_packet.json and DaleoBanks.report: participants 0, owned relationships 0, reconciled revenue 0, advancement actions 0, gates cleared 0, accounts ACTIVE 0",
+      "confidence": "high"
+    },
+    {
+      "claim": "Construction continued through five consecutive commits after the zeros were visible in the report.",
+      "tier": "primary_source",
+      "reference": "git log aad836f through 6f77db7",
+      "confidence": "high"
+    },
+    {
+      "claim": "An evidence hierarchy with an external threshold already exists and can be reused rather than forked.",
+      "tier": "primary_source",
+      "reference": "services/aspiration_registry.py EVIDENCE_HIERARCHY and MINIMUM_GATE_CLEARANCE_TIER",
+      "confidence": "high"
+    },
+    {
+      "claim": "Ceiling-on-registration refuses the wrong thing, empirically.",
+      "tier": "reproduced_test",
+      "reference": "First seeding run refused 'one daily edition', the lowest-tier and most concrete component, while admitting four infrastructure super-nodes",
+      "confidence": "high"
+    }
+  ],
+  "counterevidence": [
+    {
+      "claim": "A ledger that reports ARCHITECTURE_ONLY about itself is one more piece of architecture.",
+      "tier": "other",
+      "reference": "Self-referential critique raised in pass 2",
+      "force": "Substantial and not fully answerable. The ledger is registered as a component at BUILT with its own deadline and its own required external consequence, so it is subject to its own rule, but that is a consistency property rather than a refutation."
+    },
+    {
+      "claim": "The ceiling number is arbitrary.",
+      "tier": "other",
+      "reference": "No empirical basis for twelve rather than eight or twenty",
+      "force": "Real. Mitigated by gating only advancement, which makes a wrong number costly in delay rather than in lost information, and by leaving the blueprint unrationed."
+    },
+    {
+      "claim": "Refusing construction could block work that would have produced proof.",
+      "tier": "other",
+      "reference": "Raised by the Operating Engineer",
+      "force": "Answered by the asymmetry: prove is never gated. The only door out of the ceiling is the door the ceiling exists to push work toward."
+    }
+  ],
+  "pass_1": {
+    "intended_outcome": "A ledger that tiers every component on the founder's hierarchy, requires each to declare which of the seven dimensions it increases and what external consequence should follow, forces a verdict at a deadline from which INTEGRATE is absent, and refuses to let anything be killed unharvested.",
+    "advantages": [
+      {
+        "id": "A1",
+        "statement": "The seven-dimension test becomes a registration requirement rather than a question someone might ask.",
+        "amplified_value": "A component that cannot name its consequence in advance can name any outcome afterwards as success, and that door closes at registration time."
+      },
+      {
+        "id": "A2",
+        "statement": "Proof is defined as external by construction, reusing the existing hierarchy.",
+        "amplified_value": "One bar for goals and components, so a component cannot be easier to prove than the aspiration it serves."
+      },
+      {
+        "id": "A3",
+        "statement": "Deadlines force disposal rather than accumulation.",
+        "amplified_value": "Modify, harvest, kill are the founder's three disposals, and INTEGRATE being absent past the deadline is what makes them real."
+      },
+      {
+        "id": "A4",
+        "statement": "Harvest before kill preserves the knowledge dimension even from failures.",
+        "amplified_value": "Failure becomes a contribution to the accumulation rather than a subtraction from it."
+      }
+    ],
+    "disadvantages": [
+      {
+        "id": "D1",
+        "statement": "The ledger is itself architecture, added in response to a warning about too much architecture.",
+        "severity": "high"
+      },
+      {
+        "id": "D2",
+        "statement": "The ceiling number has no empirical basis.",
+        "severity": "medium"
+      },
+      {
+        "id": "D3",
+        "statement": "A ceiling on registration prevents the blueprint from being completed.",
+        "severity": "high"
+      },
+      {
+        "id": "D4",
+        "statement": "Nothing can be operated without importing the module.",
+        "severity": "medium"
+      }
+    ],
+    "comparisons": {
+      "baseline": "Zeros visible in the report, construction continuing through them, no mechanism opposing it.",
+      "do_nothing": "Rejected: the absence of construction is not a mechanism against construction.",
+      "simplest_viable_alternative": "LOCAL_OPTIMUM_WARNING as a report field. Rejected: the existing report already showed six zeros and did not stop anything.",
+      "strongest_competing_architecture": "Maturity tracking with no ceiling. Rejected: a more precise description of the same failure.",
+      "reversible_experiment": "Three additive dataclasses and one service on a stacked draft branch. Nothing seeded outside the store, no authority, no credential, no external effect."
+    },
+    "rejected_alternatives": [
+      {
+        "name": "Report field only",
+        "rejection_reason": "Competes with the pleasure of building and loses.",
+        "revival_evidence": "A human demonstrably acts on the warning without a gate."
+      },
+      {
+        "name": "Ceiling on registration",
+        "rejection_reason": "Refuses the map instead of the building, and refused the most concrete component first.",
+        "revival_evidence": "Evidence that a complete map causes more harm than an incomplete one."
+      },
+      {
+        "name": "Stop and wait",
+        "rejection_reason": "Leaves the failure mode intact for the next session.",
+        "revival_evidence": "Founder instruction to halt."
+      }
+    ]
+  },
+  "pass_2": {
+    "attack_summary": "Attacked the design for self-reference, for gating the wrong action, for being unoperable from outside, for permitting a component to declare its own maturity, for permitting quiet deletion, and for the possibility that a complete blueprint is itself a form of endless architecture.",
+    "new_weaknesses": [
+      {
+        "id": "N1",
+        "category": "self_reference",
+        "statement": "A component could cite another component in the same ledger as evidence that it worked, which is exactly how a closed system proves itself.",
+        "strengthening_response": "record_proof scans the external reference against every component name in the ledger and against markers for repository paths, simulations, shadow runs, and dry runs, and refuses with SelfReferentialProofError naming which one it caught. The refused attempt is still recorded, because a refusal is a finding about the world rather than an absence of one."
+      },
+      {
+        "id": "N2",
+        "category": "wrong_gate",
+        "statement": "Gating registration blocks the map, which the founder explicitly required to be complete and available for future building.",
+        "strengthening_response": "The ceiling moved from registration to advancement. Mapping is unrationed and recording something as already built is never refused. What is rationed is moving a component further along while nothing has produced a consequence."
+      },
+      {
+        "id": "N3",
+        "category": "declared_maturity",
+        "statement": "A component could be registered at PROVEN or advanced into it, which would make the whole ladder decorative.",
+        "strengthening_response": "PROVEN and HARDENED are refused at registration and refused by advance. PROVEN is set only by record_proof admitting external evidence; HARDENED requires three admitted proofs plus a named survived failure mode, because once is luck and adversity without repetition is an anecdote. Levels also cannot be skipped, since the skipped step is precisely the work nobody did."
+      },
+      {
+        "id": "N4",
+        "category": "unoperable",
+        "statement": "A gate whose only handle is a Python import is a wall, and the first real consequence would go unrecorded because recording it was inconvenient.",
+        "strengthening_response": "Four command-line verbs: advance, prove, harvest, kill. Every refusal prints as the useful output rather than a stack trace. The asymmetry is deliberate: advance is refused while construction is over the ceiling and prove never is, because locking the only door out would make the ceiling permanent instead of a forcing function."
+      },
+      {
+        "id": "N5",
+        "category": "quiet_deletion",
+        "statement": "A component could be killed to reduce the count, taking its lesson with it.",
+        "strengthening_response": "kill refuses without a prior harvest, and harvest refuses without a lesson. The HarvestRecord outlives the component and appears in the report as lessons_banked."
+      },
+      {
+        "id": "N6",
+        "category": "seeding_order",
+        "statement": "Seeding in declaration order made the ceiling refuse the component closest to reality while admitting the most abstract.",
+        "strengthening_response": "Seeding sorts by tier ascending, so a refusal lands on the most abstract component rather than on the one nearest a consequence. This surfaced only by running it."
+      }
+    ],
+    "pass_1_disadvantage_dispositions": [
+      {
+        "disadvantage_id": "D1",
+        "outcome": "accepted",
+        "rationale": "Irreducible. Mitigated by registering the ledger as a component at BUILT with its own deadline and its own required external consequence, so it is subject to the rule it enforces. It is architecture that makes further architecture more expensive, which is the only defensible kind to add here."
+      },
+      {
+        "disadvantage_id": "D2",
+        "outcome": "mitigated",
+        "rationale": "Gating advancement rather than registration makes a wrong number cost delay rather than lost information, and the blueprint stays complete regardless of the number."
+      },
+      {
+        "disadvantage_id": "D3",
+        "outcome": "resolved",
+        "rationale": "The ceiling moved to advancement. The blueprint is now sixty-two components and unrationed."
+      },
+      {
+        "disadvantage_id": "D4",
+        "outcome": "resolved",
+        "rationale": "Four command-line verbs with tested refusal paths."
+      }
+    ],
+    "final_design": "services/compounding_ledger.py holds TIERS on the founder's hierarchy, COMPOUNDING_DIMENSIONS as the seven named quantities, MATURITY_LEVELS from BLUEPRINT to HARDENED with PROVEN as the first level requiring outside evidence, and ARCHITECTURE_DEBT_CEILING governing advancement only. db/models.py gains ComponentRecord, ProofRecord, HarvestRecord. services/canon.py carries the complete blueprint of sixty-two components across all six tiers, each naming its expected external consequence and its honest current maturity. services/institution.py composes the ledger, seeds the blueprint cheapest-first, and folds the compounding verdict into the section 89 report. daleobanks/__main__.py gains opus, advance, prove, harvest, kill.",
+    "residual_risks": [
+      {
+        "risk": "The ledger is never used and becomes another unexercised system.",
+        "mitigation": "It is registered as a component with a ninety-day deadline and an expected consequence of its own: a component killed or reshaped because it refused, with the resources going somewhere that works."
+      },
+      {
+        "risk": "The internal-reference marker list is a keyword heuristic and will miss a cleverly worded internal citation.",
+        "mitigation": "Component-name scanning covers the specific bypass that matters most. Error rates are unmeasured and stated as unmeasured."
+      },
+      {
+        "risk": "A complete sixty-two-component blueprint reads as a claim about what exists.",
+        "mitigation": "Every entry carries an explicit maturity and twenty-nine of them are BLUEPRINT. The report separates blueprint size from proven count in every view."
+      },
+      {
+        "risk": "The founder experiences the ceiling as obstruction rather than as a forcing function.",
+        "mitigation": "prove is never gated and the report always names the single cheapest real-world test."
+      }
+    ],
+    "recommendation": "RETAIN"
+  },
+  "dissent": {
+    "present": true,
+    "handling": "Binding on reporting. No summary of this branch may describe the institution as built, complete, or working without stating the proven count beside it.",
+    "entries": [
+      {
+        "role": "Adversarial Reviewer",
+        "position": "Adding a governor to a machine that has never been driven is still work on the machine rather than on the road. The strongest version of this objection is that the correct response to the founder's correction was zero commits, not four.",
+        "disposition": "Recorded and not resolved. The counterargument is that a session boundary would have erased the lesson while the ledger persists it, but that is an argument for the mechanism, not a refutation of the objection."
+      },
+      {
+        "role": "Evidence and Welfare Guardian",
+        "position": "ARCHITECTURE_ONLY is the honest verdict and it will stay the honest verdict until a person outside this repository does something because of it. Sixty-two mapped components and twenty-seven built ones change nothing about that number, and a complete map can make an empty territory feel occupied.",
+        "disposition": "Recorded and binding. The report states blueprint size and proven count in the same view and never one without the other."
+      }
+    ]
+  },
+  "authority_impact": {
+    "level": "standard",
+    "changes_authority": false,
+    "requires_authorized_human": false,
+    "approval_status": "not_required",
+    "notes": "No capability, credential, connector, publishing path, spending path, or scheduler activation. The ledger only ever narrows what the system will claim about itself. The four command-line verbs write to the local durable store and produce no external effect.",
+    "approver": null
+  },
+  "migration_plan": "Three additive dataclasses auto-registered by the existing durable store. One new service. Canon gains OPUS_COMPONENTS. Institution gains seed_opus, opus_report, and the cheapest-real-test helper, and folds OPUS_COMPOUNDING into the existing section 89 report. CLI gains five verbs. No existing behaviour changes and no existing record shape changes.",
+  "rollback_plan": {
+    "possible": true,
+    "steps": [
+      "Revert commits acac68e, 467f8f5, dba3fdf, and ac3b243.",
+      "The three dataclasses deserialize as unknown models and are ignored by the store loader.",
+      "No external state exists to reconcile, because the layer has produced none by construction."
+    ],
+    "reason_impossible": null
+  }
+}

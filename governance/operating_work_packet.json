@@ -134,7 +134,7 @@
     "Per-service unit tests do not catch integration defects. Composing the parts surfaced two immediately: AccountLane takes legal_principal not owner, and shadow_publish is a coroutine. Both were green in isolation.",
     "A CLI that writes logs to stdout is not pipeable. The shared logger did, and one DRY RUN line broke . Found only by running the thing end to end."
   ],
-  "tests": "612 passing",
+  "tests": "623 passing",
   "ci": "GITHUB_ACTIONS_CONFIGURED_ON_THIS_BRANCH; runs pytest from requirements.txt plus governance JSON parse on every push and PR",
   "strongest_counterargument": "The institution now boots from nothing, seeds its own canonical structure, and refuses every claim it has not earned. It is a complete, honest, runnable machine with zero participants. The defaults carry the mandate; they cannot carry a customer.",
   "next_smallest_implementation": "Four values: handle, destination, budget ceiling, source packet. Then run it.",
@@ -243,17 +243,17 @@
     ]
   },
   "opus_compounding": {
-    "blueprint": "56 components mapped across all six tiers \u2014 complete, so future work has a target",
+    "blueprint": "62 components across all six tiers \u2014 every section 84 deliverable now on the map",
     "maturity": {
       "BLUEPRINT": 29,
       "SKETCHED": 6,
-      "BUILT": 21,
+      "BUILT": 27,
       "EXERCISED": 0,
       "PROVEN": 0,
       "HARDENED": 0
     },
     "verdict": "ARCHITECTURE_ONLY",
-    "in_construction": "27 of a 12 ceiling \u2014 advancement is refused until something is proven",
+    "in_construction": "33 of a 12 ceiling \u2014 advancement refused until something is proven",
     "note": "The blueprint is never rationed and recording what is already built is never refused. What is rationed is advancing further while nothing has produced a consequence. PROVEN and HARDENED cannot be declared: PROVEN needs external evidence, HARDENED needs three of them plus a survived failure mode."
   }
 }

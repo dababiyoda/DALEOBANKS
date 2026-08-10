@@ -44,3 +44,5 @@ jobs:
               print("\n".join(bad)); sys.exit(1)
           print(f"{len(paths)} governance records parse")
           PY
+      - name: Validate deliberation records
+        run: python governance/validate_deliberation.py governance/deliberations
