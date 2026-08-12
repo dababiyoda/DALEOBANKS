@@ -12,6 +12,15 @@ required in both directions and verification failures fail closed.
 A valid signature proves sender authenticity ONLY. It never carries
 authorization: a perfectly signed assessment still has no execution
 authority and still routes through the human approval queue.
+
+IDENTITY ISOLATION LIMIT — read before trusting an identity here.
+All mirrors of this module share ONE ``WEALTHMACHINE_SIGNING_KEY``. A
+recognised identity is therefore a CLAIMED identity, not a
+cryptographically isolated per-service identity: any holder of the shared
+secret can assert any name in ``KNOWN_IDENTITIES``. This is adequate for
+distinguishing well-formed peers on a trusted channel and inadequate as
+an authentication boundary between mutually distrusting services.
+Per-service keys or mTLS is the hardening step; it is not done.
 """
 
 from __future__ import annotations
@@ -35,7 +44,11 @@ H_SCHEMA = "X-Schema-Version"
 H_SIGNATURE = "X-Signature"
 H_TRACE = "X-Trace-Id"
 
-KNOWN_IDENTITIES = frozenset({"daleobanks", "wealthmachine"})
+# "kernel" is TRANSPORT AUTHENTICATION ONLY. It lets kernel-originated payloads
+# be recognised as well-formed; it grants no execution rights whatsoever. A
+# kernel-signed message still passes signature, timestamp, nonce/replay, schema,
+# capability, approval and consequence gates exactly like any other sender.
+KNOWN_IDENTITIES = frozenset({"daleobanks", "wealthmachine", "kernel"})
 
 
 class BridgeSecurityError(PermissionError):
