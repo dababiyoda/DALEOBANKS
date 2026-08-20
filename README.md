@@ -79,6 +79,14 @@ After the stack is running:
 - Proxied health (through Express): `curl http://localhost:5000/api/health`
 - Config snapshot: `curl http://localhost:5001/config`
 
+## Governance and operating doctrine
+- [Constitution](constitution.md) — fixed runtime values; human commit required for amendments.
+- [Safety & rollout discipline](docs/SAFETY_AND_ROLLOUT.md) — ledger, kill switch, arming ceremony, gates, and platform rollout discipline.
+- [Idea Refinery & Venture Cockpit](docs/IDEA_REFINERY.md) — governed idea intake, opportunity packets, media drafts, and venture assessment flow.
+- [Lawful Market Infrastructure Builder](docs/LAWFUL_MARKET_INFRASTRUCTURE_BUILDER.md) — Notion operating spec for market-infrastructure thesis design.
+- [Founder Intent Ledger](docs/FOUNDER_INTENT_LEDGER.md) — material founder intent records, lifecycle states, conflict matrix, and review triggers.
+- [Recursive Collaboration Protocol](docs/RECURSIVE_COLLABORATION_PROTOCOL.md) — protocol for preserving intent, dissent, evidence, and reversible institutional updates.
+
 ## Project structure
 - `app.py` – FastAPI application and scheduler bootstrap
 - `server/index.ts` – Express/Vite server that spawns and proxies the backend
