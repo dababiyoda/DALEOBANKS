@@ -98,6 +98,34 @@ optional behind env config; everything runs in mock/local mode.
 - Phase 5 dashboard views; Phase 6 LLM harness; ValidationResult ingestion
   UI once real validation runs happen.
 
+## 11. RailScout doctrine integration boundary
+
+The RailScout doctrine is now captured as repository documentation in:
+
+- [`docs/RAILSCOUT_HEGEMONIC_BUSINESS_ARCHITECT.md`](RAILSCOUT_HEGEMONIC_BUSINESS_ARCHITECT.md)
+- [`docs/FOUNDER_INTENT_LEDGER_RAILSCOUT.md`](FOUNDER_INTENT_LEDGER_RAILSCOUT.md)
+
+This doctrine upgrades the venture cockpit's reasoning layer. It teaches the
+refinery to evaluate opportunities through buyer, payer, gatekeeper, proof
+artifact, validation threshold, control rail, moat path, legal/ethical risk,
+and next 14-day action.
+
+It does **not** grant runtime authority. The doctrine is subordinate to the
+constitution, kill switch, operator approval line, prompt firewall, identity
+gate, ethics guard, and decision ledger. The refinery may generate founder-
+review proposals; it may not autonomously perform outreach, contracting,
+fundraising, settlement, payment handling, identity changes, legal advice, or
+financial advice.
+
+The core operating sequence for venture assessment is:
+
+`pain discovery → narrow wedge → buyer/payer/gatekeeper map → paid diagnostic → manual service → SOP → proof artifact → proof standard → permission layer → routing layer → settlement trigger → compliance/audit layer → legitimacy/governance → institutional adoption → market default status → defensive hardening → capital preservation`.
+
+The primary evaluation metric is **Institutionally Expected Clearing
+Coverage**: the percentage of valuable workflow activity that clears through,
+references, depends on, or is materially improved by the proposed proof,
+permission, routing, compliance, or settlement rail.
+
 ## The wire contract (v1.0)
 `OpportunityPacket` → see `services/venture_protocol.py::packet_to_wire`
 (JSON: all dataclass fields + `schema_version`, ISO `created_at`).
