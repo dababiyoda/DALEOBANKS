@@ -213,6 +213,14 @@ async def _add_jobs():
         max_instances=1
     )
     
+    # Outcome pull: attach observed engagement to committed publishes
+    scheduler.add_job(
+        heartbeat.supervise('outcome_pull', outcome_pull_job),
+        IntervalTrigger(minutes=30, jitter=300),
+        id='outcome_pull',
+        max_instances=1
+    )
+    
     # KPI rollup job
     scheduler.add_job(
         heartbeat.supervise('kpi_rollup', kpi_rollup_job),
@@ -1206,6 +1214,24 @@ async def analytics_pull_job():
 
     except Exception as e:
         logger.error(f"Analytics pull job failed: {e}")
+
+async def outcome_pull_job():
+    """Attach observed engagement to committed publishes as gate outcomes.
+
+    Read-only against the platform; runs in any LIVE state. Zero
+    engagement is recorded as zero_response — a negative result, never
+    an absence.
+    """
+    try:
+        from services.outcome_pull import pull_publish_outcomes
+        summary = await pull_publish_outcomes(x_client)
+        if summary.get("recorded"):
+            await _log_action("outcomes_recorded", summary)
+        logger.info(f"Outcome pull: {summary}")
+
+    except Exception as e:
+        logger.error(f"Outcome pull job failed: {e}")
+
 
 async def kpi_rollup_job():
     """Calculate and store KPIs"""
