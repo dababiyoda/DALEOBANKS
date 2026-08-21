@@ -1,0 +1,33 @@
+{
+  "run_id": "2026-08-21T14-34-18.783574+00-00",
+  "recorded_at": "2026-08-21T14:34:18.783574+00:00",
+  "subject": "write-family gating: like/unlike/repost/follow/send_dm through the ConsequenceGate",
+  "repo": "dababiyoda/DALEOBANKS",
+  "branch": "phase5/write-family-gating",
+  "base": "phase5/consequence-gate-adoption",
+  "verifier_level": 1,
+  "evidence": {
+    "suite": "PERSIST_STORE=false python3 -m pytest tests/ -q --asyncio-mode=auto",
+    "result": "59 passed, 0 failed — two consecutive runs",
+    "new_tests": 17,
+    "kernel_sdk": "uniimente-kernel SDK 0.10.0, 184/184 unchanged (organ-only PR)",
+    "files_changed": [
+      "services/gate.py",
+      "services/x_client.py",
+      "tests/test_gate_writes.py"
+    ],
+    "conftest": "harness-only stub update; does not ship",
+    "byte_verification": "a /tmp wipe destroyed the pre-push worktree mid-session; the suite was re-run twice against the exact bytes fetched back from the pushed branch (59/59 both runs) — the pushed code is the tested code"
+  },
+  "invariants_checked": [
+    "no grant -> no effect, rejection ledgered (per family)",
+    "cross-family grant misuse structurally impossible (registry keyed per family)",
+    "dedupe without grant-use consumption; identical DM text never double-sends",
+    "transport refusal inside the gate receipts consequence.failed, never committed",
+    "kill switch and rate governor gate before authority; zero grant uses consumed",
+    "disabled feature family is inert and ledgers nothing",
+    "ledger carries sha256 of DM text, never plaintext",
+    "grant exhaustion fails closed",
+    "ledger hash chain verifies after every scenario"
+  ]
+}
