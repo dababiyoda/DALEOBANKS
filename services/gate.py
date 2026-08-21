@@ -1,16 +1,22 @@
-"""Consequence Gate wiring for the organ's publishing action family.
+"""Consequence Gate wiring for the organ's external action families.
 
-Every live outbound post crosses the kernel ConsequenceGate:
+Every live outbound effect crosses the kernel ConsequenceGate:
 
     evidence -> authority (capability grant) -> commit witness
     -> one-time execution -> receipt -> postcondition -> reconciliation
     -> outcome
 
-The boundary is total: ``publish_post`` sends *every* attempt through
-``gate.execute``, including attempts with no grant (which the gate
-rejects and ledgers). A rejection fails toward silence: the caller
-receives a dry-run result, exactly as it does for a disarmed kill
-switch. There is no unmediated live path in this family.
+Two families are mediated here:
+
+1. Publishing (``publish_post``) — posts, replies, quotes on every
+   social platform adapter.
+2. Engagement/DM writes (``execute_write``) — like, unlike, repost,
+   follow and send_dm on X. Every attempt crosses the gate, including
+   attempts with no grant (which the gate rejects and ledgers).
+
+The boundary is total within each family: a rejection fails toward
+silence — the caller receives the family's dry-run result, exactly as
+it does for a disarmed kill switch. There is no unmediated live path.
 
 Authority posture: grants mint only from verified operator approvals.
 The approval verifier is injected at ``configure`` time (app startup
@@ -34,7 +40,7 @@ from uniimente_kernel.commit_witness import CommitWitness
 from uniimente_kernel.events import EventSpine
 from uniimente_kernel.gate import ConsequenceGate
 
-from services.ledger import get_kill_switch, get_ledger
+from services.ledger import get_kill_switch, get_ledger, get_rate_governor
 from services.logging_utils import get_logger
 from services.social_base import SocialPostResult
 
@@ -218,10 +224,162 @@ async def publish_post(
     return await dry_run(kind=kind, metadata=metadata)
 
 
+# --- Engagement/DM write family -------------------------------------------
+
+WRITE_FAMILIES = ("like", "unlike", "repost", "send_dm", "follow")
+
+
+class WriteExecutionRefused(RuntimeError):
+    """The transport refused or failed inside a gated write executor.
+
+    Raised when the adapter's write helper returns the injected sentinel
+    (dry run, circuit open, rate-limit exhaustion, provider error). The
+    gate receipts the attempt as ``consequence.failed`` — never as a
+    success — and the family method returns its dry-run result.
+    """
+
+
+def mint_write_grant(
+    *,
+    platform: str,
+    family: str,
+    approval_request_id: str,
+    maximum_uses: int = 30,
+    objective: Optional[str] = None,
+) -> GrantRecord:
+    """Mint and register the active write grant for (platform, family).
+
+    ``family`` must be one of WRITE_FAMILIES. Raises CapabilityError if
+    the approval does not verify. Authority starts narrow: one platform,
+    one family, bounded uses, shadow stage.
+    """
+    if family not in WRITE_FAMILIES:
+        raise ValueError(f"unknown write family: {family!r}")
+    if _capability is None:
+        get_gate()
+    grant = GrantRecord(
+        grantee=AGENT,
+        granted_by=LEGAL_PRINCIPAL,
+        legal_actor=LEGAL_PRINCIPAL,
+        objective=objective or f"{family} on {platform}",
+        permitted_actions=[f"write.{family}"],
+        resource=platform,
+        maximum_uses=maximum_uses,
+        initial_stage="shadow",
+    )
+    minted = _capability.mint(grant, approval_request_id=approval_request_id)
+    _active_grants[(platform, f"write.{family}")] = minted.grant_id
+    return minted
+
+
+async def execute_write(
+    *,
+    platform: str,
+    family: str,
+    target: str,
+    impl: Callable[..., Any],
+    impl_kwargs: Dict[str, Any],
+    dry_run_result: Any,
+    text: Optional[str] = None,
+) -> Any:
+    """Mediate one engagement/DM write through the ConsequenceGate.
+
+    Carries the same safety envelope as ``BaseSocialClient.publish`` so
+    every write family inherits it by construction: the attempt is
+    ledgered, a disarmed kill switch or a saturated rate governor fails
+    toward silence before authority is consulted, and only then does
+    the attempt cross the gate.
+
+    ``impl`` is the client's ``_execute_write`` transport; the witness
+    never sees the platform client. The executor injects a unique
+    sentinel as the transport's ``default_result``: a sentinel return
+    means the transport refused or failed without producing an effect,
+    which is honestly receipted as a failure instead of the family's
+    silent-success default.
+
+    Returns True when the effect is committed (or already existed —
+    these families set state, so deduplication means the desired state
+    holds); otherwise the family's ``dry_run_result``.
+    """
+    if family not in WRITE_FAMILIES:
+        raise ValueError(f"unknown write family: {family!r}")
+
+    ledger = get_ledger()
+    attempt: Dict[str, Any] = {"platform": platform, "family": family,
+                               "target": target}
+    if text is not None:
+        # The ledger carries proof of content, never the content itself.
+        attempt["text_sha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    ledger.record("write_attempt", attempt)
+
+    if not get_kill_switch().armed:
+        ledger.record(
+            "write_gated",
+            {"platform": platform, "family": family, "reason": "kill_switch"},
+        )
+        return dry_run_result
+    if not get_rate_governor().allow(platform):
+        ledger.record(
+            "write_gated",
+            {"platform": platform, "family": family, "reason": "rate_governor"},
+        )
+        logger.warning("Rate governor blocked live %s on %s", family, platform)
+        return dry_run_result
+
+    gate = get_gate()
+    grant_id = _active_grants.get((platform, f"write.{family}"), "none")
+    parameters: Dict[str, Any] = {"family": family, "target": target}
+    if text is not None:
+        # The ledger carries proof of content, never the content itself.
+        parameters["text_sha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    sentinel = object()
+
+    def executor() -> Dict[str, Any]:
+        result = _await_in_thread(impl(default_result=sentinel, **impl_kwargs))
+        if result is sentinel:
+            raise WriteExecutionRefused(
+                f"{family} on {platform} refused or failed at transport"
+            )
+        return {"family": family, "platform": platform, "ok": True}
+
+    outcome = gate.execute(
+        grant_id=grant_id,
+        action_type=f"write.{family}",
+        resource=platform,
+        target=target,
+        parameters=parameters,
+        executor=executor,
+        expected_consequence=f"{family} effect on {platform}",
+        subject=f"{platform}:write.{family}:{target}",
+    )
+
+    ledger.record(
+        "write_result",
+        {"platform": platform, "family": family, "target": target,
+         "status": outcome.status},
+    )
+
+    if outcome.status in ("committed", "deduplicated"):
+        return True
+
+    # rejected | failed: fail toward silence. The gate has already
+    # ledgered and chained the honest record.
+    logger.warning(
+        "write %s on %s not committed (status=%s); returning dry-run result",
+        family, platform, outcome.status,
+    )
+    return dry_run_result
+
+
 __all__ = [
+    "WRITE_FAMILIES",
+    "WriteExecutionRefused",
     "configure",
     "get_gate",
     "reset_gate",
     "mint_publish_grant",
+    "mint_write_grant",
     "publish_post",
+    "execute_write",
 ]
