@@ -208,6 +208,17 @@ async def publish_post(
 
     if outcome.status in ("committed", "deduplicated") and outcome.receipt is not None:
         receipt = outcome.receipt.result or {}
+        post_id = receipt.get("post_id", "")
+        if outcome.status == "committed" and post_id:
+            # Durable commit -> post_id correlation for the outcome pull.
+            # The witness receipt is runtime-only; this chained event is
+            # what lets a later job find the committed action's external
+            # artifact and attach what actually happened to the commit.
+            gate.spine.chain(
+                "consequence.receipt",
+                outcome.final_event,
+                data={"platform": platform, "kind": kind, "post_id": str(post_id)},
+            )
         return SocialPostResult(
             platform=receipt.get("platform", platform),
             post_id=receipt.get("post_id", ""),
@@ -372,6 +383,51 @@ async def execute_write(
     return dry_run_result
 
 
+# --- Outcomes ----------------------------------------------------------------
+
+
+def record_outcome_for(
+    commit_event_id: str,
+    *,
+    external_observation: str,
+    result_class: str,
+    expected_vs_actual: str,
+    validation_status: str = "externally_verified",
+    evidence_refs: Optional[list] = None,
+    learning: Optional[str] = None,
+):
+    """Attach what actually happened to a committed consequence.
+
+    Rebuilds the commit event's identity from the ledger — the only
+    part ``record_outcome`` needs is the id it chains to — and refuses
+    unknown ids: an outcome chained to nothing is a fabrication.
+    """
+    from uniimente_kernel.events import Event
+
+    gate = get_gate()
+    payload = gate.spine.get(commit_event_id)
+    if payload is None:
+        raise KeyError(f"unknown commit event: {commit_event_id}")
+    parent = Event(
+        type=payload.get("type", ""),
+        source=payload.get("source", ORG),
+        actor=payload.get("actor", AGENT),
+        legal_principal=payload.get("legal_principal", LEGAL_PRINCIPAL),
+        sensitivity=payload.get("sensitivity", "internal"),
+        causal_parent=payload.get("causal_parent"),
+        id=payload["id"],
+    )
+    return gate.record_outcome(
+        parent,
+        external_observation=external_observation,
+        result_class=result_class,
+        expected_vs_actual=expected_vs_actual,
+        validation_status=validation_status,
+        evidence_refs=evidence_refs,
+        learning=learning,
+    )
+
+
 __all__ = [
     "WRITE_FAMILIES",
     "WriteExecutionRefused",
@@ -382,4 +438,5 @@ __all__ = [
     "mint_write_grant",
     "publish_post",
     "execute_write",
+    "record_outcome_for",
 ]
