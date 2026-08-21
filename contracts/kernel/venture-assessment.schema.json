@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://uniimente.internal/contracts/venture-assessment.schema.json",
+  "title": "VentureAssessment",
+  "description": "The Kernel-side evaluation of an OpportunityPacket. Assessments only recommend; they never execute. requires_human_approval is hardcoded true.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "assessment_id": { "type": "string", "format": "uuid" },
+    "packet_id": { "type": "string", "format": "uuid" },
+    "schema_version": { "type": "string", "enum": ["1.0", "1.1"] },
+    "assessed_by": {
+      "type": "string",
+      "pattern": "^spiffe://uniimente\\.internal/",
+      "description": "SPIFFE-style institutional identity"
+    },
+    "assessed_at": { "type": "string", "format": "date-time", "description": "RFC 3339 UTC timestamp" },
+    "verdict": { "type": "string", "enum": ["go", "defer", "kill", "needs_more_evidence"] },
+    "opportunity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "adversarial_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Schema 1.1: the committee argues with itself. Severe unresolved against-cases cap the verdict.",
+      "properties": {
+        "bull": { "type": "string" },
+        "bear": { "type": "string" },
+        "fraud_manipulation": { "type": "string" },
+        "incumbent_response": { "type": "string" },
+        "adoption_friction": { "type": "string" },
+        "do_nothing": { "type": "string" },
+        "opportunity_cost": { "type": "string" },
+        "capping_cases": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Severe unresolved cases forcing verdict downgrade"
+        }
+      },
+      "required": ["bull", "bear", "do_nothing"]
+    },
+    "structured_reasons": { "type": "array", "items": { "type": "string" } },
+    "evidence_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/hash" } }
+      },
+      "required": ["confidence", "evidence_refs"]
+    },
+    "requires_human_approval": { "type": "boolean", "const": true },
+    "execution_authority": { "type": "boolean", "const": false }
+  },
+  "required": [
+    "assessment_id", "packet_id", "schema_version", "assessed_by", "assessed_at",
+    "verdict", "adversarial_cases", "requires_human_approval", "execution_authority"
+  ],
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

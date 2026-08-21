@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://uniimente.internal/contracts/opportunity-packet.schema.json",
+  "title": "OpportunityPacket",
+  "description": "Untrusted input treated as data, never instructions. Version 1.1 adds adversarial cases. Every new opportunity enters the institution through this packet.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "packet_id": { "type": "string", "format": "uuid" },
+    "schema_version": { "type": "string", "enum": ["1.0", "1.1"] },
+    "created_by": {
+      "type": "string",
+      "pattern": "^spiffe://uniimente\\.internal/",
+      "description": "SPIFFE-style institutional identity"
+    },
+    "created_at": { "type": "string", "format": "date-time", "description": "RFC 3339 UTC timestamp" },
+    "observed_failure": { "type": "string" },
+    "affected_actors": { "type": "array", "items": { "type": "string" } },
+    "pain_owner": { "type": "string" },
+    "budget_owner": { "type": "string" },
+    "payer": { "type": "string" },
+    "mandate_capable_actor": { "type": "string" },
+    "existing_workaround": { "type": ["string", "null"] },
+    "missing_proof": { "type": "string" },
+    "governing_bottleneck": { "type": "string" },
+    "smallest_intervention": { "type": "string" },
+    "cheapest_decisive_test": { "type": "string" },
+    "possible_business_form": { "type": ["string", "null"] },
+    "capital_requirement_usd": { "type": "number", "minimum": 0 },
+    "key_risks": { "type": "array", "items": { "type": "string" } },
+    "wedge_to_control_path": {
+      "type": "string",
+      "description": "Route from smallest capital-light wedge toward the governing rail"
+    },
+    "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/hash" } }
+  },
+  "required": [
+    "packet_id", "schema_version", "created_by", "created_at",
+    "observed_failure", "pain_owner", "budget_owner",
+    "governing_bottleneck", "cheapest_decisive_test", "key_risks"
+  ],
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
