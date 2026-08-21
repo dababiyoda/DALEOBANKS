@@ -74,7 +74,22 @@ class BaseSocialClient:
             },
         )
 
-        if not get_kill_switch().armed:
+        if not self.enabled:
+            ledger.record(
+                "publish_gated",
+                {"platform": self.platform, "kind": kind, "reason": "adapter_disabled"},
+            )
+            result = await self._dry_run(kind=kind, metadata=metadata)
+        elif not self.live:
+            # Adapter-local shadow mode is a load-bearing gate.  The global
+            # kill switch may be armed for another approved adapter; that
+            # must never promote a shadow adapter into live execution.
+            ledger.record(
+                "publish_gated",
+                {"platform": self.platform, "kind": kind, "reason": "shadow_mode"},
+            )
+            result = await self._dry_run(kind=kind, metadata=metadata)
+        elif not get_kill_switch().armed:
             # Fail-safe to silence: nothing goes live while disarmed, even if
             # a subclass forgets its own LIVE check.
             result = await self._dry_run(kind=kind, metadata=metadata)

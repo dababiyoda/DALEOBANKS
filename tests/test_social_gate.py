@@ -28,6 +28,13 @@ class RecordingClient(BaseSocialClient):
         )
 
 
+class ShadowRecordingClient(RecordingClient):
+    def __init__(self, *, enabled=True):
+        super().__init__()
+        self.enabled = enabled
+        self.live = False
+
+
 @pytest.fixture
 def gate(tmp_path):
     """Isolated ledger/kill-switch/governor wired into the shared gate."""
@@ -70,6 +77,28 @@ async def test_armed_switch_delegates_to_impl(gate):
 
     results = gate.replay("publish_result")
     assert results[-1]["payload"]["dry_run"] is False
+
+
+async def test_adapter_shadow_mode_cannot_be_overridden_by_global_arming(gate):
+    update_config(LIVE=True)
+    client = ShadowRecordingClient()
+
+    result = await client.publish(content="shadow only")
+
+    assert result.dry_run is True
+    assert client.impl_calls == 0
+    assert gate.replay("publish_gated")[-1]["payload"]["reason"] == "shadow_mode"
+
+
+async def test_disabled_adapter_never_delegates(gate):
+    update_config(LIVE=True)
+    client = ShadowRecordingClient(enabled=False)
+
+    result = await client.publish(content="disabled")
+
+    assert result.dry_run is True
+    assert client.impl_calls == 0
+    assert gate.replay("publish_gated")[-1]["payload"]["reason"] == "adapter_disabled"
 
 
 async def test_rate_governor_gates_excess_publishes(gate):

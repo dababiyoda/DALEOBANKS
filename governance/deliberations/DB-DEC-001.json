@@ -1,0 +1,316 @@
+{
+  "decision_id": "DB-DEC-001",
+  "title": "Install a separate Phase 0 operating substrate on DALEOBANKS main lineage",
+  "problem": "DALEOBANKS has useful persona, evidence, safety, IdeaRefinery, platform, and opportunity-routing mechanisms, while the founder-intent PR is documentation-only and the executable publication PR is a separate shadow lineage. The repository lacks one canonical account authority record and one attributable source-to-localization-to-shadow-receipt transaction. The decision must add that smallest loop without rewriting the runtime, stacking unrelated branches, claiming live authority, or treating simulation as reality.",
+  "founder_intent_refs": ["DB-FI-001", "DB-FI-003", "DB-FI-004", "DB-FI-005", "DB-FI-006", "DB-FI-010", "DB-FI-014", "DB-FI-015"],
+  "baseline": "main at 1ba3b85474af60c1c0b1f34159f464cf69011e18 contains a production-shaped X agent, hash-chained ledger, kill switch, capability grants, AccountLane, IdeaRefinery, source citation library, platform multiplexer, and WMI mock/http client; it does not contain the PR #65 founder-intent documents or PR #66 Aperture shadow implementation, and it has no canonical Account Registry lifecycle or source-to-shadow publication receipt object.",
+  "alternatives": [
+    {
+      "name": "Documentation-only continuation",
+      "description": "Add or expand architecture documents while leaving executable gaps unchanged.",
+      "advantages": ["Lowest immediate regression risk", "Preserves all current runtime behavior"],
+      "disadvantages": ["Repeats the failure mode the founder explicitly rejected", "Produces no executable evidence or closed transaction"],
+      "revival_evidence": "Revive only if repository mutation is no longer authorized and the requested output becomes an architecture review rather than an implementation."
+    },
+    {
+      "name": "Stack implementation on PR #66",
+      "description": "Extend the existing Aperture shadow-publication branch with all Phase 0 media controls.",
+      "advantages": ["Reuses an existing shadow publication path", "Could reduce duplicate branch count"],
+      "disadvantages": ["Couples this work to a separate Claude lineage and vendored artifact dependency", "Obscures whether failures come from Aperture or DALEOBANKS controls"],
+      "revival_evidence": "Revive after PR #66 is merged or its API becomes the explicitly selected canonical publication authority."
+    },
+    {
+      "name": "Build all requested phases immediately",
+      "description": "Implement media, owned audience, community, commerce, WMI, PumpStation, aspiration, and civilization-seeding systems in one branch.",
+      "advantages": ["Maximizes apparent feature coverage", "Avoids a later migration if every design guess is correct"],
+      "disadvantages": ["Violates the stage-gate and anti-cathedral rules", "Creates large unverified authority, privacy, commercial, and maintenance surface"],
+      "revival_evidence": "Revive only after each prior phase has real external evidence, stable ownership, and a measured bottleneck requiring the next capability."
+    },
+    {
+      "name": "Separate Phase 0 vertical slice",
+      "description": "Branch from main, reuse existing mechanisms, add canonical account/source/content/receipt records, close one shadow-only transaction, label simulations, and leave all external effects disabled.",
+      "advantages": ["Directly creates executable evidence", "Keeps PR #65 and PR #66 lineage intact", "Is reversible and independently testable", "Builds reusable substrate for later phases"],
+      "disadvantages": ["Adds models and API surface before real audience evidence exists", "Still cannot prove market, user, or WMI outcomes"],
+      "revival_evidence": "This is the selected reversible experiment; retain only while it reduces integration uncertainty and does not create a local optimum."
+    }
+  ],
+  "do_nothing_option": {
+    "expected_outcome": "DALEOBANKS remains an X-oriented agent with strong local safety mechanisms but without a canonical multi-surface account registry, structured content provenance, localization parity contract, or permanent mock provenance.",
+    "advantages": ["No new code risk", "Existing tests remain untouched"],
+    "disadvantages": ["Founder intent remains documentation without runtime substrate", "Mock WMI results remain easy to misread", "Future platform growth repeats account and evidence ambiguity"]
+  },
+  "roles": [
+    {
+      "role": "Founder-Intent Steward",
+      "position": "Build upward from the historical runtime while preserving the global institution and staged destination.",
+      "material_concerns": ["PR #65 must remain visible and unmodified", "A narrow implementation must not shrink the founder's long-range intent"],
+      "evidence_refs": ["PR #65 head 2394127f603636da789a30c765ad756d58a7a82f", "governance/founder_intent.json"],
+      "recommendation": "EXPERIMENT"
+    },
+    {
+      "role": "Systems Architect",
+      "position": "Use existing AccountLane, ledger, BaseSocialClient, IdeaRefinery, and durable store as seams; add one bounded service instead of a second system.",
+      "material_concerns": ["Avoid duplicate approval and publish paths", "Keep wire ownership and persistence backward compatible"],
+      "evidence_refs": ["db/models.py", "services/social_base.py", "services/idea_refinery.py", "services/venture_protocol.py"],
+      "recommendation": "EXPERIMENT"
+    },
+    {
+      "role": "Adversarial Reviewer",
+      "position": "Assume the new abstraction will accidentally arm a shadow adapter, leak credentials, create fake account identity, or promote simulation to evidence.",
+      "material_concerns": ["Adapter-local live state was not enforced by the base gate", "Account metadata could become implicit authority", "Cross-language facts can drift structurally"],
+      "evidence_refs": ["tests/test_social_gate.py", "tests/test_account_registry.py", "tests/test_media_operating_system.py"],
+      "recommendation": "EXPERIMENT"
+    },
+    {
+      "role": "Operator and Maintainer",
+      "position": "Prefer one service, additive dataclass fields, normal FastAPI endpoints, and explicit work-packet continuation over a framework rewrite.",
+      "material_concerns": ["app.py is already large", "New governance records must not become a second planning bureaucracy", "The full suite must remain fast and offline-capable"],
+      "evidence_refs": ["app.py", "db/session.py", "321 passing Python tests"],
+      "recommendation": "EXPERIMENT"
+    },
+    {
+      "role": "Evidence and Welfare Guardian",
+      "position": "Only claim implementation and shadow evidence; require sources, counterarguments, uncertainty, humane framing, finance disclosure, and zero external effects.",
+      "material_concerns": ["Shadow output is not audience impact", "Public-discussion sources cannot support high-risk claims", "Immigrant and financial topics create heightened dignity and advice risks"],
+      "evidence_refs": ["services/evidence_policy.py", "services/media_operating_system.py", "constitution.md"],
+      "recommendation": "EXPERIMENT"
+    }
+  ],
+  "evidence": [
+    {
+      "claim": "The clean main baseline is the expected commit.",
+      "tier": "sandbox_execution",
+      "reference": "git rev-parse HEAD and git rev-parse origin/main",
+      "finding": "Both resolved to 1ba3b85474af60c1c0b1f34159f464cf69011e18 before the branch was created."
+    },
+    {
+      "claim": "The existing runtime already contains reusable safety and domain mechanisms.",
+      "tier": "primary_source",
+      "reference": "services/ledger.py, services/capability.py, services/social_base.py, services/idea_refinery.py, services/venture_protocol.py",
+      "finding": "The repository has a hash-chain, kill switch, exact grants, a common publish gate, the real IdeaRefinery domain path, and WMI wire serialization."
+    },
+    {
+      "claim": "The selected vertical slice is executable in shadow mode.",
+      "tier": "unit_test",
+      "reference": "tests/test_media_operating_system.py",
+      "finding": "Source, claim, content, localization, experiment, account authority, adapter shadowing, and receipt persistence are covered with negative controls."
+    },
+    {
+      "claim": "The integrated repository remains green after the change.",
+      "tier": "sandbox_execution",
+      "reference": "env with proxy variables removed .venv/bin/pytest -q",
+      "finding": "322 tests passed with 10 pre-existing warnings."
+    }
+  ],
+  "counterevidence": [
+    {
+      "claim": "A working shadow loop proves media, community, or commercial success.",
+      "tier": "other",
+      "reference": "governance/operating_work_packet.json",
+      "finding": "No official account, live publication, owned-audience conversion, paying customer, advancement action, or real WMI execution exists."
+    },
+    {
+      "claim": "All long-range implementation deliverables belong in this atomic change.",
+      "tier": "historical_artifact",
+      "reference": "DALEOBANKS Complete Master Implementation Prompt section 71",
+      "finding": "The founder's own phased construction sequence requires evidence-gated expansion rather than simultaneous completion."
+    }
+  ],
+  "pass_1": {
+    "intended_outcome": "Create the smallest reusable DALEOBANKS transaction that turns declared source evidence into an authority-evaluated multilingual shadow receipt while preserving founder intent, historical mechanisms, and zero-live-effect posture.",
+    "advantages": [
+      {
+        "id": "A1",
+        "statement": "A canonical Account Registry replaces inferred identity and implicit lane activity.",
+        "amplified_value": "Make account lifecycle, owner, authorization, limits, disclosures, and compromise state reusable across every future platform."
+      },
+      {
+        "id": "A2",
+        "statement": "One source and content knowledge graph feeds many local expressions without changing material facts.",
+        "amplified_value": "Make every researched thesis a compounding multilingual portfolio asset instead of one disposable post."
+      },
+      {
+        "id": "A3",
+        "statement": "Shadow receipts and mock provenance prevent simulated activity from becoming institutional fact.",
+        "amplified_value": "Give later analytics, commercial, and WMI consumers a trustworthy evidence boundary."
+      }
+    ],
+    "disadvantages": [
+      {
+        "id": "D1",
+        "statement": "New records and endpoints add complexity before a real external outcome exists.",
+        "severity": "high",
+        "response_type": "evidence",
+        "redesigned_response": "Limit Phase 0 to one vertical slice, one active SBM, shadow-only execution, and a kill criterion if it does not reduce time to the first authorized external test."
+      },
+      {
+        "id": "D2",
+        "statement": "Account Registry metadata could be mistaken for live authority.",
+        "severity": "critical",
+        "response_type": "governance",
+        "redesigned_response": "Make the registry explicitly prerequisite-only, require declared authorization references for ACTIVE state, and retain exact capability consumption at the consequence gate."
+      },
+      {
+        "id": "D3",
+        "statement": "Structural claim parity cannot prove a translation is semantically accurate.",
+        "severity": "high",
+        "response_type": "learning",
+        "redesigned_response": "Treat the material-facts hash as necessary but insufficient; require specialist or human localization review before an authorized production artifact."
+      },
+      {
+        "id": "D4",
+        "statement": "A larger app.py increases maintenance cost and import-time coupling.",
+        "severity": "medium",
+        "response_type": "modularity",
+        "redesigned_response": "Keep business logic in services/media_operating_system.py and services/account_registry.py; expose thin endpoints now and set route extraction as a review trigger if the surface grows."
+      }
+    ],
+    "comparisons": {
+      "baseline": "Baseline preserves useful safety but leaves identity, provenance, localization, and mock truth gaps open.",
+      "do_nothing": "Doing nothing has low regression risk and guarantees no progress against the explicit implementation request.",
+      "simplest_viable_alternative": "Mock labeling plus the adapter-local shadow gate alone would fix two hazards but would not create the governing media transaction.",
+      "strongest_competing_architecture": "Stacking on PR #66 offers a stronger publication authority abstraction but adds a cross-lineage artifact dependency before its canonical ownership is decided.",
+      "reversible_experiment": "Additive dataclasses and services on a dedicated branch, retain historical fields and APIs, execute shadow-only tests, and open a draft PR without merge or deployment."
+    },
+    "rejected_alternatives": [
+      {
+        "name": "Documentation-only continuation",
+        "rejection_reason": "It produces no runtime evidence and repeats a directly rejected outcome.",
+        "revival_evidence": "The founder changes the task from implementation to architecture review."
+      },
+      {
+        "name": "Build all phases immediately",
+        "rejection_reason": "It maximizes unverified complexity and violates the phase sequence.",
+        "revival_evidence": "Every preceding phase has reconciled real outcomes and the remaining capability is the measured bottleneck."
+      },
+      {
+        "name": "Stack on PR #66",
+        "rejection_reason": "Its branch lineage and artifact dependency are unresolved relative to this main-based implementation.",
+        "revival_evidence": "PR #66 is merged or explicitly declared the canonical publication owner."
+      }
+    ]
+  },
+  "pass_2": {
+    "attack_summary": "Attack the strengthened design as a bureaucratic internal cathedral: it may create elegant registries and receipts that no audience wants, centralize too much media state in one service, overfit to X-shaped posting, or game success by counting dry-run completion. Also assume a stale live flag, credential leak, or mock result will bypass labels.",
+    "new_weaknesses": [
+      {
+        "id": "N1",
+        "category": "gaming",
+        "statement": "The active SBM could be gamed by producing more shadow receipts instead of a real outcome.",
+        "strengthening_response": "Use a binary controlled-loop closure target of 1/1 only for Phase 0, then retire it; shadow counts remain analytics-not-applicable and cannot become advancement or commercial metrics."
+      },
+      {
+        "id": "N2",
+        "category": "centralization",
+        "statement": "MediaOperatingSystem may become a new monolith that owns generation, authority, evidence, publication, and analytics.",
+        "strengthening_response": "Keep it an orchestrator: IdeaRefinery owns draft generation, AccountRegistry owns account prerequisites, BaseSocialClient owns adapter gating, capability service owns exact authority, and existing ledgers own events."
+      },
+      {
+        "id": "N3",
+        "category": "overfit",
+        "statement": "The first adapter and artifact format remain post-oriented and could hard-code X assumptions.",
+        "strengthening_response": "Require platform on registry and localization records, use BaseSocialClient interfaces, and keep the content ontology multi-format while activating only a registered adapter."
+      },
+      {
+        "id": "N4",
+        "category": "dependency",
+        "statement": "The real WMI and Golden Kernel boundaries cannot be verified from this repository alone.",
+        "strengthening_response": "Label HTTP, inbound-unverified, and mock execution separately; preserve the open boundary in the work packet and make cross-repo proof a later explicit scope decision."
+      }
+    ],
+    "pass_1_disadvantage_dispositions": [
+      {
+        "disadvantage_id": "D1",
+        "outcome": "experiment",
+        "rationale": "Accept the smallest additive complexity only while it closes the controlled loop and accelerates the first real evidence test.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "Before any Phase 2 owned-distribution implementation or if route/model count expands without external evidence."
+      },
+      {
+        "disadvantage_id": "D2",
+        "outcome": "resolved",
+        "rationale": "Registry external approval is explicitly prerequisite-only and exact capability grants remain mandatory for consequence execution.",
+        "owner": "DALEOBANKS operator",
+        "review_trigger": "Any ACTIVE account transition or live publication implementation."
+      },
+      {
+        "disadvantage_id": "D3",
+        "outcome": "accepted",
+        "rationale": "Structural parity is a necessary automated guard but semantic localization quality remains a human or specialist review responsibility.",
+        "owner": "DALEOBANKS localization lead",
+        "review_trigger": "Before the first production artifact in each language and market."
+      },
+      {
+        "disadvantage_id": "D4",
+        "outcome": "deferred",
+        "rationale": "Thin endpoints are acceptable for the atomic phase; modular route extraction is deferred until the route group changes again.",
+        "owner": "DALEOBANKS implementation maintainer",
+        "review_trigger": "The Phase 0 media route group gains another material responsibility or app.py exceeds maintainable review scope."
+      }
+    ],
+    "final_design": "Create a dedicated main-based draft PR containing additive persistent records, a canonical AccountRegistry service, a bounded MediaOperatingSystem orchestrator, adapter-local shadow enforcement in BaseSocialClient, permanent WMI execution provenance, thin API routes, exact negative controls, machine-readable founder intent, two-pass deliberation, ownership, inventory, and a single continuation packet. No account is pre-populated, no credentials are stored, no live flag is enabled, no external action is taken, and no other repository is changed.",
+    "residual_risks": [
+      {
+        "risk": "The implementation may become an internal local optimum without a real user, buyer, or owned-audience test.",
+        "mitigation": "Retire the Phase 0 SBM after 1/1 closure and require the next smallest implementation to be an explicitly authorized external evidence pilot.",
+        "owner": "Alfonso Lopez and DALEOBANKS business operator",
+        "review_trigger": "Phase 0 draft PR validation completes."
+      },
+      {
+        "risk": "Localization text can retain claim identifiers while changing meaning.",
+        "mitigation": "Require qualified bilingual review and later semantic parity evaluation before production authority.",
+        "owner": "DALEOBANKS localization lead",
+        "review_trigger": "First production artifact per language."
+      },
+      {
+        "risk": "PR #66 may become canonical and create overlapping publication receipt concepts.",
+        "mitigation": "Do not stack or copy PR #66; compare contracts and converge ownership after its disposition is known.",
+        "owner": "DALEOBANKS systems architect",
+        "review_trigger": "PR #66 merges, closes, or receives an explicit canonicality decision."
+      }
+    ],
+    "recommendation": "EXPERIMENT"
+  },
+  "dissent": {
+    "present": true,
+    "handling": "Preserve the anti-cathedral dissent as a binding stage gate rather than suppressing it; the implementation is retained only as a reversible substrate experiment.",
+    "entries": [
+      {
+        "role": "Evidence and Welfare Guardian",
+        "position": "A code-complete shadow loop is not valuable until an authorized real participant or buyer produces an outcome.",
+        "rationale": "Internal correctness cannot establish usefulness, trust, advancement, or commercial demand.",
+        "evidence_threshold": "One authorized pilot with a predeclared outcome, zero unauthorized effects, and a preserved negative or positive result.",
+        "owner": "DALEOBANKS business operator",
+        "review_trigger": "Immediately after Phase 0 validation and before additional internal expansion."
+      }
+    ]
+  },
+  "authority_impact": {
+    "level": "standard",
+    "changes_authority": false,
+    "requires_authorized_human": false,
+    "approval_status": "not_required",
+    "approver": null
+  },
+  "migration_plan": "Add fields backward-compatibly to existing dataclasses, preserve AccountLane.active as a historical compatibility field while status becomes canonical, route new API operations through services, keep all accounts unregistered by default, and defer any production adapter, credential, scheduler, or cross-repository integration to a separately authorized phase.",
+  "rollback_plan": {
+    "possible": true,
+    "steps": [
+      "Freeze or close the dedicated draft PR without merging.",
+      "Remove the additive endpoints, services, models, and governance files from the branch.",
+      "Restore BaseSocialClient and WMI assessment fields to the unchanged main behavior if independent fixes are not retained.",
+      "Re-run the full Python suite against origin/main and preserve this deliberation as rejected evidence."
+    ],
+    "reason_impossible": null
+  },
+  "kill_criteria": [
+    "Any Phase 0 test or runtime path produces an unauthorized external effect.",
+    "A mock or inbound-unverified assessment can be represented as actual WMI execution.",
+    "Account registration can store credential material, infer an official handle, or self-promote authority.",
+    "The full Python suite regresses relative to the clean main baseline.",
+    "The substrate adds ongoing planning or maintenance cost without reducing time to the first authorized external evidence test."
+  ],
+  "decision": "EXPERIMENT",
+  "decision_owner": "Alfonso Lopez",
+  "review_trigger": "The dedicated draft PR has validated code and CI evidence, or any kill criterion is met."
+}

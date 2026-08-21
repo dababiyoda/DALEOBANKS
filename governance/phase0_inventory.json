@@ -1,0 +1,262 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-08-08T23:00:00Z",
+  "repository": "dababiyoda/DALEOBANKS",
+  "repository_role": {
+    "lifecycle": "active",
+    "unique_responsibility": "DALEOBANKS public identity, media sensing, content, audience relationships, distribution, community, commerce signals, and opportunity discovery.",
+    "canonically_owns": [
+      "DALEOBANKS persona and brand-local policy",
+      "public account metadata",
+      "media source, claim, content, localization, and publication-receipt state",
+      "IdeaRefinery and OpportunityPacket production",
+      "organ-local analytics and relationship memory"
+    ],
+    "consumes": [
+      "Founder-authorized mission and authority envelope",
+      "platform APIs and policies",
+      "external source evidence",
+      "WMI VentureAssessment wire responses"
+    ],
+    "must_not_own": [
+      "Root UNIIMENTE Constitution",
+      "parallel legal principal",
+      "unrestricted treasury",
+      "self-authored authority expansion",
+      "WMI strategic assessment implementation",
+      "PumpStation eligibility or settlement truth"
+    ],
+    "external_effect_boundary": "Capability grant and social/transport adapter gates; Phase 0 media path is shadow-only.",
+    "testing_boundary": "Python unit and integration tests in tests/; no external production-effect test is authorized.",
+    "deployment_boundary": "No deployment, production credential, account activation, or live scheduler change in Phase 0."
+  },
+  "baseline": {
+    "main_head": "1ba3b85474af60c1c0b1f34159f464cf69011e18",
+    "pr65_head": "2394127f603636da789a30c765ad756d58a7a82f",
+    "pr65_role": "OPEN DRAFT documentation and founder-intent lineage",
+    "pr66_head": "5c675b247d341be5ae21c8aac113a6edd4ccdd7d",
+    "pr66_role": "OPEN DRAFT separate Aperture shadow-publication lineage",
+    "automated_inventory_complete": true,
+    "automated_inventory_entries": 240,
+    "provisional_path_classes": {
+      "canonical_authored_candidate": 153,
+      "organ_specific_authored": 55,
+      "documentation": 16,
+      "generated_output": 1,
+      "runtime_state": 1,
+      "unknown": 14
+    },
+    "exact_duplicate_groups": 2,
+    "duplicate_disposition": "Historical attached prompt artifacts retained for lineage; no deletion performed."
+  },
+  "mechanisms": [
+    {
+      "mechanism": "Hash-chained decision ledger, kill switch, and rate governor",
+      "path": "services/ledger.py",
+      "classification": "CANONICAL",
+      "owner": "DALEOBANKS organ-local safety spine",
+      "phase0_action": "REUSE_AND_TIGHTEN"
+    },
+    {
+      "mechanism": "Exact, expiring, revocable capability grants",
+      "path": "services/capability.py",
+      "classification": "SPECIALIST",
+      "owner": "DALEOBANKS compatibility authority verifier pending external Kernel contract",
+      "phase0_action": "REUSE_NO_AUTHORITY_EXPANSION"
+    },
+    {
+      "mechanism": "Common platform publish gate",
+      "path": "services/social_base.py",
+      "classification": "CANONICAL",
+      "owner": "DALEOBANKS platform-effect gate",
+      "phase0_action": "TIGHTEN_ADAPTER_LOCAL_SHADOW"
+    },
+    {
+      "mechanism": "Platform adapter registry and routing",
+      "path": "services/multiplexer.py",
+      "classification": "ADAPTER",
+      "owner": "DALEOBANKS social routing",
+      "phase0_action": "REUSE"
+    },
+    {
+      "mechanism": "Persona schema, versioning, and prompt construction",
+      "path": "services/persona_store.py and persona.json",
+      "classification": "CANONICAL",
+      "owner": "DALEOBANKS identity expression",
+      "phase0_action": "REUSE_WITH_BRAND_GENOME_INVARIANTS"
+    },
+    {
+      "mechanism": "Raw source preservation and citation recall",
+      "path": "services/raw_vault.py and services/evidence_library.py",
+      "classification": "SPECIALIST",
+      "owner": "DALEOBANKS evidence intake",
+      "phase0_action": "WRAP_WITH_STRUCTURED_SOURCE_AND_CLAIM_RECORDS"
+    },
+    {
+      "mechanism": "Idea to media and opportunity refinement",
+      "path": "services/idea_refinery.py",
+      "classification": "CANONICAL",
+      "owner": "DALEOBANKS IdeaRefinery",
+      "phase0_action": "PRESERVE"
+    },
+    {
+      "mechanism": "OpportunityPacket and VentureAssessment wire",
+      "path": "services/venture_protocol.py",
+      "classification": "SHARED_CONTRACT",
+      "owner": "UNRESOLVED_CROSS_REPOSITORY",
+      "phase0_action": "PRESERVE_VERSION_AND_LABEL_PROVENANCE"
+    },
+    {
+      "mechanism": "WMI local deterministic scorer",
+      "path": "services/wealthmachine_client.py",
+      "classification": "FALLBACK",
+      "owner": "DALEOBANKS test and planning fallback",
+      "phase0_action": "PERMANENTLY_LABEL_SIMULATION"
+    },
+    {
+      "mechanism": "AccountLane",
+      "path": "db/models.py",
+      "classification": "HISTORICAL_COMPATIBILITY",
+      "owner": "DALEOBANKS account metadata",
+      "phase0_action": "UPGRADE_IN_PLACE_TO_CANONICAL_ACCOUNT_REGISTRY"
+    }
+  ],
+  "platform_adapter_inventory": [
+    {
+      "platform": "x",
+      "adapter": "services.multiplexer._XAdapter",
+      "transport": "services.x_client.XClient",
+      "implementation": "write-capable when configured and authorized",
+      "default_posture": "dry-run because LIVE defaults false",
+      "official_accounts_registered": 0
+    },
+    {
+      "platform": "linkedin",
+      "adapter": "services.linkedin_client.LinkedInClient",
+      "transport": "stub",
+      "implementation": "dry-run only",
+      "default_posture": "disabled unless configured",
+      "official_accounts_registered": 0
+    },
+    {
+      "platform": "mastodon",
+      "adapter": "services.mastodon_client.MastodonClient",
+      "transport": "stub",
+      "implementation": "dry-run only",
+      "default_posture": "disabled unless configured",
+      "official_accounts_registered": 0
+    }
+  ],
+  "external_effect_inventory": [
+    {
+      "effect": "Create X post, reply, quote, or upload media",
+      "path": "services/social_base.py -> services/multiplexer.py -> services/x_client.py",
+      "current_gates": ["adapter enabled", "adapter live", "global kill switch", "rate governor", "XClient LIVE and endpoint circuit breaker"],
+      "phase0": "SHADOW_ONLY"
+    },
+    {
+      "effect": "Send X direct message or like",
+      "path": "runner.py -> services/x_client.py",
+      "current_gates": ["config LIVE", "per-effect feature toggle", "XClient circuit breaker", "runner policy"],
+      "phase0": "UNCHANGED_SPECIALIST_PATH",
+      "open_risk": "Does not pass through BaseSocialClient.publish and requires later convergence review."
+    },
+    {
+      "effect": "Send operator SMS",
+      "path": "services/operator_line.py -> services/operator_notifications.py",
+      "current_gates": ["complete Twilio configuration", "operator workflow"],
+      "phase0": "UNCHANGED"
+    },
+    {
+      "effect": "POST OpportunityPacket to configured WMI endpoint",
+      "path": "services/wealthmachine_client.py",
+      "current_gates": ["approved packet", "WEALTHMACHINE_MODE=http", "configured URL", "optional bearer and signed headers", "circuit breaker"],
+      "phase0": "UNCHANGED_EXTERNAL_PATH_WITH_STRONGER_RESULT_PROVENANCE"
+    },
+    {
+      "effect": "Call configured embedding provider",
+      "path": "services/embeddings.py",
+      "current_gates": ["provider configuration", "hash fallback"],
+      "phase0": "UNCHANGED"
+    },
+    {
+      "effect": "Record inbound conversion and redirect click",
+      "path": "app.py /api/conversions and /r/{redirect_id}",
+      "current_gates": ["API authentication or public redirect semantics", "durable store", "ledger event"],
+      "phase0": "UNCHANGED"
+    }
+  ],
+  "data_store_inventory": [
+    {"store": "durable object snapshot", "path": "db/session.py -> data/agent_store.jsonl", "classification": "CANONICAL_ORGAN_STATE"},
+    {"store": "decision ledger", "path": "services/ledger.py -> data/decision_ledger.jsonl", "classification": "CANONICAL_AUDIT"},
+    {"store": "raw evidence vault", "path": "services/raw_vault.py -> data/raw_vault.jsonl", "classification": "CANONICAL_RAW_EVIDENCE"},
+    {"store": "semantic index", "path": "services/semantic_index.py -> data/semantic_index.jsonl", "classification": "SPECIALIST_MEMORY"},
+    {"store": "evidence library", "path": "services/evidence_library.py -> data/evidence_library.jsonl", "classification": "SPECIALIST_CITATION_MEMORY"},
+    {"store": "world model", "path": "services/world_model.py -> data/world_model.jsonl", "classification": "SPECIALIST_INFERENCE_MEMORY"}
+  ],
+  "scheduler_inventory": {
+    "path": "runner.py",
+    "engine": "APScheduler AsyncIOScheduler supervised by Heartbeat",
+    "jobs": [
+      "post_proposal",
+      "reply_mentions",
+      "search_engage",
+      "post_thread",
+      "value_dm",
+      "perception_ingest",
+      "dm_ingest",
+      "crisis_watch",
+      "analytics_pull",
+      "kpi_rollup",
+      "follower_snapshot",
+      "nightly_reflection",
+      "discovery",
+      "dream_consolidation",
+      "weekly_planning"
+    ],
+    "phase0_change": "No new live or daily-news scheduler activation."
+  },
+  "current_pipeline_map": {
+    "historical_social": "sensor -> ContextPacket -> instinct -> generator -> identity/ethics gates -> BaseSocialClient -> platform result -> analytics/reflection",
+    "opportunity": "Idea -> IdeaRefinery._opportunity_from -> OpportunityPacket -> packet_to_wire -> WealthMachineClient mock/http -> VentureAssessment -> approval drafts -> ValidationResult",
+    "phase0_media": "SourceRecord -> ClaimRecord -> ContentRecord -> LocalizedArtifact -> AccountRegistry shadow authority -> BaseSocialClient dry-run -> PublicationReceipt -> ContentExperiment remains SIMULATION"
+  },
+  "mock_and_simulation_registry": [
+    {
+      "mechanism": "WealthMachineClient local scorer",
+      "path": "services/wealthmachine_client.py",
+      "labels": ["SIMULATION", "MOCK", "NON_EXTERNAL", "NON_WMI_EXECUTION"],
+      "may_prove": "local deterministic contract and planning behavior",
+      "must_not_prove": "actual WMI participation or strategic assessment"
+    },
+    {
+      "mechanism": "BaseSocialClient dry-run",
+      "path": "services/social_base.py",
+      "labels": ["dry_run", "SHADOW"],
+      "may_prove": "adapter gating, payload construction, and publication receipt plumbing",
+      "must_not_prove": "platform publication, reach, engagement, or audience advancement"
+    },
+    {
+      "mechanism": "LinkedIn and Mastodon adapters",
+      "path": "services/linkedin_client.py and services/mastodon_client.py",
+      "labels": ["dry_run"],
+      "may_prove": "common adapter interface",
+      "must_not_prove": "connector availability or production publishing"
+    },
+    {
+      "mechanism": "ContentExperiment in Phase 0",
+      "path": "db/models.py and services/media_operating_system.py",
+      "labels": ["SHADOW", "SIMULATION"],
+      "may_prove": "experiment predeclaration",
+      "must_not_prove": "user behavior, advancement, revenue, or causality"
+    }
+  ],
+  "account_state": {
+    "official_accounts_registered_in_repository": 0,
+    "languages_active": 0,
+    "platforms_active": 0,
+    "handles_inferred": 0,
+    "credential_values_stored": 0,
+    "note": "The code supports declared registry records; no founder-declared account records are fabricated or pre-populated."
+  }
+}

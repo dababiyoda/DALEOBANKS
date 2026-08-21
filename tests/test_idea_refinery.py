@@ -113,6 +113,9 @@ def test_assessment_actions_require_operator_approval(tmp_path):
     # Landing page, interview script, and outreach draft are all drafts.
     for key in ("landing_page", "interview_script", "outreach_draft"):
         assert actions[key].approval_status == "pending"
+        body = actions[key].draft_text or actions[key].script
+        assert "SIMULATION | MOCK | NON_EXTERNAL | NON_WMI_EXECUTION" in body
+    assert actions["approval_request"].payload["external_wmi_execution"] is False
 
 
 # ---------------------------------------------------------------------- #
@@ -131,6 +134,10 @@ def test_mock_wealthmachine_returns_valid_assessment(tmp_path, monkeypatch):
     assert assessment.validation_plan
     assert assessment.pricing_hypothesis
     assert "review_required" == assessment.legal_readiness  # finance content
+    assert assessment.execution_class == "SIMULATION"
+    assert assessment.evidence_class == "MOCK"
+    assert assessment.external_execution is False
+    assert assessment.reasons[0] == "SIMULATION | MOCK | NON_EXTERNAL | NON_WMI_EXECUTION"
     # Wire round-trip stays valid.
     from services.venture_protocol import assessment_to_wire
     validate_assessment_wire(assessment_to_wire(assessment))
