@@ -319,19 +319,30 @@ class XClient:
         return result  # type: ignore[return-value]
     
     async def like(self, tweet_id: str) -> bool:
-        """Like a tweet"""
-        endpoint = "like"
-        
+        """Like a tweet — mediated by the ConsequenceGate (family ``like``).
+
+        The feature toggle short-circuits before the boundary exactly as
+        before (a disabled family is inert and ledgers nothing). Once the
+        family is enabled, every attempt crosses the gate: no grant, no
+        effect, and the rejection is ledgered. Kill-switch and rate-
+        governor posture is enforced inside ``services.gate.execute_write``.
+        """
+        if not self.config.ENABLE_LIKES:
+            logger.info(f"DRY RUN - Would perform like with args {{'tweet_id': {tweet_id}}}")
+            return True
+
         def _call():
             return self.client.like(tweet_id)
 
-        result = await self._execute_write(
-            endpoint=endpoint,
-            enabled=self.config.ENABLE_LIKES,
-            default_result=True,
-            func=_call,
-        )
-        return bool(result)
+        from services.gate import execute_write
+        return bool(await execute_write(
+            platform="x",
+            family="like",
+            target=str(tweet_id),
+            impl=self._execute_write,
+            impl_kwargs={"endpoint": "like", "enabled": True, "func": _call},
+            dry_run_result=True,
+        ))
 
     async def send_dm(self, user_id: str, text: str) -> bool:
         """Send a direct message (DM) to a user.
@@ -349,8 +360,13 @@ class XClient:
         Returns:
             True if the DM was sent (or would have been sent in dry run),
             False otherwise.
+
+        Mediated by the ConsequenceGate (family ``send_dm``). The ledger
+        carries a sha256 of the message text, never the text itself.
         """
-        endpoint = "send_dm"
+        if not self.config.ENABLE_DMS:
+            logger.info(f"DRY RUN - Would perform send_dm with args {{'user_id': {user_id}}}")
+            return True
 
         # Compose a function to send the DM using whatever API is available
         def _call():
@@ -361,13 +377,16 @@ class XClient:
             else:
                 raise RuntimeError("DM API not available on Tweepy client")
 
-        result = await self._execute_write(
-            endpoint=endpoint,
-            enabled=self.config.ENABLE_DMS,
-            default_result=True,
-            func=_call,
-        )
-        return bool(result)
+        from services.gate import execute_write
+        return bool(await execute_write(
+            platform="x",
+            family="send_dm",
+            target=str(user_id),
+            impl=self._execute_write,
+            impl_kwargs={"endpoint": "send_dm", "enabled": True, "func": _call},
+            dry_run_result=True,
+            text=text,
+        ))
 
     async def upload_media(self, media_path: str, media_type: str = "image") -> Optional[str]:
         """Upload an image or video to X and return the media ID.
@@ -419,49 +438,60 @@ class XClient:
         return str(result)
     
     async def unlike(self, tweet_id: str) -> bool:
-        """Unlike a tweet"""
-        endpoint = "unlike"
+        """Unlike a tweet — mediated by the ConsequenceGate (family ``unlike``)."""
         # Compose function to perform the unlike
         def _call():
             return self.client.unlike(tweet_id)
 
-        result = await self._execute_write(
-            endpoint=endpoint,
-            enabled=True,
-            default_result=True,
-            func=_call,
-        )
-        return bool(result)
+        from services.gate import execute_write
+        return bool(await execute_write(
+            platform="x",
+            family="unlike",
+            target=str(tweet_id),
+            impl=self._execute_write,
+            impl_kwargs={"endpoint": "unlike", "enabled": True, "func": _call},
+            dry_run_result=True,
+        ))
     
     async def repost(self, tweet_id: str) -> bool:
-        """Repost (retweet) a tweet"""
-        endpoint = "repost"
+        """Repost (retweet) a tweet — mediated by the ConsequenceGate (family ``repost``)."""
+        if not self.config.ENABLE_REPOSTS:
+            logger.info(f"DRY RUN - Would perform repost with args {{'tweet_id': {tweet_id}}}")
+            return True
+
         # Compose function to perform the retweet
         def _call():
             return self.client.retweet(tweet_id)
 
-        result = await self._execute_write(
-            endpoint=endpoint,
-            enabled=self.config.ENABLE_REPOSTS,
-            default_result=True,
-            func=_call,
-        )
-        return bool(result)
+        from services.gate import execute_write
+        return bool(await execute_write(
+            platform="x",
+            family="repost",
+            target=str(tweet_id),
+            impl=self._execute_write,
+            impl_kwargs={"endpoint": "repost", "enabled": True, "func": _call},
+            dry_run_result=True,
+        ))
     
     async def follow(self, user_id: str) -> bool:
-        """Follow a user"""
-        endpoint = "follow"
+        """Follow a user — mediated by the ConsequenceGate (family ``follow``)."""
+        if not self.config.ENABLE_FOLLOWS:
+            logger.info(f"DRY RUN - Would perform follow with args {{'user_id': {user_id}}}")
+            return True
+
         # Compose function to perform the follow
         def _call():
             return self.client.follow_user(user_id)
 
-        result = await self._execute_write(
-            endpoint=endpoint,
-            enabled=self.config.ENABLE_FOLLOWS,
-            default_result=True,
-            func=_call,
-        )
-        return bool(result)
+        from services.gate import execute_write
+        return bool(await execute_write(
+            platform="x",
+            family="follow",
+            target=str(user_id),
+            impl=self._execute_write,
+            impl_kwargs={"endpoint": "follow", "enabled": True, "func": _call},
+            dry_run_result=True,
+        ))
 
     def _on_config_update(self, cfg, changes: Dict[str, Any]) -> None:
         if "LIVE" in changes and not cfg.LIVE:
