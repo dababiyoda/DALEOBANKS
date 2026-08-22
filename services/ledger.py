@@ -1,228 +1,69 @@
-"""Tamper-evident decision ledger, kill switch, and rate governor.
+"""Compatibility shim: decision ledger, kill switch, and rate governor.
 
-The safety spine of the agent:
+The implementations now live in the UNIIMENTE kernel SDK
+(``uniimente_kernel.ledger``), extracted from this module in kernel Phase 2
+with byte-compatible semantics: same canonical hashing, same chain
+verification, same fail-safe direction. Existing ledger files on disk
+verify unchanged under the kernel module.
 
-- ``DecisionLedger`` is an append-only, hash-chained JSONL log. Every entry
-  carries the hash of its predecessor, so the agent's history (decisions,
-  publishes, identity changes, lessons) can be verified months later with
-  ``verify_chain()`` and read back in order with ``replay()``. The mind can
-  add to its autobiography but cannot silently rewrite it.
-- ``KillSwitch`` is the single authority over live posting. It is a thin,
-  ledgered wrapper around the existing ``config.LIVE`` toggle, so the whole
-  stack (multiplexer, adapters, X client) observes it through the config
-  update mechanism that is already in place. Fail-safe direction is always
-  toward silence: ``LIVE`` defaults to false.
-- ``RateGovernor`` caps live actions per platform in a sliding window so a
-  runaway loop cannot outpace human oversight.
+What stays here (organ wiring, not logic):
+
+- ``KillSwitch`` keeps the DALEOBANKS state model: ``config.LIVE`` is the
+  source of truth and ``update_config`` propagates transitions to every
+  config subscriber (multiplexer, adapters, X client). The kernel class
+  supplies the ledgered transition machinery underneath.
+- The shared-instance helpers stay so existing imports keep working.
+- ``time`` is imported at module level because tests monkeypatch
+  ``services.ledger.time.monotonic`` (same module object the kernel uses).
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
-import threading
-import time
-from collections import defaultdict, deque
-from datetime import datetime, UTC
-from typing import Any, Deque, Dict, List, Optional, Tuple
+import time  # noqa: F401 -- monkeypatch target, must exist in this namespace
+from typing import Optional
 
 from config import get_config, update_config
 from services.logging_utils import get_logger
 
+from uniimente_kernel.ledger import (
+    DecisionLedger,
+    RateGovernor,
+    default_ledger_path,
+)
+from uniimente_kernel.ledger import KillSwitch as _KernelKillSwitch
+
 logger = get_logger(__name__)
 
-_GENESIS_HASH = "0" * 64
 
-# One lock per ledger file so multiple DecisionLedger instances in the same
-# process (each service constructs its own) serialize their appends.
-_PATH_LOCKS: Dict[str, threading.Lock] = {}
-_PATH_LOCKS_GUARD = threading.Lock()
+class KillSwitch(_KernelKillSwitch):
+    """Config-derived kill switch on kernel transition machinery.
 
-
-def _lock_for(path: str) -> threading.Lock:
-    with _PATH_LOCKS_GUARD:
-        if path not in _PATH_LOCKS:
-            _PATH_LOCKS[path] = threading.Lock()
-        return _PATH_LOCKS[path]
-
-
-def default_ledger_path() -> str:
-    """Resolve the ledger location (env override for tests/deployments)."""
-
-    return os.getenv("LEDGER_PATH", os.path.join("data", "decision_ledger.jsonl"))
-
-
-def _entry_hash(entry: Dict[str, Any]) -> str:
-    """Hash the canonical form of an entry (everything except its own hash)."""
-
-    material = {k: v for k, v in entry.items() if k != "hash"}
-    canonical = json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-class DecisionLedger:
-    """Append-only hash-chained event log (JSONL, one entry per line)."""
-
-    def __init__(self, path: Optional[str] = None) -> None:
-        self.path = path or default_ledger_path()
-
-    # ------------------------------------------------------------------ #
-    # Writing
-    # ------------------------------------------------------------------ #
-    def record(self, event: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Append an event to the chain and return the stored entry."""
-
-        with _lock_for(self.path):
-            prev_seq, prev_hash = self._tail()
-            entry: Dict[str, Any] = {
-                "seq": prev_seq + 1,
-                "ts": datetime.now(UTC).isoformat(),
-                "event": event,
-                "payload": payload or {},
-                "prev_hash": prev_hash,
-            }
-            entry["hash"] = _entry_hash(entry)
-
-            directory = os.path.dirname(self.path)
-            if directory:
-                os.makedirs(directory, exist_ok=True)
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, separators=(",", ":"), default=str) + "\n")
-        return entry
-
-    # ------------------------------------------------------------------ #
-    # Reading & verification
-    # ------------------------------------------------------------------ #
-    def entries(self) -> List[Dict[str, Any]]:
-        """All entries in order. Malformed lines are surfaced as corrupt."""
-
-        if not os.path.exists(self.path):
-            return []
-        out: List[Dict[str, Any]] = []
-        with open(self.path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    out.append(json.loads(line))
-                except json.JSONDecodeError:
-                    out.append({"seq": None, "event": "__corrupt__", "raw": line})
-        return out
-
-    def replay(self, event: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Return entries in order, optionally filtered by event type."""
-
-        entries = self.entries()
-        if event is not None:
-            entries = [e for e in entries if e.get("event") == event]
-        if limit is not None:
-            entries = entries[-limit:]
-        return entries
-
-    def verify_chain(self) -> Tuple[bool, Optional[int]]:
-        """Verify the hash chain. Returns (ok, first_bad_seq)."""
-
-        prev_hash = _GENESIS_HASH
-        expected_seq = 1
-        for entry in self.entries():
-            seq = entry.get("seq")
-            if entry.get("event") == "__corrupt__" or seq != expected_seq:
-                return False, seq if isinstance(seq, int) else expected_seq
-            if entry.get("prev_hash") != prev_hash or _entry_hash(entry) != entry.get("hash"):
-                return False, seq
-            prev_hash = entry["hash"]
-            expected_seq += 1
-        return True, None
-
-    # ------------------------------------------------------------------ #
-    # Internals
-    # ------------------------------------------------------------------ #
-    def _tail(self) -> Tuple[int, str]:
-        """Sequence number and hash of the last entry on disk."""
-
-        if not os.path.exists(self.path):
-            return 0, _GENESIS_HASH
-        last_line = ""
-        with open(self.path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    last_line = line
-        if not last_line:
-            return 0, _GENESIS_HASH
-        try:
-            last = json.loads(last_line)
-            return int(last["seq"]), str(last["hash"])
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-            logger.error("Ledger tail unreadable; continuing chain from genesis marker")
-            return 0, _GENESIS_HASH
-
-
-class KillSwitch:
-    """Ledgered authority over live posting; wraps ``config.LIVE``.
-
-    Disarming propagates through ``update_config`` so every component that
-    subscribes to config updates (multiplexer, adapters) goes quiet together.
+    The kernel switch holds internal state and delegates the organ-specific
+    state change to an injected ``apply`` callable; here ``apply`` is the
+    config update and ``armed`` reads live config, preserving the original
+    semantics exactly (including transitions triggered elsewhere in config).
     """
 
     def __init__(self, ledger: Optional[DecisionLedger] = None) -> None:
-        self.ledger = ledger or DecisionLedger()
+        super().__init__(
+            ledger=ledger,
+            apply=lambda armed: update_config(LIVE=bool(armed)),
+            initially_armed=bool(get_config().LIVE),
+        )
 
     @property
     def armed(self) -> bool:
         return bool(get_config().LIVE)
 
     def set_armed(self, armed: bool, reason: str = "") -> None:
-        if bool(get_config().LIVE) == bool(armed):
-            return
-        update_config(LIVE=bool(armed))
-        self.ledger.record(
-            "kill_switch",
-            {"armed": bool(armed), "reason": reason or "unspecified"},
-        )
-        logger.warning("Kill switch %s (%s)", "ARMED" if armed else "DISARMED", reason or "unspecified")
-
-
-class RateGovernor:
-    """Sliding-window cap on live actions per key (typically per platform)."""
-
-    def __init__(self, max_actions: Optional[int] = None, window_seconds: int = 3600) -> None:
-        if max_actions is None:
-            max_actions = int(os.getenv("RATE_GOVERNOR_MAX_PER_HOUR", "30"))
-        self.max_actions = max_actions
-        self.window_seconds = window_seconds
-        self._events: Dict[str, Deque[float]] = defaultdict(deque)
-        self._lock = threading.Lock()
-
-    def allow(self, key: str) -> bool:
-        """Record an action attempt for ``key``; False when over the cap."""
-
-        now = time.monotonic()
-        with self._lock:
-            window = self._events[key]
-            while window and now - window[0] > self.window_seconds:
-                window.popleft()
-            if len(window) >= self.max_actions:
-                return False
-            window.append(now)
-            return True
-
-    def remaining(self, key: str) -> int:
-        now = time.monotonic()
-        with self._lock:
-            window = self._events[key]
-            while window and now - window[0] > self.window_seconds:
-                window.popleft()
-            return max(self.max_actions - len(window), 0)
+        # Align kernel state with the organ source of truth, then let the
+        # kernel machinery perform and ledger the transition (or no-op).
+        self._armed = bool(get_config().LIVE)
+        super().set_armed(armed, reason=reason)
 
 
 # ---------------------------------------------------------------------- #
-# Shared instances
-#
-# The publish gate in BaseSocialClient and the app startup check need one
-# process-wide chain and governor. Services that want isolation (tests) can
-# construct their own instances or swap these via set_shared_instances().
+# Shared instances (unchanged from the original module)
 # ---------------------------------------------------------------------- #
 _SHARED_LEDGER: Optional[DecisionLedger] = None
 _SHARED_KILL_SWITCH: Optional[KillSwitch] = None
