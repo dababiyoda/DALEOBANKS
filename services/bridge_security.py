@@ -36,6 +36,23 @@ SIGNING_KEY_ENV = "WEALTHMACHINE_SIGNING_KEY"
 MAX_SKEW_SECONDS = 300
 MIN_SCHEMA_VERSION = "1.0"
 
+#: Explicit opt-in to the legacy unsigned path. Set to "1" to allow it.
+#:
+#: Added 2026-08-23, mirroring the kernel's adapters/bridge_transport.py under
+#: FOUNDER-RULING-2026-08-22, which ratified asymmetric workload identity and
+#: ruled on what may remain of the shared-key transport: legacy HMAC
+#: compatibility must be "an explicit development compatibility mode, fail
+#: closed, never auto-downgrade, and never be mistaken for mutually isolated
+#: identity."
+#:
+#: This module auto-downgraded. `must_sign` was derived as `bool(key)`, so an
+#: unset WEALTHMACHINE_SIGNING_KEY did not fail — it returned SUCCESS carrying
+#: the caller's *claimed* identity, unverified, while the docstring above said
+#: "fail closed, never degrade". Absence of configuration silently disabled
+#: authentication, which is the failure mode where a forgotten environment
+#: variable in a new deployment reads as a working trust boundary.
+DEV_UNSIGNED_ENV = "UNIIMENTE_BRIDGE_DEV_UNSIGNED"
+
 H_IDENTITY = "X-Service-Identity"
 H_TIMESTAMP = "X-Timestamp"
 H_NONCE = "X-Nonce"
@@ -146,7 +163,12 @@ def verify_headers(
         return getter.get(name.lower(), "")
 
     key = signing_key()
-    must_sign = require_signature if require_signature is not None else bool(key)
+    #: An explicit `require_signature=True` is a caller DEMANDING a signature and
+    #: the dev flag must not override it. The flag only rescues the default and
+    #: the explicit-unsigned cases.
+    demanded = require_signature is True
+    must_sign = require_signature if require_signature is not None else True
+    dev_unsigned = os.getenv(DEV_UNSIGNED_ENV) == "1"
 
     identity = get(H_IDENTITY)
     schema_version = get(H_SCHEMA) or MIN_SCHEMA_VERSION
@@ -156,9 +178,35 @@ def verify_headers(
             "downgrade rejected"
         )
 
-    if not must_sign:
-        return {"identity": identity or "unsigned-local", "schema_version": schema_version,
-                "signed": "false", "trace_id": get(H_TRACE)}
+    if must_sign and not key and (demanded or not dev_unsigned):
+        # Fail closed. This branch used to be a silent success, because
+        # `must_sign` was inferred from whether a key happened to be configured.
+        # `demanded` keeps the dev flag from overriding a caller that explicitly
+        # asked for a signature.
+        raise BridgeSecurityError(
+            f"no signing key configured ({SIGNING_KEY_ENV} unset) and signature "
+            f"required. Set the key, or set {DEV_UNSIGNED_ENV}=1 to opt into the "
+            "legacy unsigned development path explicitly. Verification is never "
+            "disabled by the absence of configuration."
+        )
+
+    if not must_sign or not key:
+        if not dev_unsigned:
+            raise BridgeSecurityError(
+                f"unsigned transport requested but {DEV_UNSIGNED_ENV} is not set "
+                "to 1. The legacy path is development-only and must be asked for "
+                "by name."
+            )
+        # Marked so no downstream reader can mistake this for an authenticated
+        # peer. `identity_isolated` is "false" because even the *signed* path is
+        # not isolated identity: one shared secret both verifies and signs, so
+        # any holder can claim any known identity.
+        return {"identity": identity or "unsigned-local",
+                "schema_version": schema_version,
+                "signed": "false",
+                "identity_isolated": "false",
+                "dev_compatibility_mode": "true",
+                "trace_id": get(H_TRACE)}
 
     if identity not in KNOWN_IDENTITIES:
         raise BridgeSecurityError(f"unknown service identity '{identity}'")
@@ -182,15 +230,20 @@ def verify_headers(
     if not signature or not hmac.compare_digest(signature, expected):
         raise BridgeSecurityError("signature verification failed")
 
+    # `signed` and `identity_isolated` are separate facts and both travel. A
+    # valid signature proves the sender held the shared secret; it does not
+    # prove WHICH holder sent it, because every participant needs that secret to
+    # verify and can therefore also sign.
     return {"identity": identity, "schema_version": schema_version,
-            "signed": "true", "idempotency_key": idempotency,
+            "signed": "true", "identity_isolated": "false",
+            "idempotency_key": idempotency,
             "trace_id": get(H_TRACE)}
 
 
 __all__ = [
     "BridgeSecurityError", "NonceCache", "build_headers", "verify_headers",
     "sign", "signing_key", "SIGNING_KEY_ENV", "MAX_SKEW_SECONDS",
-    "MIN_SCHEMA_VERSION", "KNOWN_IDENTITIES",
+    "MIN_SCHEMA_VERSION", "KNOWN_IDENTITIES", "DEV_UNSIGNED_ENV",
     "H_IDENTITY", "H_TIMESTAMP", "H_NONCE", "H_IDEMPOTENCY",
     "H_SCHEMA", "H_SIGNATURE", "H_TRACE",
 ]

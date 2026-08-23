@@ -70,16 +70,32 @@ def test_a_correctly_signed_kernel_message_verifies():
 
 
 def test_verification_returns_transport_facts_and_no_authority():
-    """Recognition must not smuggle in a role, a permission or a capability."""
+    """Recognition must not smuggle in a role, a permission or a capability.
+
+    The allowlist moved on 2026-08-23 to admit `identity_isolated`, and the
+    move is deliberate rather than accommodating. That field is a transport
+    fact and an ANTI-authority one: it reports that a valid signature proves
+    possession of the shared secret and not which holder sent it, because
+    every participant needs that secret to verify and can therefore also sign.
+
+    Adding it makes this result strictly less able to be mistaken for
+    authorization, which is the property this test defends. The allowlist is
+    kept closed so the next addition is also a decision.
+    """
     from services.bridge_security import verify_headers
 
     result = verify_headers(_headers(), BODY, nonce_cache=NonceCache(),
                             require_signature=True)
     assert set(result) <= {"identity", "schema_version", "signed",
+                           "identity_isolated", "dev_compatibility_mode",
                            "idempotency_key", "trace_id"}
     for forbidden in ("authority", "role", "permissions", "capabilities",
                       "approved", "grant"):
         assert forbidden not in result
+
+    # The new field must say the transport is NOT isolated identity. A "true"
+    # here would be the exact overclaim the field was added to prevent.
+    assert result["identity_isolated"] == "false"
 
 
 def test_kernel_gets_no_more_than_any_other_sender():
