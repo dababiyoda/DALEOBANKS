@@ -149,8 +149,35 @@ def verify_headers(
         return getter.get(name.lower(), "")
 
     key = signing_key()
-    # Never derived from whether a key happens to be configured.
-    must_sign = require_signature if require_signature is not None else True
+    # Never derived from whether a key happens to be configured. The default is
+    # "signature required"; the ONLY way to get the legacy unsigned path is to
+    # ask for it — either at the call site via `require_signature=False`, or by
+    # an operator setting DEV_UNSIGNED_ENV=1.
+    #
+    # DIVERGENCE FROM THE KERNEL MIRROR, stated rather than silent. In
+    # `adapters/bridge_transport.py` the env var alone is not enough: a caller
+    # must also pass `require_signature=False`, so both the code path and the
+    # operator have to consent. That is the stricter form and is right there,
+    # where every caller is in-process and can pass the flag.
+    #
+    # Here the caller is an HTTP route (`_verified_payload`), which has no
+    # position from which to opt in per-request. Requiring both would mean this
+    # service simply has no local development mode, which is not what the
+    # founder's ruling asked for — it asked that legacy compatibility survive as
+    # an EXPLICIT development mode. So the env var is that explicit mode.
+    #
+    # The property the ruling actually protects is preserved exactly: absence of
+    # configuration never disables authentication. An unset signing key with no
+    # env var set is refused, which is the case that used to return success.
+    # The dev flag permits the unsigned path ONLY when no key is configured.
+    # A first version read `not dev_unsigned`, which meant a deployment with a
+    # perfectly good signing key would silently stop verifying if the flag was
+    # left on — the same "configuration silently disables authentication"
+    # failure in the opposite direction. Caught by this repository's own parity
+    # test before it shipped.
+    dev_unsigned = os.getenv(DEV_UNSIGNED_ENV) == "1"
+    must_sign = require_signature if require_signature is not None \
+        else not (dev_unsigned and not key)
 
     identity = get(H_IDENTITY)
     schema_version = get(H_SCHEMA) or MIN_SCHEMA_VERSION
