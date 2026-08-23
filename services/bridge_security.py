@@ -27,6 +27,22 @@ SIGNING_KEY_ENV = "WEALTHMACHINE_SIGNING_KEY"
 MAX_SKEW_SECONDS = 300
 MIN_SCHEMA_VERSION = "1.0"
 
+#: Explicit opt-in to the legacy unsigned path. Set to "1" to allow it.
+#:
+#: PARITY 2026-08-23 with the kernel mirror (`adapters/bridge_transport.py`),
+#: which took this change on 2026-08-22 under FOUNDER-RULING-2026-08-22:
+#: *"If legacy HMAC compatibility must temporarily survive, it must be an
+#: explicit development compatibility mode, fail closed, never auto-downgrade,
+#: and never be mistaken for mutually isolated identity."*
+#:
+#: This mirror still auto-downgraded. `must_sign` was derived as `bool(key)`, so
+#: an unset SIGNING_KEY did not fail — it returned SUCCESS carrying the caller's
+#: *claimed* identity, unverified. Absence of configuration silently disabled
+#: authentication, which is the failure mode where a forgotten environment
+#: variable in a new deployment reads as a working trust boundary.
+DEV_UNSIGNED_ENV = "UNIIMENTE_BRIDGE_DEV_UNSIGNED"
+
+
 H_IDENTITY = "X-Service-Identity"
 H_TIMESTAMP = "X-Timestamp"
 H_NONCE = "X-Nonce"
@@ -133,7 +149,8 @@ def verify_headers(
         return getter.get(name.lower(), "")
 
     key = signing_key()
-    must_sign = require_signature if require_signature is not None else bool(key)
+    # Never derived from whether a key happens to be configured.
+    must_sign = require_signature if require_signature is not None else True
 
     identity = get(H_IDENTITY)
     schema_version = get(H_SCHEMA) or MIN_SCHEMA_VERSION
@@ -143,9 +160,32 @@ def verify_headers(
             "downgrade rejected"
         )
 
+    if must_sign and not key:
+        raise BridgeSecurityError(
+            f"no signing key configured ({SIGNING_KEY_ENV} unset) and signature "
+            f"required. Set the key, or set {DEV_UNSIGNED_ENV}=1 to opt into the "
+            "legacy unsigned development path explicitly. Verification is never "
+            "disabled by the absence of configuration."
+        )
+
     if not must_sign:
-        return {"identity": identity or "unsigned-local", "schema_version": schema_version,
-                "signed": "false", "trace_id": get(H_TRACE)}
+        if os.getenv(DEV_UNSIGNED_ENV) != "1":
+            raise BridgeSecurityError(
+                f"unsigned transport requested but {DEV_UNSIGNED_ENV} is not set "
+                "to 1. The legacy path is development-only and must be asked for "
+                "by name."
+            )
+        # `identity_isolated` is "false" because even the *signed* HMAC path is
+        # not isolated identity — one shared secret verifies and signs, so any
+        # holder can claim any known identity. Isolated identity is the kernel's
+        # `identity/pki/`, where a private key proves a SPIFFE ID no other
+        # workload can assert.
+        return {"identity": identity or "unsigned-local",
+                "schema_version": schema_version,
+                "signed": "false",
+                "identity_isolated": "false",
+                "dev_compatibility_mode": "true",
+                "trace_id": get(H_TRACE)}
 
     if identity not in KNOWN_IDENTITIES:
         raise BridgeSecurityError(f"unknown service identity '{identity}'")
@@ -169,8 +209,15 @@ def verify_headers(
     if not signature or not hmac.compare_digest(signature, expected):
         raise BridgeSecurityError("signature verification failed")
 
+    # `signed` and `identity_isolated` are separate facts and both travel.
+    # A valid signature proves the sender held the shared secret; it does not
+    # prove *which* holder sent it, because every participant needs that secret
+    # to verify and can therefore also sign. Under the founder's ruling this
+    # must never read as mutually isolated identity, so the record says so in
+    # its own field rather than leaving a reader to infer it from `signed`.
     return {"identity": identity, "schema_version": schema_version,
-            "signed": "true", "idempotency_key": idempotency,
+            "signed": "true", "identity_isolated": "false",
+            "idempotency_key": idempotency,
             "trace_id": get(H_TRACE)}
 
 
