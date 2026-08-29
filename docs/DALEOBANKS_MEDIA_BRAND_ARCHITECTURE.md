@@ -786,7 +786,7 @@ Current implementation truth: the repository already has relationship memory, so
 
 ---
 
-# 17. Business evolution# 17. Business evolution
+# 17. Business evolution
 
 ## Stage A: profitable media and lifestyle engine
 
