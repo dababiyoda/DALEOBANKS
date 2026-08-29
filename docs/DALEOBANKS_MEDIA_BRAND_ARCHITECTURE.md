@@ -523,7 +523,7 @@ The deeper asset is the relationship network across:
 - partnerships;
 - searchable knowledge and content archives.
 
-Distribution should become reusable by future DALEOBANKS products and UNIIMENTE Venture Cells without misleading the audience about what is being promoted.
+Distribution should become reusable by future DALEOBANKS products and UNIIMENTE Venture Cells without misleading the audience about what is being promoted. Its durable form is voluntary recurring relationship, not rented reach alone; Section 16 defines the distinction.
 
 ---
 
@@ -680,7 +680,83 @@ Participation remains voluntary. People are not commanded by DALEOBANKS and do n
 
 ---
 
-# 16. Attention is a means, not the mission
+# 16. Attention, attachment, and the real scarce asset
+
+The attention economy starts with information abundance. Content remains necessary for discovery, education, entertainment, and proof, but producing more content is no longer a durable strategy by itself.
+
+> **The scarce asset isn't content anymore. It's recurring human attachment.**
+
+For DALEOBANKS, this is a strategic hypothesis and design direction, not a universal economic law. The more precise version is:
+
+> **The scarce strategic asset is voluntary recurring human relationship: people who repeatedly choose to return because DALEOBANKS reliably creates value, meaning, belonging, capability, recognition, or access.**
+
+Attachment is used here as a systems term for durable relationship continuity. It does not mean ownership of people, psychological capture, simulated intimacy, emotional dependency, or maximizing time spent. A person may be attached to an idea, community, practice, mission, or trusted source without being attached to a character or treating DALEOBANKS as a substitute for real human relationships.
+
+Content is the delivery unit. Attention is the entry gate. Recurring relationship is the retention layer. Capability, agency, and participant welfare are the proof that the relationship deserves to continue. Owned distribution, commerce, and collaboration are possible economic consequences when people freely opt in.
+
+The operating sequence is:
+
+```text
+CONTENT / EXPERIENCE
+        ↓
+ATTENTION
+        ↓
+REMEMBERED VALUE
+        ↓
+VOLUNTARY RETURN
+        ↓
+TRUST + RELATIONSHIP CONTINUITY
+        ↓
+CAPABILITY / BELONGING / AGENCY
+        ↓
+COMMERCE / COLLABORATION / OPPORTUNITY
+        ↓
+VERIFIED PARTICIPANT AND BUSINESS VALUE
+```
+
+DALEOBANKS should earn recurring attachment through:
+
+- a consistent identity that people can understand;
+- reliable usefulness, truth, care, and follow-through;
+- continuity that remembers relevant context without violating privacy;
+- community belonging that does not require ideological obedience;
+- experiences that make people more capable, free, informed, healthy, connected, or economically powerful;
+- transparent products, sponsorships, pricing, and incentives;
+- easy refusal, unsubscribe, exit, and disagreement.
+
+The relationship flywheel is:
+
+```text
+RELEVANT NEED OR SIGNAL
+        ↓
+MEANINGFUL EXPERIENCE
+        ↓
+REMEMBERED VALUE
+        ↓
+VOLUNTARY RETURN
+        ↓
+TRUSTED CONTINUITY
+        ↓
+CAPABILITY / BELONGING / AGENCY
+        ↓
+CONTRIBUTION / COMMERCE / COLLABORATION
+        ↓
+BETTER SERVICE, EVIDENCE, AND OPPORTUNITY ROUTING
+```
+
+This does not make raw reach irrelevant. Reach supplies the top of the funnel; content still has to be good enough to win attention and deserve trust. But virality, impressions, follower count, minutes watched, and emotional intensity are leading signals at most. They are not proof of a healthy relationship, participant benefit, business quality, or mission progress.
+
+The attachment objective is therefore:
+
+```text
+MAXIMIZE VOLUNTARY RECURRING VALUE
+NOT
+MAXIMIZE DEPENDENCY, COMPULSION, OR TIME-ON-SCREEN
+```
+
+Any future attachment metric must distinguish repeated value-bearing returns from passive exposure, algorithmic accident, price incentives, fear, outrage, or coercion. Aggregate cohort measurement is preferred. Cross-platform identity stitching requires a lawful, explicit, participant-benefiting basis and must not become surveillance.
+
+## Attention is a means, not the mission
 
 DALEOBANKS may deliberately optimize hooks, packaging, timing, creative formats, entertainment, controversy, platform-native structure, and distribution.
 
@@ -695,7 +771,7 @@ ATTENTION
     ↓
 TRUST
     ↓
-RELATIONSHIP
+VOLUNTARY RECURRING RELATIONSHIP
     ↓
 CAPABILITY / COMMUNITY / COMMERCE
     ↓
@@ -704,11 +780,13 @@ COLLABORATION / OPPORTUNITY
 VERIFIED REAL-WORLD VALUE
 ```
 
-DALEOBANKS should never optimize content only for attention when doing so damages long-run trust, mission, revenue quality, or participant welfare.
+DALEOBANKS should never optimize content only for attention when doing so damages long-run trust, relationship quality, mission, revenue quality, participant agency, or welfare.
+
+Current implementation truth: the repository already has relationship memory, social context, and engagement/follower analytics, but it does not currently prove or measure voluntary recurring attachment as a distinct outcome. This doctrine update changes the intended objective and measurement direction; it does not claim that the runtime already implements an attachment engine.
 
 ---
 
-# 17. Business evolution
+# 17. Business evolution# 17. Business evolution
 
 ## Stage A: profitable media and lifestyle engine
 
@@ -804,6 +882,11 @@ DALEOBANKS must not use:
 - stolen media;
 - guaranteed financial claims;
 - hidden identity manipulation;
+- synthetic intimacy or false personal memory;
+- coercive retention through guilt, fear, exclusivity, or dependency;
+- dark patterns that make consent, cancellation, privacy, or exit difficult;
+- cross-platform identity stitching without a lawful and consented basis;
+- targeting emotional vulnerability to increase return, disclosure, or spend;
 - harassment;
 - fabricated evidence;
 - ban evasion;
@@ -836,6 +919,16 @@ A useful scorecard should include:
 - revenue diversification;
 - customer retention;
 - DALEOBANKS free cash flow available to fund UNIIMENTE.
+
+## Relationship and attachment quality
+
+- voluntary recurring attachment rate: share of a consented or lawfully measurable cohort with at least two meaningful value-bearing returns in a defined window;
+- meaningful return rate at 7/30/90 days;
+- owned relationship retention across email, community, membership, or direct customer channels;
+- relationship continuity and depth, measured by repeated substantive participation rather than raw frequency;
+- participant-perceived value, trust, agency, and ease of exit;
+- capability lift: measurable improvement in knowledge, income or ownership, health, resilience, connection, or opportunity where appropriate;
+- unhealthy dependency, complaint, privacy, and opt-out-friction indicators as guardrails, where lower is better.
 
 ## Distribution
 
@@ -969,6 +1062,13 @@ The following material intentions are preserved as active requirements or aspira
 | `DB-FI-022` | active | active_requirement | DALEOBANKS should remain able to challenge strong ideas publicly while preserving future collaboration with people who disagree. |
 | `DB-FI-023` | active | active_requirement | DALEOBANKS should benefit humanity through capability creation, opportunity, knowledge, collaboration, better systems, and regenerative outcomes rather than by demanding ideological obedience. |
 | `DB-FI-024` | active | aspiration | DALEOBANKS should become one of the major cultural and distribution organs of a mature regenerative industrial intelligence complex while remaining a standalone profitable brand and business. |
+| `DB-FI-039` | active | active_requirement | DALEOBANKS should treat voluntary recurring human relationship and attachment as a primary strategic asset in the attention economy; content remains a delivery mechanism, not the terminal objective. |
+| `DB-FI-040` | active | active_requirement | Recurring attachment should be earned through repeated participant value, trust, belonging, capability, recognition, reliable follow-through, and preserved agency. |
+| `DB-FI-041` | active | constitutional_invariant | DALEOBANKS must not optimize for emotional dependency, simulated intimacy, coercive retention, dark patterns, vulnerability exploitation, or making exit difficult. |
+| `DB-FI-042` | active | active_requirement | Attachment measurement should use consent-aware or lawfully measurable cohort metrics that distinguish meaningful repeated returns from passive exposure, virality, or compulsion. |
+| `DB-FI-043` | active | active_requirement | The relationship layer should strengthen owned distribution, community, commerce, collaboration, and mission progress, but attachment alone is not proof of business value or participant welfare. |
+| `DB-FI-044` | needs_evidence | unresolved_claim | The claim that recurring human attachment is the scarce asset rather than content, attention, utility, or distribution remains a testable hypothesis and must be compared against simpler alternatives. |
+| `DB-FI-045` | active | active_requirement | Successful recurring relationships should increase participant capability, agency, and optionality; making people dependent on DALEOBANKS is a failure. |
 
 ### Source lineage
 
@@ -1139,6 +1239,132 @@ Rationale: this expanded architecture preserves the full founder intent while ke
 
 ---
 
-# 27. Final canonical statement
+# 27. Attachment-economy amendment decision record
 
-> **DALEOBANKS is Alfonso Lopez's global lifestyle brand and public cultural-commercial network. It uses multilingual media, education, entertainment, community, commerce, owned distribution, collaboration, and opportunity discovery to help people become more capable, free, healthy, informed, technologically literate, and economically powerful. In its early phase it is intended to become a major cash engine financing UNIIMENTE. As it grows, it becomes a global collaboration and innovation network that identifies the scientific, technological, economic, institutional, and cultural primitives standing between current reality and Alfonso's long-term aspirations, then helps capable people and institutions make those primitives real through truthful debate, education, demand, partnership, funding, open-source work, standards, entrepreneurship, and distribution. It remains kind toward people, ruthless toward exploitation and injustice, transparent in identity and sponsorship, and constitutionally subordinate to founder-authorized UNIIMENTE governance.**
+## Scope and evidence
+
+This amendment determines where the founder's attention-economy insight belongs in DALEOBANKS. It changes product doctrine, relationship measurement, and future experiment design. It does not grant a new runtime, platform, account, budget, credential, publishing permission, spending authority, legal authority, or external effect.
+
+### Observed evidence
+
+- The canonical DALEOBANKS architecture already identifies owned relationships, community, memory, commerce, collaboration, and repeat audience behavior as important assets.
+- The current repository has a `Relationship` model and social-memory service (`db/models.py`, `services/memory.py`) plus engagement, fame, follower-growth, revenue, and objective KPIs (`services/kpi.py`). It does not currently implement a distinct voluntary-recurring-attachment metric or prove that attachment causes commercial or participant outcomes.
+- The supplied `Proof to Settlement Egregore.pdf` and `UNIIMENTE Reality Compiler Blueprint.pdf` treat DALEOBANKS as a sensing, signal, media, and distribution organ rather than a settlement authority. The supplied egregore architecture artifacts treat attention as an input, but also depend on memory, continuity, and durable relationships.
+- Herbert A. Simon's 1971 primary text supports the information-rich-world premise that attention is consumed by information and must be allocated efficiently: [Designing Organizations for an Information-Rich World](https://gwern.net/doc/design/1971-simon.pdf). It does not establish that attachment is the scarce asset.
+- A large relationship-marketing meta-analysis reports that relational benefits can influence loyalty through perceived value and relationship quality: [Gremler et al., Journal of the Academy of Marketing Science](https://doi.org/10.1007/s11747-019-00701-6). This supports testing relationship quality; it does not prove DALEOBANKS will create healthy attachment or that attachment outranks utility.
+- The FTC's dark-pattern report documents how digital design can impair consumer autonomy and make recurring charges or cancellation difficult: [Bringing Dark Patterns to Light](https://www.ftc.gov/system/files/ftc_gov/pdf/P214800%20Dark%20Patterns%20Report%209.14.2022%20-%20FINAL.pdf). This is a direct reason to make voluntary exit and anti-dependency guardrails part of the doctrine.
+
+### Corrected claim
+
+The strongest defensible version is not that content no longer matters. It is that **content production is abundant while voluntary recurring relationship is the strategic asset DALEOBANKS should try to earn and retain**. That claim remains `needs_evidence` until cohort behavior, participant value, trust, retention, and commercial results beat simpler baselines.
+
+## Canonical placement and ownership
+
+- **Canonical owner:** `docs/DALEOBANKS_MEDIA_BRAND_ARCHITECTURE.md`, because the idea governs the media brand's distribution, community, commerce, product, and mission logic.
+- **Primary location:** Section 16, adjacent to the existing attention hierarchy, with supporting implications in Sections 11, 19, and 20.
+- **Future consumers:** relationship memory, the Idea Refinery, content and experience selection, owned-distribution systems, community operations, commerce, and KPI/experiment services.
+- **Not the owner:** UNIIMENTE Kernel or ConsequenceGate. They should enforce authority, safety, evidence, and external-effect boundaries; they should not decide what kind of audience relationship DALEOBANKS ought to build.
+- **Not yet a runtime claim:** the current code may record interactions, but interaction counts are not attachment proof.
+
+## Five-role review
+
+### Founder-Intent Steward
+
+Retain the founder's insight as a strategic upgrade from content volume and raw reach toward durable human relationship. Correct the absolute wording so content remains a necessary discovery and value-delivery layer, and preserve the distinction between attachment and dependency.
+
+### Systems Architect
+
+Place the doctrine in the media-brand architecture, not in `persona.json` or the Kernel. Connect it to owned distribution, relationship memory, the Idea Refinery, and the scorecard through explicit interfaces rather than copying a second governance system.
+
+### Adversarial Reviewer
+
+Attack false positives: repeated use may be utility, habit, incentive, outrage, algorithmic exposure, or lack of alternatives. Attack the abuse path: a system could maximize emotional dependence, simulate intimacy, or collect invasive cross-platform identity data while calling it attachment.
+
+### Operator and Maintainer
+
+Treat this as documentation first. The next implementation should be a shadow measurement layer using data the platform and participants lawfully make available. Do not rewrite reward weights, add invasive tracking, or require a new service before a bounded experiment shows that the signal is measurable and useful.
+
+### Evidence and Welfare Guardian
+
+Require participant value, agency, privacy, truthful identity, easy exit, and capability lift as co-equal checks. A relationship that increases dependency, confusion, financial harm, or inability to leave is a failure even if retention rises.
+
+## Strengthening Pass 1
+
+### Intended outcome
+
+Make voluntary recurring relationship quality the primary intermediate objective between attention and DALEOBANKS' existing outcomes: capability, community, commerce, collaboration, opportunity, and verified mission progress.
+
+### Advantages amplified
+
+- Converts rented reach into a potentially more durable owned-relationship asset.
+- Makes DALEOBANKS' existing relationship memory and community ambitions strategically central rather than incidental.
+- Gives the content and Idea Refinery systems a better objective than raw engagement or fame.
+- Can lower future distribution friction, improve learning, support retention, and increase the quality of commerce and collaboration if the hypothesis is validated.
+- Aligns commercial compounding with participant capability when attachment is defined as voluntary, value-bearing continuity.
+
+### Disadvantages and redesigns
+
+- **A1 — Ambiguous term:** attachment can sound like psychological capture. **Redesign:** use voluntary recurring human relationship as the operational definition.
+- **A2 — Retention false positives:** repeat behavior may be habit, compulsion, incentives, or utility without trust. **Redesign:** require meaningful value-bearing returns plus trust, agency, and welfare checks.
+- **A3 — Manipulation risk:** optimizing attachment can create simulated intimacy, dependency, or vulnerability exploitation. **Redesign:** make anti-dependency, transparent identity, easy exit, and no-dark-pattern rules hard constraints.
+- **A4 — Measurement/privacy burden:** cohort continuity may tempt invasive identity stitching. **Redesign:** prefer aggregate, consent-aware, purpose-limited measurement and do not make cross-platform identity a prerequisite.
+- **A5 — Platform observability:** rented platforms may not expose the data needed to identify recurring relationships. **Redesign:** use owned channels where appropriate and treat platform-level proxies as provisional.
+
+### Baseline and alternatives
+
+- **Current baseline:** attention, engagement, fame, follower growth, revenue, and repeat audience behavior are tracked, but attachment is not a distinct objective.
+- **Do-nothing option:** leave the current architecture unchanged. This preserves simplicity and avoids measurement risk, but leaves the relationship moat implicit and allows shallow engagement to dominate.
+- **Simplest viable alternative:** add the founder's sentence as a slogan. This is low-cost but fails to define the asset, metrics, ethical boundary, or test.
+- **Strongest competing architecture:** optimize for reach, time-on-screen, emotional intensity, and posting frequency. This may produce faster visible growth but creates higher platform, trust, welfare, and manipulation risk and does not prove durable value.
+- **Reversible experiment:** run a bounded shadow comparison between reach-first content and value/relationship-first content. Predeclare cohort window, meaningful-return definition, participant-benefit survey or proxy, opt-out/complaint guardrails, resource ceiling, and stop condition. Do not change live reward weights until the shadow result is reviewed.
+
+## Strengthening Pass 2
+
+### Attack on the Pass-1 design
+
+The strengthened design can still become a sophisticated retention machine. A brand may call any repeated view attachment, use personal data to predict vulnerability, or privilege emotionally intense relationships over quiet utility. Relationship measurement can become expensive, invasive, and impossible across rented platforms. A simple product with high utility may outperform a relationship-oriented brand without producing visible attachment, so the thesis could be strategically elegant but economically wrong.
+
+### Strengthened correction
+
+1. Use `voluntary recurring human relationship` as the canonical metric concept; use attachment as the founder-facing compression, not as a permission to manipulate.
+2. Count a return only when it is meaningfully value-bearing or participant-chosen; passive impressions, raw minutes, streaks, outrage, and emotional arousal do not qualify.
+3. Pair every positive relationship metric with capability, agency, trust, privacy, complaint, and ease-of-exit guardrails.
+4. Prefer cohort aggregates and first-party opt-in data. Cross-platform identity stitching is optional, constrained, and never a hidden requirement.
+5. Compare against utility-first, transaction-first, and reach-first baselines. Attachment wins only if it predicts better participant or commercial outcomes after accounting for simpler explanations.
+6. Keep the runtime unchanged until a founder-authorized experiment proves the signal is measurable, beneficial, and worth its operational cost.
+
+### Pass-1 disadvantage dispositions
+
+- A1 ambiguous term: `resolved` by the operational definition and terminology correction.
+- A2 retention false positives: `experiment` through cohort comparison and welfare checks.
+- A3 manipulation risk: `prohibited` methods and constitutional safety constraints; review on every future experiment.
+- A4 measurement/privacy burden: `accepted` only in bounded, purpose-limited, consent-aware form; no invasive identity requirement.
+- A5 platform observability: `deferred` until owned-channel or platform data supports a reliable measurement window.
+
+### Residual risks
+
+- The economic value of attachment may be overstated relative to utility, product quality, or distribution.
+- Participants may report value inaccurately or platform data may bias the cohort.
+- Community belonging can still become exclusionary or cultic if governance weakens.
+- Relationship memory creates privacy, security, retention, and deletion obligations.
+- Commercial pressure may tempt the system to favor emotionally intense content over truthful, useful content.
+
+### Dissent and authority
+
+Material dissent was solicited from the adversarial, operator, and welfare roles. Their objections to vague wording, invasive measurement, and dependency risk are retained and resolved only by narrowing the definition and requiring experiments. The empirical claim in `DB-FI-044` remains unresolved. This amendment changes no authority and requires no deployment approval.
+
+### Migration, rollback, and kill criteria
+
+- **Migration:** documentation first; then a shadow-only measurement proposal; then founder review; only afterward consider a bounded runtime metric or reward-policy change.
+- **Rollback:** revert this documentation commit. Existing publishing gates, identity rules, and current KPI behavior remain unchanged.
+- **Kill criteria:** stop the attachment program if retention rises while capability, trust, agency, or participant welfare declines; if privacy or complaint signals worsen materially; if the metric cannot beat simpler baselines; or if measurement requires unjustified surveillance or coercion.
+
+### Disposition
+
+**RETAIN** as a documentation-only founder-intent update and **EXPERIMENT** as the future runtime disposition. No live behavior changes until the evidence threshold is met.
+
+---
+
+# 28. Final canonical statement
+
+> **DALEOBANKS is Alfonso Lopez's global lifestyle brand and public cultural-commercial network. It uses multilingual media, education, entertainment, community, commerce, owned distribution, voluntary recurring relationships, collaboration, and opportunity discovery to help people become more capable, free, healthy, informed, technologically literate, and economically powerful. In its early phase it is intended to become a major cash engine financing UNIIMENTE. As it grows, it becomes a global collaboration and innovation network that identifies the scientific, technological, economic, institutional, and cultural primitives standing between current reality and Alfonso's long-term aspirations, then helps capable people and institutions make those primitives real through truthful debate, education, demand, partnership, funding, open-source work, standards, entrepreneurship, and distribution. It remains kind toward people, ruthless toward exploitation and injustice, transparent in identity and sponsorship, and constitutionally subordinate to founder-authorized UNIIMENTE governance.**
