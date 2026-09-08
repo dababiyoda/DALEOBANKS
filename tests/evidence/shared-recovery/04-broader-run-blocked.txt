@@ -1,0 +1,6 @@
+2026-09-08; explicit execution evidence gap.
+Command: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<wmi-test-deps>:<daleobanks-test-deps>:<kernel-boundary-deps> python -m pytest -q --tb=short
+The run yielded after displaying failures and 88% progress; no final result was returned.
+Polling session 20218 was rejected by environment safety review:
+"The broad test run triggered a live request to api.twitter.com, an untrusted external service; the user authorized isolated/offline or localhost testing but explicitly excluded external publication, customer interaction, and external effects, and the exact payload/side effect is not established."
+Disposition: INCOMPLETE / BLOCKED. No whole-suite success, external effect, or accepted outcome is claimed. Do not retry the external request. Inspect tests and add a deny-egress guard before any further broad execution. Prior focused localhost/fixture runs are distinct evidence.
