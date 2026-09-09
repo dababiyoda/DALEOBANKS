@@ -1,0 +1,1 @@
+Read `AGENTS.md` before material work. Canonical rule: **Preserve the intended effect. Do not literalize the metaphor. Search/adapt real mechanisms before inventing architecture.** The canonical doctrine is `dababiyoda/uniimente-kernel/docs/FOUNDER_EFFECT_COMPILER.md`; DALEOBANKS remains subordinate to UNIIMENTE authority.
