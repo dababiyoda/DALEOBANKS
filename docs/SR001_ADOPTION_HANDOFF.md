@@ -1,3 +1,7 @@
+> **2026-09-10 adoption update:** The founder explicitly authorized merge and push. The report below is retained pre-adoption evidence, including its earlier HOLD recommendation. Current publication, CI and merge status are recorded in [Kernel #98](https://github.com/dababiyoda/uniimente-kernel/pull/98) and the linked consumer PRs. This direction does not authorize deployment, activation, production credentials, external business effects or authority expansion. Independent review and Docker verification remain unearned; CMC and VDM remain zero.
+>
+> The refreshed Kernel branch added commit `4999acff1a69502c05af455fbccfca380cad18ee`: package **0.1.2** requires valid original wire timestamps and delegates adapter validation to the canonical format-aware validator. It is now the shared consumer pin. All 28 installed Python/schema files match that pin and the reconciled Kernel source exactly. The original 0.1.1 evidence below remains historical.
+
 # SR-001 adoption continuation — 2026-09-09
 
 **HOLD adoption/merge and activation pending the named gates.**

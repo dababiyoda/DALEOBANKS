@@ -1,5 +1,5 @@
 apscheduler==3.11.0
-uniimente-kernel-boundaries @ https://github.com/dababiyoda/uniimente-kernel/archive/3e059c20331d96e05a44daac1b097896aaabde93.tar.gz
+uniimente-kernel-boundaries @ https://github.com/dababiyoda/uniimente-kernel/archive/4999acff1a69502c05af455fbccfca380cad18ee.tar.gz
 fastapi==0.116.1
 levenshtein==0.27.1
 numpy==2.3.2
