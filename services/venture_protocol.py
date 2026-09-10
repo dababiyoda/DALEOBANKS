@@ -83,6 +83,8 @@ def packet_to_wire(packet: Any) -> Dict[str, Any]:
     payload = asdict(packet)
     payload["schema_version"] = SCHEMA_VERSION
     payload["created_at"] = packet.created_at.isoformat()
+    from adapters.contract_validation import validate_contract
+    validate_contract(payload, 'wire-opportunity-packet')
     return payload
 
 
@@ -96,6 +98,8 @@ def assessment_to_wire(assessment: Any) -> Dict[str, Any]:
 def validate_assessment_wire(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Validate an inbound VentureAssessment payload. Raises ValueError on a
     contract violation — inbound wire data is untrusted input."""
+    from adapters.contract_validation import validate_contract
+    validate_contract(payload, 'wire-venture-assessment')
     if not isinstance(payload, dict):
         raise ValueError("assessment payload must be an object")
     go_no_go = payload.get("go_no_go")

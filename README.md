@@ -1,5 +1,65 @@
 # DaLeoBanks - Autonomous AI Agent
 
+## SR-001 shared bridge recovery (draft, 2026-09-08)
+
+This bounded repair starts from main ed5e95d7f48e006d180b972efe138179325c31d2.
+Historical operating claims below are not established by this package. No live
+Twitter/X operation, deployment, credentials, founder authentication, economic
+outcome, CMC or VDM is authorized or claimed here.
+
+The consumer imports one canonical Kernel boundary package, revision
+3e059c20331d96e05a44daac1b097896aaabde93 (uniimente-kernel-boundaries 0.1.1), pinned
+in requirements.txt and pyproject.toml. services/bridge_security.py and
+services/kernel_contracts.py are temporary import adapters, not security mirrors;
+their headers define source, owner, supported versions, expiry/removal and refusal.
+Kernel contracts/adapters/events/provenance own shared meaning and durable truth.
+DALEOBANKS retains its domain models and consumer composition. The old transport
+and translation implementations remain in Git as historical alternatives.
+
+WMI #33 requires JWT plus signed-body admission. The linked WMI consumer draft
+retains both checks and adds transport v2 context/response binding and durable
+idempotency. This producer supplies an explicitly configured synthetic JWT,
+signs the exact body, refuses redirects, verifies the actual response bytes and
+context, and preserves returned identity, observation time and dissent. It never
+issues credentials. Shared keys prove possession only, not isolation or Alfonso's
+identity. Missing keys/JWT/state/anchor/principal, unsupported protocol or schema,
+tampering and conflicting identities fail closed. A retry has a new transport
+nonce with the same logical operation key and payload; response replay protection
+survives consumer-process replacement.
+
+HTTP mode is allowed only in explicit synthetic-localhost composition. The
+required test settings are UNIIMENTE_BRIDGE_MODE=synthetic-localhost, a loopback
+WEALTHMACHINE_URL, and isolated signing/JWT/state/constitutional-anchor/principal
+fixtures. These settings authorize no live routing. Direct organ HTTP remains
+refused until canonical Kernel mediation is composed and reviewed. Do not weaken
+WMI or restore unsigned admission to migrate an old client.
+
+Bounded checks: tests/test_shared_response_boundary.py,
+tests/test_signed_bridge_client.py, tests/test_wealthmachine_http.py and
+tests/test_kernel_contract_parity.py; real producer-consumer restart testing
+lives in WMI tests/test_shared_consumer_integration.py. See
+tests/evidence/shared-recovery and the Kernel SR-001 adoption handoff for pins,
+commands, counts, warnings and dependency order. At the pinned Kernel 0.1.1
+revision above, the four focused files pass 33 tests (0.28s); broad execution
+remains blocked as described below. This is consumer regression evidence only.
+
+The broad suite is **BLOCKED/INCOMPLETE**, not passing: two runs triggered the
+environment's safety review over api.twitter.com access. A Python test-only
+deny-egress guard was added, but the second attempt was also blocked; its
+effectiveness is not established. No further broad rerun is justified here.
+Use an independently isolated OS/container offline runner after inspecting the
+network fixtures. Do not treat fallback dependencies, a monkeypatch or blocked
+output as evidence of safe external operation. Docker image build/run remains
+unverified separately. No default-branch repair follows from this draft.
+
+Adoption order: Kernel boundary review, WMI #33 dependency, then the linked WMI
+consumer and this producer as one compatibility gate. No merge is authorized.
+Rollback before activation is to leave the existing branches untouched. A later
+authorized sandbox rollback must stop writers, preserve history/head and all
+obligations, and refuse unsupported history; never erase a state file or restore
+permissive transport to make startup green. The September 5 two passes govern;
+these are implementation checks, not a new architecture or third formal pass.
+
 DaLeoBanks is a production-grade, self-evolving AI agent that operates on Twitter/X. The stack pairs a Python FastAPI backend (agent logic, scheduler, persona management) with a Node/Express + Vite frontend that proxies requests to the backend.
 
 ## Features

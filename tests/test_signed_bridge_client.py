@@ -18,7 +18,9 @@ from services.ledger import DecisionLedger
 from services.venture_protocol import SCHEMA_VERSION
 from services.wealthmachine_client import CircuitOpenError, WealthMachineClient
 
-KEY = "test-signing-key"
+from tests.bridge_fixtures import bridge_configuration, Response, assessment_wire, intercept
+
+KEY = "synthetic-shared-bridge-key"
 
 
 class _FakeResponse:
@@ -47,26 +49,20 @@ def _client(tmp_path):
 
 
 def _packet():
-    return OpportunityPacket(evidence=["e1"], possible_offer="guide",
+    return OpportunityPacket(source='synthetic', observed_pain='retained observation', evidence=["e1"], possible_offer="guide",
                              monetization_paths=["paid guide"])
 
 
 def _assessment_wire(packet):
-    return {
-        "opportunity_packet_id": packet.id, "go_no_go": "defer",
-        "opportunity_score": 0.5, "requires_human_approval": True,
-    }
+    return assessment_wire(packet)
 
 
 def _signed_response(packet):
-    body = json.dumps(_assessment_wire(packet)).encode()
-    headers = build_headers(body, identity="wealthmachine",
-                            schema_version=SCHEMA_VERSION)
-    return _FakeResponse(_assessment_wire(packet), headers)
+    return Response(packet)
 
 
 def test_outbound_requests_are_signed(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wm.local")
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     monkeypatch.setenv("WEALTHMACHINE_SIGNING_KEY", KEY)
     client = _client(tmp_path)
     packet = _packet()
@@ -77,7 +73,7 @@ def test_outbound_requests_are_signed(tmp_path, monkeypatch):
         seen["body"] = request.data
         return _signed_response(packet)
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    intercept(monkeypatch, fake_urlopen)
     assessment = client.evaluate(packet)
 
     headers = seen["headers"]
@@ -87,13 +83,13 @@ def test_outbound_requests_are_signed(tmp_path, monkeypatch):
     # The signature verifies against the exact bytes that were sent.
     expected = sign(KEY, "daleobanks", headers[H_TIMESTAMP.lower()],
                     headers[H_NONCE.lower()], packet.id, SCHEMA_VERSION,
-                    seen["body"])
+                    seen["body"], trace_id=packet.id)
     assert headers[H_SIGNATURE.lower()] == expected
     assert assessment.requires_human_approval is True
 
 
 def test_forged_response_is_rejected(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wm.local")
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     monkeypatch.setenv("WEALTHMACHINE_SIGNING_KEY", KEY)
     client = _client(tmp_path)
     packet = _packet()
@@ -105,35 +101,34 @@ def test_forged_response_is_rejected(tmp_path, monkeypatch):
         headers[H_SIGNATURE] = "0" * 64  # forged
         return _FakeResponse(_assessment_wire(packet), headers)
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    intercept(monkeypatch, fake_urlopen)
     with pytest.raises(Exception):
         client.evaluate(packet)
 
 
 def test_replayed_response_nonce_is_rejected(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wm.local")
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     monkeypatch.setenv("WEALTHMACHINE_SIGNING_KEY", KEY)
     client = _client(tmp_path)
     packet = _packet()
     canned = _signed_response(packet)  # one signed response, served twice
 
-    monkeypatch.setattr("urllib.request.urlopen",
-                        lambda request, timeout=None: canned)
+    intercept(monkeypatch, lambda request, timeout=None: canned)
     client.evaluate(packet)  # first use of the nonce: fine
     with pytest.raises(Exception):
         client.evaluate(packet)  # replayed nonce: refused
 
 
 def test_circuit_breaker_opens_and_fails_closed(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wm.local")
-    monkeypatch.delenv("WEALTHMACHINE_SIGNING_KEY", raising=False)
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
+    monkeypatch.setenv("WEALTHMACHINE_SIGNING_KEY", KEY)
     client = _client(tmp_path)
     packet = _packet()
 
     def failing_urlopen(request, timeout=None):
         raise ConnectionError("service unavailable")
 
-    monkeypatch.setattr("urllib.request.urlopen", failing_urlopen)
+    intercept(monkeypatch, failing_urlopen)
     for _ in range(client.FAILURE_THRESHOLD):
         with pytest.raises(ConnectionError):
             client.evaluate(packet)
@@ -142,14 +137,14 @@ def test_circuit_breaker_opens_and_fails_closed(tmp_path, monkeypatch):
     def must_not_be_called(request, timeout=None):  # pragma: no cover
         raise AssertionError("network call while circuit open")
 
-    monkeypatch.setattr("urllib.request.urlopen", must_not_be_called)
+    intercept(monkeypatch, must_not_be_called)
     with pytest.raises(CircuitOpenError):
         client.evaluate(packet)
     assert client.ledger.replay("bridge_circuit_opened")
 
 
-def test_unsigned_local_mode_still_works(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wm.local")
+def test_unsigned_local_mode_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     monkeypatch.delenv("WEALTHMACHINE_SIGNING_KEY", raising=False)
     client = _client(tmp_path)
     packet = _packet()
@@ -158,5 +153,5 @@ def test_unsigned_local_mode_still_works(tmp_path, monkeypatch):
         "urllib.request.urlopen",
         lambda request, timeout=None: _FakeResponse(_assessment_wire(packet)),
     )
-    assessment = client.evaluate(packet)
-    assert assessment.go_no_go == "defer"
+    with pytest.raises(PermissionError, match="signing configuration"):
+        client.evaluate(packet)
