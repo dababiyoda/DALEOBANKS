@@ -1,5 +1,9 @@
 """
-OpenAI LLM Adapter with retry logic and budgets
+LLM adapter with retry logic, budgets and an ordered provider chain.
+
+Any OpenAI-compatible endpoint works (local Ollama/llama.cpp/vLLM, Groq,
+OpenRouter, Gemini, OpenAI); see ``services.llm_providers`` for the env
+variables. Providers are tried in order, then the template fallback.
 """
 
 import asyncio
@@ -13,6 +17,7 @@ import openai
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from config import get_config
+from services.llm_providers import ProviderConfig, resolve_provider_chain
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -28,11 +33,20 @@ class LLMBudget:
     day_reset_time: datetime = field(default_factory=datetime.now)
 
 class LLMAdapter:
-    """OpenAI adapter with retry logic and budget management"""
+    """Provider-chain adapter with retry logic and budget management"""
     
-    def __init__(self):
+    def __init__(self, providers: Optional[List[ProviderConfig]] = None):
         self.config = get_config()
-        self.client = openai.AsyncOpenAI(api_key=self.config.OPENAI_API_KEY)
+        if providers is None:
+            providers, skipped = resolve_provider_chain()
+            for reason in skipped:
+                logger.warning(f"LLM provider skipped: {reason}")
+        self.providers = list(providers)
+        self.clients = {
+            p.name: openai.AsyncOpenAI(api_key=p.api_key, base_url=p.base_url)
+            for p in self.providers
+        }
+        self.last_provider: Optional[str] = None
         self.budget = LLMBudget()
         self.template_fallback_enabled = True
         
@@ -71,6 +85,31 @@ class LLMAdapter:
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=retry_if_exception_type((openai.RateLimitError, openai.APITimeoutError))
     )
+    async def _call_provider(
+        self,
+        provider: ProviderConfig,
+        chat_messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        start_time = time.time()
+        response = await self.clients[provider.name].chat.completions.create(
+            model=provider.model,
+            messages=chat_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        duration = time.time() - start_time
+        usage = getattr(response, "usage", None)
+        tokens = getattr(usage, "total_tokens", "?") if usage else "?"
+        logger.info(
+            f"LLM call via {provider.name}/{provider.model} completed in {duration:.2f}s, tokens: {tokens}"
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError(f"{provider.name} returned an empty completion")
+        return content
+
     async def chat(
         self, 
         system: str, 
@@ -79,60 +118,40 @@ class LLMAdapter:
         max_tokens: Optional[int] = None
     ) -> str:
         """
-        Chat completion with retry logic and budget management
-        
-        Args:
-            system: System prompt
-            messages: Conversation messages
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-            
-        Returns:
-            Generated text response
+        Chat completion across the provider chain with budget management.
+
+        Each provider gets its own retries on rate limits/timeouts; any
+        remaining failure moves to the next provider, then to templates.
         """
-        # Check budget
         if not self._check_budget():
             if self.template_fallback_enabled:
                 logger.info("Budget exceeded, falling back to template-only generation")
+                self.last_provider = "template"
                 return self._template_fallback(system, messages)
-            else:
-                raise Exception("LLM budget exceeded and template fallback disabled")
-        
-        try:
-            # Prepare messages
-            chat_messages = [{"role": "system", "content": system}]
-            chat_messages.extend(messages)
-            
-            # Make API call
-            start_time = time.time()
-            response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=chat_messages,
-                temperature=temperature,
-                max_tokens=max_tokens or self.budget.max_tokens_per_call
-            )
-            
-            # Log metrics
-            duration = time.time() - start_time
-            usage = response.usage
-            logger.info(f"LLM call completed in {duration:.2f}s, tokens: {usage.total_tokens}")
-            
-            # Increment budget
+            raise Exception("LLM budget exceeded and template fallback disabled")
+
+        chat_messages = [{"role": "system", "content": system}]
+        chat_messages.extend(messages)
+        limit = max_tokens or self.budget.max_tokens_per_call
+
+        last_error: Optional[Exception] = None
+        for provider in self.providers:
+            try:
+                reply = await self._call_provider(provider, chat_messages, temperature, limit)
+            except Exception as e:
+                last_error = e
+                logger.warning(f"LLM provider {provider.name} failed, trying next: {e}")
+                continue
             self._increment_budget()
-            
-            return response.choices[0].message.content
-            
-        except openai.RateLimitError as e:
-            logger.error(f"Rate limit error: {e}")
-            raise
-        except openai.APITimeoutError as e:
-            logger.error(f"Timeout error: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected LLM error: {e}")
-            if self.template_fallback_enabled:
-                return self._template_fallback(system, messages)
-            raise
+            self.last_provider = provider.name
+            return reply
+
+        if self.template_fallback_enabled:
+            self.last_provider = "template"
+            return self._template_fallback(system, messages)
+        if last_error is not None:
+            raise last_error
+        raise Exception("no LLM provider configured and template fallback disabled")
     
     def _template_fallback(self, system: str, messages: List[Dict[str, str]]) -> str:
         """
@@ -159,5 +178,10 @@ CTA: Join beta at link.bio"""
         return {
             "hourly_usage": f"{self.budget.current_hour_calls}/{self.budget.max_calls_per_hour}",
             "daily_usage": f"{self.budget.current_day_calls}/{self.budget.max_calls_per_day}",
-            "template_fallback": self.template_fallback_enabled
+            "template_fallback": self.template_fallback_enabled,
+            "providers": [
+                {"name": p.name, "model": p.model, "open_weights": p.open_weights}
+                for p in self.providers
+            ],
+            "last_provider": self.last_provider,
         }
