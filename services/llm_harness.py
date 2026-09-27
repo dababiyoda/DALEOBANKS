@@ -30,6 +30,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from services.idea_refinery import EDUCATIONAL_DISCLOSURE, check_educational
 from services.ledger import DecisionLedger
+from services.llm_providers import resolve_provider_chain
 from services.logging_utils import get_logger
 from services.prompt_firewall import get_firewall
 
@@ -385,11 +386,8 @@ class ModelRouter:
     def route(self, role: str) -> str:
         if role == "screen":
             return "deterministic"  # the firewall screens; no model required
-        if os.getenv("OPENAI_API_KEY"):
-            return "openai"
-        if os.getenv("OLLAMA_URL"):
-            return "ollama"
-        return "template"
+        chain, _ = resolve_provider_chain()
+        return chain[0].name if chain else "template"
 
 
 class FallbackManager:
@@ -407,10 +405,12 @@ class FallbackManager:
         role: str,
     ) -> Tuple[str, str]:
         provider = self.router.route(role)
-        if provider in ("openai", "ollama") and llm_adapter is not None:
+        if provider not in ("template", "deterministic") and llm_adapter is not None:
             try:
                 reply = await llm_adapter.chat(system, [{"role": "user", "content": user_text}])
-                return reply, provider
+                # The adapter walks its own chain; report who actually answered.
+                answered = getattr(llm_adapter, "last_provider", None)
+                return reply, answered if isinstance(answered, str) and answered else provider
             except Exception as exc:  # degraded, never dead
                 logger.warning(f"{provider} generation failed, degrading: {exc}")
         if template_fn is not None:

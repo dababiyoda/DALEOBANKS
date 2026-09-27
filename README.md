@@ -72,7 +72,7 @@ DaLeoBanks is a production-grade, self-evolving AI agent that operates on Twitte
 - Python 3.11+
 - Node.js 18+
 - Twitter/X API credentials (for live posting)
-- OpenAI API key
+- Optional: any LLM endpoint — local open weights via [Ollama](https://ollama.com), a free hosted tier (Groq, OpenRouter, Gemini), or OpenAI. With none, generation uses deterministic templates.
 
 ## Environment variables
 Copy `.env.example` to `.env` and fill in the required secrets:
@@ -82,7 +82,8 @@ cp .env.example .env
 ```
 
 Key variables:
-- **OPENAI_API_KEY** and **X_* tokens** for LLM + Twitter access
+- **LLM_PROVIDERS** plus per-provider keys/models (`OLLAMA_URL`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `LLM_BASE_URL`, `OPENAI_API_KEY`) — an ordered chain of OpenAI-compatible endpoints; each failure falls through to the next, then to templates (`services/llm_providers.py`)
+- **X_* tokens** for Twitter access
 - **ADMIN_TOKEN** and **JWT_SECRET** for admin/auth endpoints
 - **LIVE** toggles autonomous posting; keep `false` for local testing
 - **PORT/BACKEND_PORT** control the Express proxy and Python backend ports
