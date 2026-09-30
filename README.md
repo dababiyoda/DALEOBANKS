@@ -16,7 +16,7 @@ existing templates/hash memory, with no paid model fallback. An existing
 `OPENAI_API_KEY` does not select a paid provider. For offline fixtures set
 `LLM_PROVIDER=template` and `EMBEDDINGS_PROVIDER=hash`.
 
-See the Kernel's [open-source stack](https://github.com/dababiyoda/uniimente-kernel/blob/main/docs/OPEN_SOURCE_STACK.md)
+See the Kernel's [open-source stack](https://github.com/dababiyoda/uniimente-kernel/blob/dfc1f3394060226023c92140bfcb6a7b322f129e/docs/OPEN_SOURCE_STACK.md)
 for researched licenses, hardware estimates, remaining platform costs and
 migration boundaries. Model downloads and compute still need disk, RAM and electricity.
 
