@@ -88,3 +88,37 @@ def test_local_vectors_keep_model_identity(monkeypatch):
     _, tag = service.embed("recall")
     assert tag == {"provider": "local", "model": "nomic-embed-text", "dim": 2}
     assert tag_key(tag) != tag_key({**tag, "model": "different-model"})
+
+
+def test_local_embedding_protocol_normalizes_without_an_api_key(monkeypatch):
+    import io
+    import json
+    from services import embeddings
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == "http://127.0.0.1:11434/v1/embeddings"
+            assert request.get_header("Authorization") is None
+            assert json.loads(request.data) == {"model": "nomic-embed-text", "input": "recall"}
+            return io.BytesIO(b'{"data":[{"embedding":[3.0,4.0]}]}')
+
+    monkeypatch.setattr(embeddings, "local_opener", lambda: Opener())
+    assert EmbeddingService(mode="ollama").embed("recall") == (
+        {0: 0.6, 1: 0.8}, {"provider": "local", "model": "nomic-embed-text", "dim": 2}
+    )
+
+
+@pytest.mark.parametrize("values", [[], [0, 0], [True], [float("nan")], "bad"])
+def test_malformed_local_embedding_uses_hash_and_never_paid(monkeypatch, values):
+    import io
+    import json
+    from services import embeddings
+
+    class Opener:
+        def open(self, request, timeout):
+            return io.BytesIO(json.dumps({"data": [{"embedding": values}]}).encode())
+
+    monkeypatch.setattr(embeddings, "local_opener", lambda: Opener())
+    service = EmbeddingService(mode="ollama")
+    monkeypatch.setattr(service, "_openai_embed", lambda _: pytest.fail("paid fallback"))
+    assert service.embed("recall")[1]["provider"] == "hash"
