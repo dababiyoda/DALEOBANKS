@@ -1,5 +1,32 @@
 # DaLeoBanks - Autonomous AI Agent
 
+## Local open-source AI
+
+Install Ollama, start its server with `OLLAMA_NO_CLOUD=1`, then run:
+
+```bash
+ollama pull qwen3.5:4b
+ollama pull nomic-embed-text
+```
+
+Copy `.env.example` to `.env`. Local chat and embeddings use the loopback
+OpenAI-compatible API; the OpenAI SDK is only the protocol client. Ollama,
+llama.cpp, vLLM and LocalAI can serve this protocol. Local failure degrades to
+existing templates/hash memory, with no paid model fallback. An existing
+`OPENAI_API_KEY` does not select a paid provider. For offline fixtures set
+`LLM_PROVIDER=template` and `EMBEDDINGS_PROVIDER=hash`.
+
+Optional hosted fallbacks: when the local model is down or too weak for a
+moment, `LLM_FALLBACKS=groq,openrouter` (in order) tries those hosted
+OpenAI-compatible tiers before templates. Nothing is inferred from keys being
+present, prompts leave the machine only for listed providers, base URLs are
+fixed per provider, and `openai` (paid) runs only if listed. Template mode
+makes no calls at all. See `services/llm_providers.py` and `.env.example`.
+
+See the Kernel's [open-source stack](https://github.com/dababiyoda/uniimente-kernel/blob/dfc1f3394060226023c92140bfcb6a7b322f129e/docs/OPEN_SOURCE_STACK.md)
+for researched licenses, hardware estimates, remaining platform costs and
+migration boundaries. Model downloads and compute still need disk, RAM and electricity.
+
 ## SR-001 shared bridge recovery (draft, 2026-09-08)
 
 This bounded repair starts from main ed5e95d7f48e006d180b972efe138179325c31d2.
@@ -72,7 +99,7 @@ DaLeoBanks is a production-grade, self-evolving AI agent that operates on Twitte
 - Python 3.11+
 - Node.js 18+
 - Twitter/X API credentials (for live posting)
-- Optional: any LLM endpoint — local open weights via [Ollama](https://ollama.com), a free hosted tier (Groq, OpenRouter, Gemini), or OpenAI. With none, generation uses deterministic templates.
+- [Ollama](https://github.com/ollama/ollama) with `qwen3.5:4b` (local AI; no paid key required)
 
 ## Environment variables
 Copy `.env.example` to `.env` and fill in the required secrets:
@@ -82,8 +109,7 @@ cp .env.example .env
 ```
 
 Key variables:
-- **LLM_PROVIDERS** plus per-provider keys/models (`OLLAMA_URL`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `LLM_BASE_URL`, `OPENAI_API_KEY`) — an ordered chain of OpenAI-compatible endpoints; each failure falls through to the next, then to templates (`services/llm_providers.py`)
-- **X_* tokens** for Twitter access
+- **LLM_PROVIDER**, **LLM_BASE_URL**, **LLM_MODEL** for local AI; **X_* tokens** only for optional live Twitter access
 - **ADMIN_TOKEN** and **JWT_SECRET** for admin/auth endpoints
 - **LIVE** toggles autonomous posting; keep `false` for local testing
 - **PORT/BACKEND_PORT** control the Express proxy and Python backend ports
