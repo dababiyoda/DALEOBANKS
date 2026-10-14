@@ -27,3 +27,20 @@ def mint_publish_grant(platform: str, content: str, *, draft_id: str = "draft-1"
 
 def grant_metadata(grant, draft_id: str = "draft-1", **extra):
     return {"capability_grant_id": grant.id, "draft_id": draft_id, **extra}
+
+
+def mint_write_grant(family: str, resource: str, *, content: str = "", uses: int = 1):
+    """A write.<family> grant for one exact tweet or user id."""
+    action = f"write.{family}"
+    line = OperatorLine(ledger=get_ledger(), kill_switch=get_kill_switch())
+    with get_db_session() as session:
+        request = line.request_approval(
+            session, kind=family, summary=f"{family} {resource}",
+            payload={"resource": resource, "action_type": action},
+        )
+        line.handle_command(session, f"YES {request.code}")
+        return get_capability_service().mint_from_approval(
+            session, request.id, action, f"{family} {resource}", resource,
+            named_targets=["x"], maximum_uses=uses,
+            metadata={"content_sha256": content_sha256(content)} if content else {},
+        )

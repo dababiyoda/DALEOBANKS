@@ -77,9 +77,14 @@ built for the first loop.
   canonical enforcement is the unmerged stack DALEOBANKS #58 → #73 on Kernel
   #11 → #25, and the shared boundary package on `main` does not yet carry the gate.
   When the gate lands it replaces `authorize_publish` at this one seam.
-- **Still unmediated outside this table:** DMs (`x_client.send_dm`, called directly by
-  `runner.py`), likes, reposts and follows. None is part of the first loop. #73
-  gates them through the Kernel, and `LIVE=false` still holds them today.
+- **Outside this table, also gated (organ-local):** live likes, unlikes, reposts,
+  follows and DMs need a `write.<family>` grant for the exact tweet or user, and for a
+  DM the approved text. This is checked in `XClient._execute_write`
+  (`tests/test_write_families_governed.py`). A refusal returns `False` and the runner
+  logs no engagement. Arming `LIVE` for EXPERIMENT-001 therefore releases only what is
+  granted. `tests/test_no_side_effect_bypass.py` fails the build on any new ungoverned
+  platform write call site. The Kernel gate (#73) replaces these organ-local checks
+  when it is adopted.
 
 Coverage is not a number to push up by building adapters. Payment and delivery
 are human-only on purpose, and that is the correct end state for the first loop.

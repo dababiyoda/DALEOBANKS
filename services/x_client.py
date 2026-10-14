@@ -17,6 +17,16 @@ import random
 
 logger = get_logger(__name__)
 
+# Write families that change state on the platform outside the publish
+# seam. Each needs a write.<family> grant naming the exact tweet or user.
+# create_tweet and upload_media are reached only inside the publish seam.
+GOVERNED_WRITE_FAMILIES = frozenset({"like", "unlike", "repost", "follow", "send_dm"})
+
+# Returned by _execute_write when authority refuses a governed write, so a
+# refusal can never read as the dry-run "success" default.
+GATED = object()
+
+
 @dataclass
 class CircuitBreaker:
     failure_count: int = 0
@@ -176,6 +186,7 @@ class XClient:
         idempotency_key: str | None = None,
         timeout: float = 15.0,
         require_live: bool = True,
+        governance: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> Any:
         """
@@ -229,6 +240,26 @@ class XClient:
                 f"Skipping duplicate call for {endpoint} with idempotency_key={idempotency_key}"
             )
             return default_result
+
+        if endpoint in GOVERNED_WRITE_FAMILIES:
+            # A live like, repost, follow or DM needs a human-approved grant
+            # for exactly this tweet or user (and DM text). Refusals are
+            # ledgered and reported as failures, never as silent success.
+            from services.ledger import get_ledger
+            from services.publish_authority import authorize_write, content_sha256
+
+            gov = governance or {}
+            decision = authorize_write(
+                action_type=f"write.{endpoint}", resource=gov.get("resource", ""),
+                target="x", content=gov.get("content", ""), grant_id=gov.get("grant_id", ""),
+            )
+            if not decision.allowed:
+                get_ledger().record("write_gated", {
+                    "family": endpoint, "resource": gov.get("resource", ""),
+                    "reason": decision.reason, "capability_grant_id": decision.grant_id,
+                    "content_sha256": content_sha256(gov.get("content", "")) if gov.get("content") else "",
+                })
+                return GATED
 
         attempt = 0
         while attempt < self.max_write_attempts:
@@ -318,7 +349,7 @@ class XClient:
         # If dry run or failure, result may be a dummy ID or None; ensure type
         return result  # type: ignore[return-value]
     
-    async def like(self, tweet_id: str) -> bool:
+    async def like(self, tweet_id: str, *, capability_grant_id: Optional[str] = None) -> bool:
         """Like a tweet"""
         endpoint = "like"
         
@@ -330,10 +361,11 @@ class XClient:
             enabled=self.config.ENABLE_LIKES,
             default_result=True,
             func=_call,
+            governance={"resource": tweet_id, "content": "", "grant_id": capability_grant_id or ""},
         )
-        return bool(result)
+        return result is not GATED and bool(result)
 
-    async def send_dm(self, user_id: str, text: str) -> bool:
+    async def send_dm(self, user_id: str, text: str, *, capability_grant_id: Optional[str] = None) -> bool:
         """Send a direct message (DM) to a user.
 
         This helper wraps the Twitter/X DM endpoint and respects the
@@ -366,8 +398,9 @@ class XClient:
             enabled=self.config.ENABLE_DMS,
             default_result=True,
             func=_call,
+            governance={"resource": user_id, "content": text, "grant_id": capability_grant_id or ""},
         )
-        return bool(result)
+        return result is not GATED and bool(result)
 
     async def upload_media(self, media_path: str, media_type: str = "image") -> Optional[str]:
         """Upload an image or video to X and return the media ID.
@@ -418,7 +451,7 @@ class XClient:
             return result  # type: ignore[return-value]
         return str(result)
     
-    async def unlike(self, tweet_id: str) -> bool:
+    async def unlike(self, tweet_id: str, *, capability_grant_id: Optional[str] = None) -> bool:
         """Unlike a tweet"""
         endpoint = "unlike"
         # Compose function to perform the unlike
@@ -430,10 +463,11 @@ class XClient:
             enabled=True,
             default_result=True,
             func=_call,
+            governance={"resource": tweet_id, "content": "", "grant_id": capability_grant_id or ""},
         )
-        return bool(result)
+        return result is not GATED and bool(result)
     
-    async def repost(self, tweet_id: str) -> bool:
+    async def repost(self, tweet_id: str, *, capability_grant_id: Optional[str] = None) -> bool:
         """Repost (retweet) a tweet"""
         endpoint = "repost"
         # Compose function to perform the retweet
@@ -445,10 +479,11 @@ class XClient:
             enabled=self.config.ENABLE_REPOSTS,
             default_result=True,
             func=_call,
+            governance={"resource": tweet_id, "content": "", "grant_id": capability_grant_id or ""},
         )
-        return bool(result)
+        return result is not GATED and bool(result)
     
-    async def follow(self, user_id: str) -> bool:
+    async def follow(self, user_id: str, *, capability_grant_id: Optional[str] = None) -> bool:
         """Follow a user"""
         endpoint = "follow"
         # Compose function to perform the follow
@@ -460,8 +495,9 @@ class XClient:
             enabled=self.config.ENABLE_FOLLOWS,
             default_result=True,
             func=_call,
+            governance={"resource": user_id, "content": "", "grant_id": capability_grant_id or ""},
         )
-        return bool(result)
+        return result is not GATED and bool(result)
 
     def _on_config_update(self, cfg, changes: Dict[str, Any]) -> None:
         if "LIVE" in changes and not cfg.LIVE:
