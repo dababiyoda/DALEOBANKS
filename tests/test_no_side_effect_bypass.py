@@ -31,11 +31,12 @@ ALLOWED = {
         "X adapter implementation; only reachable through the seam",
     ("services/multiplexer.py", "upload_media", "_publish_impl"):
         "media upload inside the gated X adapter",
-    # Not part of the first loop; held by LIVE=false today and gated
-    # through the Kernel by DALEOBANKS #73 when adopted.
-    ("runner.py", "like", "search_and_engage_job"): "UNMEDIATED (not first loop) — #73",
-    ("runner.py", "repost", "search_and_engage_job"): "UNMEDIATED (not first loop) — #73",
-    ("runner.py", "send_dm", "value_dm_job"): "UNMEDIATED (not first loop) — #73",
+    # Gated inside XClient._execute_write: a live call needs a
+    # write.<family> grant for the exact tweet or user. The Kernel gate
+    # (DALEOBANKS #73) replaces that check when adopted.
+    ("runner.py", "like", "search_and_engage_job"): "gated in XClient (write.like grant)",
+    ("runner.py", "repost", "search_and_engage_job"): "gated in XClient (write.repost grant)",
+    ("runner.py", "send_dm", "value_dm_job"): "gated in XClient (write.send_dm grant)",
 }
 
 
@@ -80,3 +81,22 @@ def test_the_allowlist_has_no_stale_entries():
 def test_publish_seam_consults_authority_before_the_platform():
     source = (ROOT / "services/social_base.py").read_text(encoding="utf-8")
     assert source.index("authorize_publish(") < source.index("self._publish_impl(")
+
+
+def test_every_x_write_endpoint_is_governed_or_inside_the_publish_seam():
+    from services.x_client import GOVERNED_WRITE_FAMILIES
+    tree = ast.parse((ROOT / "services/x_client.py").read_text(encoding="utf-8"))
+    writes = set()
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or fn.name == "_execute_write":
+            continue
+        calls_write = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                          and n.func.attr == "_execute_write" for n in ast.walk(fn))
+        if not calls_write:
+            continue
+        for n in ast.walk(fn):
+            if (isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "endpoint" for t in n.targets)
+                    and isinstance(n.value, ast.Constant)):
+                writes.add(n.value.value)
+    inside_publish_seam = {"create_tweet", "upload_media"}
+    assert writes - inside_publish_seam == set(GOVERNED_WRITE_FAMILIES)

@@ -659,8 +659,10 @@ async def search_and_engage_job():
                     relevance = _calculate_relevance(tweet["text"], term)
 
                     if relevance >= 4:
-                        if config.ENABLE_LIKES and random.random() < 0.8:
-                            await x_client.like(tweet["id"])
+                        # Record an engagement only if it happened: a refused
+                        # (ungranted) live write returns False.
+                        if (config.ENABLE_LIKES and random.random() < 0.8
+                                and await x_client.like(tweet["id"])):
                             like_meta = {"tweet_id": tweet["id"], "term": term}
                             like_signals = analytics_service.derive_structured_outcome_from_text(
                                 content=tweet.get("text", ""),
@@ -669,8 +671,8 @@ async def search_and_engage_job():
                             _merge_signal_meta(like_meta, like_signals)
                             await _log_action("tweet_liked", like_meta)
 
-                        if config.ENABLE_REPOSTS and random.random() < 0.3:
-                            await x_client.repost(tweet["id"])
+                        if (config.ENABLE_REPOSTS and random.random() < 0.3
+                                and await x_client.repost(tweet["id"])):
                             repost_meta = {"tweet_id": tweet["id"], "term": term}
                             repost_signals = analytics_service.derive_structured_outcome_from_text(
                                 content=tweet.get("text", ""),
