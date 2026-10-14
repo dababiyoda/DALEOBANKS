@@ -13,6 +13,7 @@ This module authorizes nothing by itself — it verifies that a human did.
 from __future__ import annotations
 
 import os
+import threading
 from datetime import datetime, timedelta, UTC
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,12 @@ from services.ledger import DecisionLedger, get_ledger
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+
+# One lock for every check-then-consume and revoke in this process. Without
+# it, concurrent callers each pass the use-count check before any of them
+# increments, and a one-use grant is spent many times.
+_CONSUME_LOCK = threading.Lock()
 
 
 class CapabilityError(PermissionError):
@@ -174,6 +181,21 @@ class CapabilityService:
     ) -> CapabilityGrant:
         """Validate a grant immediately before execution and consume one
         use. Any failure raises CapabilityError — the caller must not act."""
+        with _CONSUME_LOCK:
+            return self._validate_and_consume(
+                session, grant_id, action_type, resource, target=target, cost=cost,
+            )
+
+    def _validate_and_consume(
+        self,
+        session: Any,
+        grant_id: str,
+        action_type: str,
+        resource: str,
+        *,
+        target: Optional[str],
+        cost: float,
+    ) -> CapabilityGrant:
         # A broken ledger disarms external action entirely: if the record
         # of authority can't be trusted, no authority is exercised.
         chain_ok, _ = self.ledger.verify_chain()
@@ -251,6 +273,10 @@ class CapabilityService:
     def revoke(
         self, session: Any, grant_id: str, *, revoked_by: str = "admin", reason: str = ""
     ) -> CapabilityGrant:
+        with _CONSUME_LOCK:
+            return self._revoke(session, grant_id, revoked_by=revoked_by, reason=reason)
+
+    def _revoke(self, session: Any, grant_id: str, *, revoked_by: str, reason: str) -> CapabilityGrant:
         grant = session.query(CapabilityGrant).filter(lambda g: g.id == grant_id).first()
         if grant is None:
             raise CapabilityError("unknown capability grant")
