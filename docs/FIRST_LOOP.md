@@ -65,6 +65,13 @@ built for the first loop.
 
 - **Executed:** 0 of 5.
 - **Mediated by design:** 2 of 5 (rows 1 and 5).
+- **Mediated in code on `main`: 0 of 5.** Verified 2026-10-14: `services/x_client.py`
+  `create_tweet` and `send_dm` do not consult a `CapabilityGrant`; only `LIVE=false`
+  stops them. The enforcement already exists as an unmerged stack that routes every
+  X write family through the Kernel Consequence Gate (DALEOBANKS #58 → #59 → #60 →
+  #61 → #73, which depends on Kernel #11 → #25). Merging or superseding that stack is a
+  founder decision. Until then `LIVE` must stay false, and arming it would bypass
+  rows 1 and 5.
 - **Deliberately human-only:** 3 of 5 (rows 2, 3 and 4).
 
 Coverage is not a number to push up by building adapters. Payment and delivery
