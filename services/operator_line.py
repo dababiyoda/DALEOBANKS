@@ -189,6 +189,11 @@ class OperatorLine:
         request.status = status
         request.decided_at = datetime.now(UTC)
         request.decided_via = via
+        if cmd == "YES":
+            from services.capability import approval_digest
+            request.approved_digest = approval_digest(request)
+            self.ledger.record("approval_digest_fixed", {
+                "id": request.id, "digest": request.approved_digest})
         session.commit()
         reply = f"{status.capitalize()} [{request.code}]: {request.summary}"
         if cmd == "YES":
@@ -212,6 +217,10 @@ class OperatorLine:
         request.status = "edited"
         request.decided_at = datetime.now(UTC)
         request.decided_via = via
+        from services.capability import approval_digest
+        request.approved_digest = approval_digest(request)
+        self.ledger.record("approval_digest_fixed", {
+            "id": request.id, "digest": request.approved_digest})
         session.commit()
         return self._done(
             "EDIT", via, ok=True,

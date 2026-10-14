@@ -289,6 +289,10 @@ class ApprovalRequest:
     expires_at: Optional[datetime] = None  # stale requests close automatically
     decided_at: Optional[datetime] = None
     decided_via: Optional[str] = None  # "sms" | "dashboard"
+    # sha256 of exactly what the human approved (kind, summary, payload),
+    # fixed at decision time. A grant may mint only while the request
+    # still hashes to this value: the approved intent is immutable.
+    approved_digest: str = ""
 
 
 @dataclass
