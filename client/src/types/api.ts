@@ -2,7 +2,15 @@
 // Sources of truth: app.py (/api/dashboard, /api/health) and
 // services/analytics.py get_analytics_summary (/api/analytics).
 
+export interface SchedulerStatus {
+  running: boolean | null;
+  jobs?: { id: string; next_run: string | null }[];
+  uptime?: string;
+}
+
 export interface SystemStatus {
+  observed_at?: string | null;
+  scheduler?: SchedulerStatus;
   api_health: string;
   rate_limits: string;
   ethics_guard: string;

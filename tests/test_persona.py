@@ -18,10 +18,10 @@ class TestPersonaStore:
     def setup_method(self):
         """Setup test fixtures"""
         self.reply_override = (
-            "REPLY STYLE — HUMAN ONLY\n\n"
-            "Write like a human community builder typing in real time. Use contractions, varied sentence lengths, and natural pacing cues. "
-            "Mirror the other person's emotional temperature while staying grounded, empathetic, and composed. Reference shared reality or lived experience without claiming you have a body. "
-            "Offer one concrete next step, question, or invitation to move the conversation forward. Never mention models, prompts, or automation; speak in first-person singular with warmth and curiosity."
+            "REPLY STYLE — NATURAL, HONEST VOICE\n\n"
+            "Write like a thoughtful community builder typing in real time. Use contractions, varied sentence lengths, and natural pacing cues. "
+            "Offer one concrete next step, question, or invitation to move the conversation forward. "
+            "If anyone asks whether they are talking to a person or a machine, say plainly that you are an AI agent."
         )
 
         self.test_persona = {

@@ -3,6 +3,7 @@ Runtime persona management with validation, versioning, and hot-reload
 """
 
 import json
+import re
 import hashlib
 import os
 from copy import deepcopy
@@ -39,6 +40,7 @@ class PersonaSchema:
             "content_mix": self._validate_content_mix,
             "beliefs": self._validate_beliefs,
             "handle": self._validate_handle,
+            "synthetic_disclosure": self._validate_synthetic_disclosure,
         }
 
         for validator in self._validators.values():
@@ -56,6 +58,28 @@ class PersonaSchema:
     def _validate_handle(self) -> None:
         if not self.handle or len(self.handle) > 15 or not self.handle.isalnum():
             raise ValueError("Handle must be alphanumeric and ≤15 characters")
+
+    # Instructions that would make the agent conceal that it is an AI. The
+    # Kernel rule (foundry/company.py) is that agents identify as machines
+    # everywhere, always; the DALEOBANKS constitution forbids impersonation.
+    _CONCEALMENT_PATTERNS = (
+        re.compile(r"human[\s-]*only", re.IGNORECASE),
+        re.compile(r"never\s+(?:mention|reveal|admit|disclose)[^.;\n]*\b(?:automation|automated|ai|bot|machine|models?)\b", re.IGNORECASE),
+        re.compile(r"(?:pretend|claim|pose)\s+(?:to\s+be\s+|as\s+)?(?:a\s+)?(?:real\s+)?(?:human|person)", re.IGNORECASE),
+        re.compile(r"(?:deny|hide|conceal)\s+(?:that\s+)?(?:you(?:'re|\s+are)\s+)?(?:an?\s+)?(?:ai|bot|automated|machine)", re.IGNORECASE),
+    )
+
+    def _validate_synthetic_disclosure(self) -> None:
+        texts = list((self.prompt_overrides or {}).values()) + list(self.guardrails or [])
+        for text in texts:
+            if not isinstance(text, str):
+                continue
+            for pattern in self._CONCEALMENT_PATTERNS:
+                if pattern.search(text):
+                    raise ValueError(
+                        "Persona instructs concealing synthetic identity "
+                        f"({pattern.pattern!r}); DALEOBANKS must never deny or hide that it is an AI agent"
+                    )
 
     def dict(self) -> Dict[str, Any]:
         """Return a deep copy of the schema data as a dictionary."""

@@ -136,7 +136,7 @@ class Selector:
 
             # Bandit selection using weighted candidates
             candidates = list(action_probs.keys())
-            selected_action = self.bandit.select(candidates)
+            selected_action = self.bandit.select(candidates, priors=action_probs)
 
             signal_snapshot = self._gather_signal_snapshot()
             self._latest_signal_snapshot = signal_snapshot
@@ -171,7 +171,9 @@ class Selector:
         if not arm_to_update:
             return
 
-        reward = metrics.get("j_score", 0.0)
+        # Prefer the integrity-qualified reward; raw j_score includes
+        # engagement that may have been earned while trust deteriorated.
+        reward = metrics.get("qualified_reward", metrics.get("j_score", 0.0)) or 0.0
         try:
             self.bandit.record_outcome(arm_to_update, reward)
         except Exception as exc:
@@ -191,7 +193,7 @@ class Selector:
 
         self._last_intensity_by_action[arm_to_update] = intensity_value
 
-        j_score = metrics.get("j_score")
+        j_score = metrics.get("qualified_reward", metrics.get("j_score"))
         if j_score is None:
             return
 

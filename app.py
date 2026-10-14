@@ -28,6 +28,7 @@ from db.models import *
 from services.persona_store import PersonaStore
 from services.admin_rate import AdminRateLimiter
 from services.analytics import AnalyticsService
+from services.system_status import build_system_status
 from services.kpi import KPIService
 from services.logging_utils import get_logger
 from services.multiplexer import SocialMultiplexer
@@ -299,17 +300,14 @@ async def get_dashboard(_: RequestContext = Depends(get_request_context)):
             )
             
             # Get system status
-            status = {
-                "api_health": "healthy" if x_client and x_client.is_healthy() else "degraded",
-                "rate_limits": "good",
-                "ethics_guard": "active",
-                "memory_usage": "67.2 MB",
-                "uptime": runner.get_uptime() if hasattr(runner, 'get_uptime') else "Unknown",
-                "live_mode": config.LIVE,
-                "crisis_state": "PAUSED" if runner.crisis_service.is_paused() else "NORMAL",
-                "crisis_reason": runner.crisis_service.reason,
-            }
-            
+            status = build_system_status(
+                x_client=x_client,
+                config=config,
+                crisis_service=runner.crisis_service,
+                uptime=getattr(runner, "get_uptime", None),
+                scheduler_status=getattr(runner, "get_scheduler_status", None),
+            )
+
             # Get persona preview
             persona_preview = persona_store.get_current_persona()
             
