@@ -94,9 +94,30 @@ Disclosure included. No product, no link, no offer, no DM solicitation.
 
 ## Execution path (Stage 7, after authorization only)
 
-1. Alfonso approves via the approval queue (`YES <code>`).
-2. A CapabilityGrant is minted from that approval (one post, one lane, one use, 72h expiry).
-3. `validate_and_consume` gates the publish — ledger intact, no crisis pause, exact draft, exact lane.
-4. The approved text publishes **verbatim** (manually by Alfonso, or via the gated pipeline once the lane is armed).
-5. Outcomes are recorded through `POST /api/validation-results`; the DecisionEpisode closes.
-6. Zero response is a completed **negative** ValidationResult — recorded, never erased.
+1. The exact post text exists as an approved `MediaAssetDraft`.
+   `POST /api/media/drafts/{id}/decision` with approve sets it to `approved`.
+2. Alfonso approves the publish request in the approval queue (`YES <code>`).
+   The request's payload names that draft id. The decision fixes the approval's
+   digest, so the request cannot be widened afterwards.
+3. Mint the grant with `POST /api/capability-grants`:
+   - action `publish_post`
+   - resource = the draft id
+   - `named_targets: ["x"]`
+   - one use, 72h expiry
+
+   Minting pins the draft's exact text by sha256, along with its opportunity packet.
+4. Execute with `POST /api/media/drafts/{id}/execute` and `{"capability_grant_id": ...}`.
+   This is refused (422, nothing sent) if any of these holds:
+   - the draft is not approved;
+   - the grant is for a different draft;
+   - the draft text changed after minting.
+
+   Otherwise the post crosses the gated publish seam, which validates and consumes
+   the grant (ledger chain, crisis pause, revocation, expiry, use, draft, platform,
+   text). The result is recorded as `executed_draft_publish`, a dry run if `LIVE` is
+   off.
+5. Arming `LIVE` releases only granted acts. Ungranted posts, likes, reposts, follows
+   and DMs stay silent (`docs/FIRST_LOOP.md`).
+6. Outcomes are recorded through `POST /api/validation-results`, and the
+   DecisionEpisode closes.
+7. Zero response is a completed **negative** ValidationResult: recorded, never erased.

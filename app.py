@@ -1204,6 +1204,7 @@ async def create_capability_grant(
     Grants never widen standing autonomy: exact action, exact resource,
     bounded uses, bounded window. Everything is ledgered."""
     from services.capability import CapabilityError, get_capability_service
+    from services.draft_execution import grant_metadata_for
     try:
         with get_db_session() as session:
             grant = get_capability_service().mint_from_approval(
@@ -1212,6 +1213,8 @@ async def create_capability_grant(
                 request.action_type,
                 request.exact_action,
                 request.resource,
+                # A publish grant for a draft pins that draft's exact text.
+                metadata=grant_metadata_for(session, request.action_type, request.resource),
                 account_lane_id=request.account_lane_id,
                 named_targets=request.named_targets,
                 max_cost=request.max_cost,
@@ -1467,6 +1470,28 @@ async def decide_media_draft(
     except Exception as e:
         logger.error(f"Media draft decision error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class DraftExecuteRequest(BaseModel):
+    capability_grant_id: str
+
+
+@app.post("/api/media/drafts/{draft_id}/execute")
+async def execute_media_draft(
+    draft_id: str, request: DraftExecuteRequest,
+    _: RequestContext = Depends(require_role("admin")),
+):
+    """Publish one approved draft under one grant. The grant must pin the
+    draft's exact current text; the publication crosses the gated publish
+    seam, which validates and consumes the grant. With LIVE off, or any
+    authority check failing, the result is a recorded dry run."""
+    from services.draft_execution import DraftExecutionError, execute_approved_draft
+    try:
+        with get_db_session() as session:
+            record = await execute_approved_draft(session, draft_id, request.capability_grant_id)
+        return {"success": True, **record}
+    except DraftExecutionError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @app.get("/api/lanes")
