@@ -677,6 +677,30 @@ class XClient:
             return {"name": item}
         return None
     
+    async def get_follower_count(self) -> Optional[int]:
+        """Return our follower count as measured by the X API, or None.
+
+        None means "not measured" (no client, open breaker, API error or a
+        response without public metrics). Callers must not substitute a
+        default for it.
+        """
+        endpoint = "get_me"
+        if not self.client or not self._check_circuit_breaker(endpoint):
+            return None
+        try:
+            me = await asyncio.to_thread(self.client.get_me, user_fields=["public_metrics"])
+            data = getattr(me, "data", None)
+            metrics = getattr(data, "public_metrics", None) if data is not None else None
+            count = metrics.get("followers_count") if isinstance(metrics, dict) else None
+            self._record_success(endpoint)
+            if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                return None
+            return count
+        except Exception as e:
+            logger.error(f"Failed to get follower count: {e}")
+            self._record_failure(endpoint)
+            return None
+
     async def metrics_for(self, tweet_ids: List[str]) -> Dict[str, Dict[str, int]]:
         """Get metrics for specific tweets"""
         endpoint = "metrics"

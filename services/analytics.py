@@ -1,6 +1,8 @@
 """Analytics service for mission-aligned impact measurement."""
 
 from typing import Dict, List, Any, Optional
+
+from services.reward_integrity import count_integrity_incidents, qualify_reward
 from datetime import datetime, timedelta, UTC
 import statistics
 import re
@@ -126,9 +128,24 @@ class AnalyticsService:
                 penalty=penalty_week,
             )
 
+            j_without_engagement = self.calculate_goal_aligned_j_score(
+                impact=weekly_impact,
+                revenue=revenue_today,
+                authority=authority_week,
+                fame=0.0,
+                penalty=penalty_week,
+            )
+            integrity = qualify_reward(
+                j_score=j_score,
+                j_score_without_engagement=j_without_engagement,
+                integrity_incidents=self.calculate_integrity_incidents(session, days=7),
+            )
+
             return {
                 "updated_count": updated_count,
                 "j_score": j_score,
+                "qualified_reward": integrity["qualified_reward"],
+                "reward_integrity": integrity,
                 "impact": weekly_impact,
                 "revenue": revenue_today,
                 "authority": authority_week,
@@ -251,6 +268,16 @@ class AnalyticsService:
 
         return float(penalty_score)
 
+    def calculate_integrity_incidents(self, session: Any, days: int = 7) -> int:
+        """Count integrity incidents (see ``reward_integrity``) in the window."""
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        recent_actions = (
+            session.query(Action)
+            .filter(lambda action: action.created_at >= cutoff)
+            .all()
+        )
+        return count_integrity_incidents(action.kind for action in recent_actions)
+
     def record_pilot_acceptance(
         self,
         session: Any,
@@ -361,13 +388,35 @@ class AnalyticsService:
         session: Any,
         kind: str,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """Persist structured outcome signals derived from action metadata."""
+    ) -> List[Dict[str, Any]]:
+        """Persist evidenced outcome signals from action metadata.
+
+        Pilots, forks, coalition partners and helpfulness feedback are
+        admitted only with an ``evidence`` mapping whose tier is in
+        :attr:`OUTCOME_EVIDENCE_TIERS` and which names an external
+        ``reference``. Everything else is refused and returned so callers
+        can retain the refusal instead of a fabricated success.
+        """
 
         if not metadata:
-            return
+            return []
 
-        pilots = self._iterify(metadata.get("pilot_acceptances") or metadata.get("pilots_accepted"))
+        rejected: List[Dict[str, Any]] = []
+
+        def admitted(category: str, entries: List[Any]) -> List[Any]:
+            kept = []
+            for entry in entries:
+                reason = self.outcome_evidence_problem(entry)
+                if reason is None:
+                    kept.append(entry)
+                else:
+                    rejected.append({"category": category, "source": kind, "reason": reason})
+            return kept
+
+        pilots = admitted(
+            "pilot_acceptance",
+            self._iterify(metadata.get("pilot_acceptances") or metadata.get("pilots_accepted")),
+        )
         for entry in pilots:
             if isinstance(entry, dict):
                 self.record_pilot_acceptance(
@@ -385,7 +434,7 @@ class AnalyticsService:
                     metadata={"source": kind},
                 )
 
-        forks = self._iterify(metadata.get("artifact_forks") or metadata.get("forks"))
+        forks = admitted("artifact_fork", self._iterify(metadata.get("artifact_forks") or metadata.get("forks")))
         for entry in forks:
             if isinstance(entry, dict):
                 self.record_artifact_fork(
@@ -403,7 +452,7 @@ class AnalyticsService:
                     metadata={"source": kind},
                 )
 
-        partners = self._iterify(metadata.get("coalition_partners") or metadata.get("partners"))
+        partners = admitted("coalition_partner", self._iterify(metadata.get("coalition_partners") or metadata.get("partners")))
         for entry in partners:
             if isinstance(entry, dict):
                 self.record_coalition_partner(
@@ -439,7 +488,7 @@ class AnalyticsService:
                     metadata={"source": kind},
                 )
 
-        feedback_entries = self._iterify(metadata.get("helpfulness_feedback") or metadata.get("feedback"))
+        feedback_entries = admitted("helpfulness", self._iterify(metadata.get("helpfulness_feedback") or metadata.get("feedback")))
         for entry in feedback_entries:
             if isinstance(entry, dict):
                 rating = float(entry.get("rating", 0.0))
@@ -463,57 +512,91 @@ class AnalyticsService:
                     metadata={"source": kind},
                 )
 
+        if rejected:
+            logger.warning("Rejected %d unevidenced outcome claim(s) from %s", len(rejected), kind)
+        return rejected
+
+    # Evidence tiers that can establish a real-world outcome. Self-authored or
+    # model-derived text is deliberately absent.
+    OUTCOME_EVIDENCE_TIERS = frozenset(
+        {
+            "platform_api_observation",
+            "counterparty_signed",
+            "external_receipt",
+            "operator_attested",
+        }
+    )
+
+    def outcome_evidence_problem(self, entry: Any) -> Optional[str]:
+        """Return why ``entry`` cannot become an outcome record, or None."""
+
+        if not isinstance(entry, dict):
+            return "outcome entry must be a mapping carrying evidence"
+        evidence = entry.get("evidence")
+        if not isinstance(evidence, dict):
+            return "missing evidence"
+        tier = evidence.get("tier")
+        if tier not in self.OUTCOME_EVIDENCE_TIERS:
+            return f"evidence tier {tier!r} cannot establish an outcome"
+        if not str(evidence.get("reference") or "").strip():
+            return "evidence has no reference to the external record"
+        if evidence.get("self_authored"):
+            return "self-authored evidence cannot establish an outcome"
+        return None
+
+    # Phrases that *describe* an outcome. Their presence in text is a claim
+    # (or a prediction, or a hope), never evidence that the outcome happened.
+    _OUTCOME_MENTION_PATTERNS = {
+        "pilot_acceptance": ("pilot accepted", "signed the pilot"),
+        "artifact_fork": ("fork", "clone"),
+        "coalition_partner": ("coalition", "partner", "ally"),
+        "helpfulness": ("thank you", "appreciate", "super helpful", "that helps"),
+    }
+
     def derive_structured_outcome_from_text(
         self,
         *,
         content: str,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Heuristically derive structured outcome signals from generated text."""
+        """Derive *mention* signals from text — never achieved outcomes.
+
+        Language such as "pilot accepted" or "thank you" proves only that the
+        words were written. Outcome records (pilots, partners, forks,
+        helpfulness) require external evidence and are recorded only through
+        :meth:`record_structured_outcome` with a qualifying ``evidence``
+        block. Here we emit ``outcome_mentions`` tagged as unverified, which
+        are retained for sensing but contribute nothing to impact or reward.
+
+        Citations are the one exception: a URL present in the text is an
+        observed fact about the text itself.
+        """
 
         context = context or {}
-        lowered = content.lower()
+        lowered = (content or "").lower()
         signals: Dict[str, Any] = {}
 
-        if "pilot accepted" in lowered or "signed the pilot" in lowered:
-            signals["pilot_acceptances"] = [
-                {
-                    "pilot_name": context.get("topic", "pilot"),
-                    "accepted_by": context.get("audience"),
-                    "scope": context.get("scope"),
-                }
-            ]
-
-        if "fork" in lowered or "clone" in lowered:
-            signals["artifact_forks"] = [
-                {
-                    "artifact_name": context.get("artifact", context.get("topic", "artifact")),
-                    "platform": "github" if "github" in lowered else None,
-                }
-            ]
-
-        if "coalition" in lowered or "partner" in lowered or "ally" in lowered:
-            signals["coalition_partners"] = [
-                {
-                    "partner_name": context.get("partner") or context.get("topic", "partner"),
-                    "partner_type": context.get("partner_type"),
-                }
-            ]
+        mentions = []
+        for mention_type, phrases in self._OUTCOME_MENTION_PATTERNS.items():
+            matched = [phrase for phrase in phrases if phrase in lowered]
+            if matched:
+                mentions.append(
+                    {
+                        "mention_type": mention_type,
+                        "matched_phrases": matched,
+                        "channel": context.get("channel"),
+                        "topic": context.get("topic"),
+                        "evidence_tier": "text_mention_unverified",
+                    }
+                )
+        if mentions:
+            signals["outcome_mentions"] = mentions
 
         citations = self.extract_citations_from_text(content)
         if citations:
             signals["citations"] = [
                 {"url": url, "source_title": url, "context": context.get("topic")}
                 for url in citations
-            ]
-
-        if any(word in lowered for word in ["thank you", "appreciate", "super helpful", "that helps"]):
-            signals["helpfulness_feedback"] = [
-                {
-                    "channel": context.get("channel", "x"),
-                    "rating": 4.5,
-                    "comment": "Positive acknowledgement detected",
-                }
             ]
 
         return signals

@@ -1225,22 +1225,33 @@ async def kpi_rollup_job():
         logger.error(f"KPI rollup job failed: {e}")
 
 async def follower_snapshot_job():
-    """Take daily follower count snapshot"""
+    """Snapshot the follower count measured by the authenticated X API.
+
+    A count is recorded only when the platform returns one. When the client
+    or API is unavailable the snapshot is skipped and the gap is logged as
+    ``follower_snapshot_unavailable`` — growth analytics must see a missing
+    measurement, never a placeholder.
+    """
     try:
-        if not x_client:
-            logger.info("X client not available for follower snapshot")
+        follower_count = None
+        reason = "x_client_unavailable"
+        if x_client:
+            follower_count = await x_client.get_follower_count()
+            reason = "platform_measurement_unavailable"
+
+        if follower_count is None:
+            await _log_action("follower_snapshot_unavailable", {"reason": reason})
+            logger.info("Follower snapshot skipped: %s", reason)
             return
-        
-        # Get current user info to get follower count
-        # This would require additional API call in real implementation
-        # For now, we'll estimate or use a placeholder
-        follower_count = 1000  # Placeholder
-        
+
         with get_db_session() as session:
             analytics_service.create_follower_snapshot(session, follower_count)
-            await _log_action("follower_snapshot", {"count": follower_count})
-            logger.info(f"Follower snapshot created: {follower_count}")
-            
+        await _log_action(
+            "follower_snapshot",
+            {"count": follower_count, "source": "x_api_v2_get_me_public_metrics"},
+        )
+        logger.info(f"Follower snapshot created: {follower_count}")
+
     except Exception as e:
         logger.error(f"Follower snapshot job failed: {e}")
 
@@ -1381,7 +1392,9 @@ async def _log_action(kind: str, meta: Dict[str, Any]):
     """Log an action to the database"""
     try:
         with get_db_session() as session:
-            analytics_service.record_structured_outcome(session, kind, meta)
+            rejected = analytics_service.record_structured_outcome(session, kind, meta)
+            if rejected:
+                meta = {**meta, "outcome_claims_rejected": rejected}
             action = Action(kind=kind, meta_json=meta)
             session.add(action)
             session.commit()

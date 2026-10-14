@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+const m = await import(process.argv[2]);
+const now = Date.parse("2026-10-14T12:00:00Z");
+const fresh = "2026-10-14T11:59:50Z";
+assert.equal(m.deriveOverallHealth(undefined, now), "unknown");
+assert.equal(m.deriveOverallHealth({}, now), "unknown");
+assert.equal(m.deriveOverallHealth({observed_at: fresh, api_health: "healthy", rate_limits: "good", crisis_state: "NORMAL"}, now), "operational");
+assert.equal(m.deriveOverallHealth({observed_at: fresh, api_health: "unavailable", rate_limits: "unknown", crisis_state: "NORMAL"}, now), "unavailable");
+assert.equal(m.deriveOverallHealth({observed_at: fresh, api_health: "healthy", rate_limits: "unknown", crisis_state: "NORMAL"}, now), "unknown");
+assert.equal(m.deriveOverallHealth({observed_at: fresh, api_health: "healthy", rate_limits: "degraded", crisis_state: "NORMAL"}, now), "degraded");
+assert.equal(m.deriveOverallHealth({observed_at: fresh, api_health: "healthy", rate_limits: "good", crisis_state: "PAUSED"}, now), "degraded");
+assert.equal(m.deriveOverallHealth({observed_at: "2026-10-14T11:50:00Z", api_health: "healthy", rate_limits: "good", crisis_state: "NORMAL"}, now), "stale");
+assert.equal(m.deriveOverallHealth({observed_at: "garbage", api_health: "healthy", rate_limits: "good"}, now), "unknown");
+console.log("health-status: 9 assertions passed");
