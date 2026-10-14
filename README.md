@@ -16,6 +16,13 @@ existing templates/hash memory, with no paid model fallback. An existing
 `OPENAI_API_KEY` does not select a paid provider. For offline fixtures set
 `LLM_PROVIDER=template` and `EMBEDDINGS_PROVIDER=hash`.
 
+Optional hosted fallbacks: when the local model is down or too weak for a
+moment, `LLM_FALLBACKS=groq,openrouter` (in order) tries those hosted
+OpenAI-compatible tiers before templates. Nothing is inferred from keys being
+present, prompts leave the machine only for listed providers, base URLs are
+fixed per provider, and `openai` (paid) runs only if listed. Template mode
+makes no calls at all. See `services/llm_providers.py` and `.env.example`.
+
 See the Kernel's [open-source stack](https://github.com/dababiyoda/uniimente-kernel/blob/dfc1f3394060226023c92140bfcb6a7b322f129e/docs/OPEN_SOURCE_STACK.md)
 for researched licenses, hardware estimates, remaining platform costs and
 migration boundaries. Model downloads and compute still need disk, RAM and electricity.

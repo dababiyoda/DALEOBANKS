@@ -407,7 +407,9 @@ class FallbackManager:
         if provider in ("openai", "ollama", "local") and llm_adapter is not None:
             try:
                 reply = await llm_adapter.chat(system, [{"role": "user", "content": user_text}])
-                return reply, provider
+                # The adapter may have served this from a fallback; report who answered.
+                answered = getattr(llm_adapter, "last_provider", None)
+                return reply, answered if isinstance(answered, str) and answered else provider
             except Exception as exc:  # degraded, never dead
                 logger.warning(f"{provider} generation failed, degrading: {exc}")
         if template_fn is not None:
