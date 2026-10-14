@@ -62,6 +62,20 @@ TIER_WEIGHTS = {
 BREACH_EVENTS = frozenset({"constitutional_violation"})
 
 
+def is_shadow(result: Any) -> bool:
+    """A shadow ValidationResult records a rehearsal of the loop, not
+    contact with reality. It never counts as external evidence."""
+    return (getattr(result, "metadata", None) or {}).get("mode") == "shadow"
+
+
+def _external_results_in_window(session: Any) -> list:
+    horizon = datetime.now(UTC) - timedelta(days=window_days())
+    return [
+        r for r in session.query(ValidationResult).all()
+        if r.created_at >= horizon and not is_shadow(r)
+    ]
+
+
 def window_days() -> int:
     try:
         return int(os.getenv("EVIDENCE_WINDOW_DAYS", "14"))
@@ -71,12 +85,9 @@ def window_days() -> int:
 
 def evidence_window(session: Any) -> Dict[str, Any]:
     """State of the external-evidence window: recorded ValidationResults
-    inside the configured horizon."""
-    horizon = datetime.now(UTC) - timedelta(days=window_days())
-    results = [
-        r for r in session.query(ValidationResult).all()
-        if r.created_at >= horizon
-    ]
+    inside the configured horizon. Shadow rehearsals are excluded — a
+    loop closed against nobody is not contact with reality."""
+    results = _external_results_in_window(session)
     return {
         "window_days": window_days(),
         "validation_results": len(results),
@@ -142,12 +153,9 @@ def constitutional_health(ledger: Optional[DecisionLedger] = None) -> Dict[str, 
 
 def evidence_quality_multiplier(session: Any) -> float:
     """Layer 2. The average tier-weighted quality of in-window results.
-    Zero results means zero — internal activity earns nothing here."""
-    horizon = datetime.now(UTC) - timedelta(days=window_days())
-    results = [
-        r for r in session.query(ValidationResult).all()
-        if r.created_at >= horizon
-    ]
+    Zero results means zero — internal activity, shadow rehearsals
+    included, earns nothing here."""
+    results = _external_results_in_window(session)
     if not results:
         return 0.0
     scores = [
@@ -181,7 +189,8 @@ def institutional_metrics(
     from services.decision_episode import loop_closure_rate
 
     ledger = ledger or get_ledger()
-    results = session.query(ValidationResult).all()
+    results = [r for r in session.query(ValidationResult).all() if not is_shadow(r)]
+    shadow_runs = sum(1 for r in session.query(ValidationResult).all() if is_shadow(r))
     negatives = [r for r in results if r.result_classification == "negative"]
     decided = [
         r for r in session.query(ApprovalRequest).all()
@@ -195,6 +204,7 @@ def institutional_metrics(
         "evidence_multiplier": evidence_quality_multiplier(session),
         **loop_closure_rate(session, ledger=ledger),
         "validation_results_total": len(results),
+        "shadow_runs_excluded": shadow_runs,
         "negative_results_retained": len(negatives),
         "negative_retention_rate": (len(negatives) / len(results)) if results else 0.0,
         "founder_decisions": len(decided),
@@ -207,7 +217,7 @@ def institutional_metrics(
 
 __all__ = [
     "WORK_CATEGORIES", "ALWAYS_PERMITTED", "TIER_WEIGHTS",
-    "window_days", "evidence_window", "evaluate_work",
+    "is_shadow", "window_days", "evidence_window", "evaluate_work",
     "constitutional_health", "evidence_quality_multiplier",
     "evidence_weighted_j", "institutional_metrics",
 ]

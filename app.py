@@ -1403,9 +1403,12 @@ async def list_decision_episodes(_: RequestContext = Depends(get_request_context
     from services.decision_episode import list_episodes
     with get_db_session() as session:
         episodes = list_episodes(session)
-        closed = sum(1 for e in episodes if e["loop_closed"])
+        # Only loops closed against the outside world count; shadow
+        # rehearsals are reported apart so they cannot inflate the rate.
+        closed = sum(1 for e in episodes if e["externally_closed"])
         return {
             "count": len(episodes), "closed": closed,
+            "shadow_closed": sum(1 for e in episodes if e["shadow_only"]),
             "loop_closure_rate": (closed / len(episodes)) if episodes else 0.0,
             "episodes": episodes,
         }
