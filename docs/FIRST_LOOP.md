@@ -65,14 +65,21 @@ built for the first loop.
 
 - **Executed:** 0 of 5.
 - **Mediated by design:** 2 of 5 (rows 1 and 5).
-- **Mediated in code on `main`: 0 of 5.** Verified 2026-10-14: `services/x_client.py`
-  `create_tweet` and `send_dm` do not consult a `CapabilityGrant`; only `LIVE=false`
-  stops them. The enforcement already exists as an unmerged stack that routes every
-  X write family through the Kernel Consequence Gate (DALEOBANKS #58 → #59 → #60 →
-  #61 → #73, which depends on Kernel #11 → #25). Merging or superseding that stack is a
-  founder decision. Until then `LIVE` must stay false, and arming it would bypass
-  rows 1 and 5.
-- **Deliberately human-only:** 3 of 5 (rows 2, 3 and 4).
+- **Mediated in code on `main`: 2 of 5 (rows 1 and 5, organ-local).** Every live post
+  or reply crosses `BaseSocialClient.publish`. Since 2026-10-14 that requires a
+  human-approved `CapabilityGrant` for the exact draft, the platform as a named
+  target, and (when recorded) the sha256 of the approved text
+  (`services/publish_authority.py`). Anything else is ledgered and falls back to a dry
+  run. Proof: `tests/test_publish_authority.py`.
+  The case list covers approved-once, replay, no grant, wrong draft, wrong platform,
+  wrong text, forged grant, expired, revoked, and a disarmed switch spending nothing.
+  This seam approximates the Kernel Consequence Gate; it does not replace it. The
+  canonical enforcement is the unmerged stack DALEOBANKS #58 → #73 on Kernel
+  #11 → #25, and the shared boundary package on `main` does not yet carry the gate.
+  When the gate lands it replaces `authorize_publish` at this one seam.
+- **Still unmediated outside this table:** DMs (`x_client.send_dm`, called directly by
+  `runner.py`), likes, reposts and follows. None is part of the first loop. #73
+  gates them through the Kernel, and `LIVE=false` still holds them today.
 
 Coverage is not a number to push up by building adapters. Payment and delivery
 are human-only on purpose, and that is the correct end state for the first loop.
