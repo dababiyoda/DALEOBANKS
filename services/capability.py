@@ -66,6 +66,16 @@ def _approved_scope(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def approval_digest(approval: Any) -> str:
+    """Canonical sha256 of what a human approved: kind, summary, payload."""
+    import hashlib
+    import json
+    body = json.dumps({"kind": approval.kind, "summary": approval.summary,
+                       "payload": approval.payload or {}},
+                      sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
 def default_ttl_hours() -> int:
     try:
         return int(os.getenv("CAPABILITY_TTL_HOURS", "72"))
@@ -115,6 +125,18 @@ class CapabilityService:
             )
         if not action_type or not resource:
             raise CapabilityError("action_type and resource are required")
+
+        # The approved intent is immutable: mint only while the request
+        # still hashes to what the human approved. A request with no fixed
+        # digest was never approved through the operator line.
+        if not approval.approved_digest:
+            self._reject("(unminted)", "approval_digest_missing")
+            raise CapabilityError("approval has no fixed digest — not a human decision")
+        if approval_digest(approval) != approval.approved_digest:
+            self._reject("(unminted)", "approval_altered_after_decision")
+            raise CapabilityError(
+                "approval was altered after the human decided — refusing to mint"
+            )
 
         # A grant may NARROW the approved intent, never broaden it. When the
         # approval's payload names resources, the grant must target one of
@@ -309,4 +331,5 @@ def set_capability_service(service: Optional[CapabilityService]) -> None:
 __all__ = [
     "CapabilityError", "CapabilityService",
     "get_capability_service", "set_capability_service", "default_ttl_hours",
+    "approval_digest",
 ]
