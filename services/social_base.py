@@ -86,6 +86,24 @@ class BaseSocialClient:
             logger.warning("Rate governor blocked live %s on %s", kind, self.platform)
             result = await self._dry_run(kind=kind, metadata=metadata)
         else:
+            # Armed and under the rate limit is not enough: a live post needs
+            # a human-approved grant for exactly this draft and platform.
+            from services.publish_authority import authorize_publish, content_sha256
+
+            decision = authorize_publish(
+                platform=self.platform, kind=kind, content=content, metadata=metadata,
+            )
+            if not decision.allowed:
+                ledger.record(
+                    "publish_gated",
+                    {"platform": self.platform, "kind": kind, "reason": decision.reason,
+                     "capability_grant_id": decision.grant_id,
+                     "content_sha256": content_sha256(content)},
+                )
+                result = await self._dry_run(kind=kind, metadata=metadata)
+            else:
+                result = None
+        if result is None:
             result = await self._publish_impl(
                 content=content,
                 kind=kind,

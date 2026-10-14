@@ -72,6 +72,10 @@ async def test_multiplexer_uploads_media_before_post(monkeypatch):
     config.LIVE = True
 
     x_client = MediaStubXClient()
+    from db.session import init_db
+    from tests.grant_helpers import mint_publish_grant
+    init_db()
+    grant = mint_publish_grant("x", "Testing media upload", draft_id="draft-media")
 
     multiplexer = SocialMultiplexer(
         config=config,
@@ -81,6 +85,8 @@ async def test_multiplexer_uploads_media_before_post(monkeypatch):
     metadata = {
         "media": [{"path": "sample.png", "type": "image"}],
         "idempotency_key": "abc123",
+        "capability_grant_id": grant.id,
+        "draft_id": "draft-media",
     }
 
     results = await multiplexer.publish(

@@ -10,7 +10,9 @@ from services.ledger import (
     set_shared_instances,
     reset_shared_instances,
 )
+from db.session import init_db
 from services.social_base import BaseSocialClient, SocialPostResult
+from tests.grant_helpers import grant_metadata, mint_publish_grant
 
 
 class RecordingClient(BaseSocialClient):
@@ -31,6 +33,7 @@ class RecordingClient(BaseSocialClient):
 @pytest.fixture
 def gate(tmp_path):
     """Isolated ledger/kill-switch/governor wired into the shared gate."""
+    init_db()
     ledger = DecisionLedger(path=str(tmp_path / "ledger.jsonl"))
     governor = RateGovernor(max_actions=2, window_seconds=3600)
     set_shared_instances(
@@ -61,8 +64,10 @@ async def test_disarmed_kill_switch_forces_dry_run(gate):
 async def test_armed_switch_delegates_to_impl(gate):
     update_config(LIVE=True)
     client = RecordingClient()
+    grant = mint_publish_grant("testnet", "hello")
 
-    result = await client.publish(content="hello", kind="post")
+    result = await client.publish(content="hello", kind="post",
+                                  metadata=grant_metadata(grant))
 
     assert result.dry_run is False
     assert result.post_id == "live_123"
@@ -76,9 +81,12 @@ async def test_rate_governor_gates_excess_publishes(gate):
     update_config(LIVE=True)
     client = RecordingClient()
 
-    first = await client.publish(content="one")
-    second = await client.publish(content="two")
-    third = await client.publish(content="three")
+    grants = {text: mint_publish_grant("testnet", text, draft_id=f"d-{text}")
+              for text in ("one", "two", "three")}
+    first = await client.publish(content="one", metadata=grant_metadata(grants["one"], "d-one"))
+    second = await client.publish(content="two", metadata=grant_metadata(grants["two"], "d-two"))
+    third = await client.publish(content="three",
+                                 metadata=grant_metadata(grants["three"], "d-three"))
 
     assert first.dry_run is False
     assert second.dry_run is False
@@ -88,6 +96,7 @@ async def test_rate_governor_gates_excess_publishes(gate):
     gated = gate.replay("publish_gated")
     assert len(gated) == 1
     assert gated[0]["payload"]["reason"] == "rate_governor"
+    assert grants["three"].uses_consumed == 0  # gated before authority was spent
 
 
 async def test_every_attempt_is_ledgered_and_chain_verifies(gate):
