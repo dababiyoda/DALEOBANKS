@@ -1,0 +1,155 @@
+name: Aperture shadow authority
+
+# DALEOBANKS had no CI. This proves something real: the organ runs against a
+# BUILT ARTIFACT, not against the Kernel source tree. A green run against source
+# would prove nothing about deployability, so APERTURE_REQUIRE_INSTALLED=1 makes
+# a source-path import a hard failure.
+#
+# WHY THE WHEELS ARE VENDORED. The first version of this workflow checked out
+# dababiyoda/uniimente-kernel and built the distributions. That failed with
+# `git exit 128`: the default GITHUB_TOKEN is scoped to THIS repository and
+# cannot read another one. Fixing it properly needs a personal access token,
+# which is a founder credential decision and is deliberately not made here.
+#
+# Vendoring the exact wheels keeps the property that actually matters - the
+# organ installs an artifact, never the source tree - at the cost of binaries in
+# git that must be refreshed deliberately. This job verifies their SHA256
+# against vendor/aperture/PINNED_ARTIFACT.json, so a stale or tampered wheel
+# fails the run rather than passing quietly.
+
+on:
+  pull_request:
+  push:
+    branches: [main, "claude/**", "agent/**"]
+  workflow_dispatch:
+
+env:
+  APERTURE_VERSION: "0.1.0"
+  VENDOR: vendor/aperture
+
+jobs:
+  shadow:
+    name: "Shadow authority path (installed artifact)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify the pinned artifact hashes
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, sys
+          v = pathlib.Path("vendor/aperture")
+          pin = json.loads((v / "PINNED_ARTIFACT.json").read_text())
+          bad = []
+          for name, expected in pin["sha256"].items():
+              actual = hashlib.sha256((v / name).read_bytes()).hexdigest()
+              status = "ok" if actual == expected else "MISMATCH"
+              print(f"  {status}  {name}  {actual}")
+              if actual != expected:
+                  bad.append(name)
+          if bad:
+              sys.exit(f"pinned artifact hash mismatch: {bad}")
+          print("built from kernel commit:", pin["built_from_kernel_commit"])
+          PY
+
+      - name: Install DALEOBANKS declared dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest
+
+      # The organ installs the CLIENT only. Not editable, not a path dependency.
+      - name: Install the aperture client artifact
+        run: pip install "${VENDOR}/uniimente_aperture_client-${APERTURE_VERSION}-py3-none-any.whl"
+
+      # Proved BEFORE the issuer is installed for fixture minting: in a
+      # client-only environment the organ cannot reach issuer functionality or
+      # any legacy authorizer.
+      - name: issuer-unreachable (client-only environment)
+        env:
+          APERTURE_REQUIRE_INSTALLED: "1"
+        run: |
+          python - <<'PY'
+          from governance.aperture_shadow import (aperture_origin,
+                                                  assert_installed_artifact,
+                                                  issuer_is_unreachable)
+          assert_installed_artifact()
+          origin = aperture_origin()
+          assert "site-packages" in origin, f"source-path leakage: {origin}"
+          assert issuer_is_unreachable(), "ORGAN CAN REACH THE ISSUER"
+          for mod in ("policy.consequence_gate", "uniimente_kernel.gate",
+                      "kernel.gate.pipeline"):
+              try:
+                  __import__(mod)
+                  raise SystemExit(f"legacy authorizer reachable: {mod}")
+              except ImportError:
+                  pass
+          print("client-only origin:", origin)
+          print("issuer unreachable: True")
+          print("legacy authorizers unreachable: True")
+          PY
+
+      - name: Verify no production credentials are present
+        run: |
+          python - <<'PY'
+          from governance.aperture_shadow import (PRODUCTION_CREDENTIAL_VARS,
+                                                  assert_no_production_credentials)
+          assert_no_production_credentials()
+          print("no production credentials:", list(PRODUCTION_CREDENTIAL_VARS))
+          PY
+
+      - name: Verify no production adapter can resolve
+        run: |
+          python - <<'PY'
+          from governance.aperture_shadow import (FakePlatform, resolve_adapter,
+                                                  ShadowConfigurationError)
+          for bad in ("x-live", "twitter", "linkedin", "production"):
+              try:
+                  resolve_adapter(bad)
+                  raise SystemExit(f"production adapter resolved: {bad}")
+              except ShadowConfigurationError:
+                  pass
+          assert resolve_adapter(FakePlatform.adapter_id) is FakePlatform
+          print("only reachable adapter:", FakePlatform.adapter_id)
+          PY
+
+      # Test-only. The organ RUNTIME never imports this; an AST test asserts so.
+      - name: Install the issuer artifact (test-only, for minting fixtures)
+        run: pip install "${VENDOR}/uniimente_aperture_issuer-${APERTURE_VERSION}-py3-none-any.whl"
+
+      - name: Run the shadow authority suite against the installed artifact
+        env:
+          APERTURE_REQUIRE_INSTALLED: "1"
+        run: python -m pytest tests/test_aperture_shadow.py -v
+
+      - name: Record dependency and commit metadata
+        if: always()
+        run: |
+          mkdir -p verification
+          pip freeze > verification/DEPENDENCY_ENVIRONMENT.txt
+          python - <<'PY'
+          import json, os, pathlib, sys
+          from governance.aperture_shadow import aperture_origin
+          pin = json.loads(pathlib.Path("vendor/aperture/PINNED_ARTIFACT.json").read_text())
+          json.dump({
+              "daleobanks_commit": os.environ.get("GITHUB_SHA"),
+              "kernel_commit": pin["built_from_kernel_commit"],
+              "aperture_version": pin["aperture_version"],
+              "artifact_hashes": pin["sha256"],
+              "aperture_origin": aperture_origin(),
+              "python": sys.version,
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+          }, open("verification/RUN_METADATA.json", "w"), indent=2)
+          PY
+          cat verification/RUN_METADATA.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shadow-verification
+          path: verification/

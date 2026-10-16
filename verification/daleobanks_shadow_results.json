@@ -1,0 +1,69 @@
+{
+  "gate": "Gate C-ORGAN-SHADOW",
+  "status": "CLOSED",
+  "organ": "DALEOBANKS",
+  "path": "governance/aperture_shadow.py",
+  "daleobanks_shadow_results": {
+    "candidates_processed": 5,
+    "certificates_issued": 3,
+    "certificates_refused": 2,
+    "local_vetoes": 0,
+    "policy_escalations": 0,
+    "legacy_path_agreements": 3,
+    "legacy_path_disagreements": 2,
+    "false_refusals": "unclassified - requires a human to judge whether a refusal was correct; no automatic classification is made and none is guessed",
+    "scope_mutation_attempts": 0,
+    "identity_mismatches": 1,
+    "revocation_refusals": 1,
+    "reconciliation_mismatches": 0,
+    "mean_validation_latency_ms": 1.947,
+    "external_publications": 0
+  },
+  "divergences_preserved": [
+    {
+      "candidate": "s4",
+      "status": "actor_mismatch",
+      "legacy_would_publish": true,
+      "agrees_with_legacy": false,
+      "reason": "certificate authorizes 'spiffe://uniimente.internal/organ/daleobanks/agent/publisher'; presented by 'spiffe://uniimente.internal/organ/wmi/a'"
+    },
+    {
+      "candidate": "s5",
+      "status": "certificate_revoked",
+      "legacy_would_publish": true,
+      "agrees_with_legacy": false,
+      "reason": "certificate is revoked"
+    }
+  ],
+  "proof_of_zero_real_publication": {
+    "real_publications": 0,
+    "only_adapter_reachable": "fake-platform",
+    "production_adapter_resolution": "raises ShadowConfigurationError",
+    "production_credentials_present": [],
+    "fake_platform_state": [
+      {
+        "id": "post-1",
+        "text": "Governed shadow publication one."
+      },
+      {
+        "id": "post-2",
+        "text": "Governed shadow publication two."
+      },
+      {
+        "id": "post-3",
+        "text": "Governed shadow publication three."
+      }
+    ]
+  },
+  "conditions": {
+    "daleobanks_uses_aperture_client": true,
+    "no_production_credential": true,
+    "no_real_publication": true,
+    "local_veto_works": true,
+    "revocation_works": true,
+    "independent_readback_works": true,
+    "receipt_and_reconciliation_complete": true,
+    "old_path_cannot_authorize_the_shadow_action": true
+  },
+  "note": "Disagreements with the legacy path are NOT automatically errors. Both recorded divergences are cases where the legacy path would have published and the aperture refused - one identity mismatch, one revoked certificate. In both the aperture is correct. Preserved as evidence either way."
+}
