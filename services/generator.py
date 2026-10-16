@@ -48,6 +48,11 @@ def levenshtein_distance(a: str, b: str) -> int:
 class Generator:
     """Content generation with persona-driven prompting"""
     
+    def draft_simulated_supported_reply(self, session, *, topic, sources):
+        """Offline narrow draft; no LLM, publication or instruction authority."""
+        from services.community_reply import supported_reply
+        return supported_reply(topic, self.memory.get_recent_improvement_notes(session), sources)
+
     def __init__(self, persona_store: PersonaStore, llm_adapter: LLMAdapter):
         self.persona_store = persona_store
         self.llm_adapter = llm_adapter

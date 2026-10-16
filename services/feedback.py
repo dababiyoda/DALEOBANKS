@@ -18,6 +18,45 @@ class FeedbackService:
     def __init__(self):
         self.memory = MemoryService()
     
+    def evaluate_simulated_correction(self, session, *, feedback, sources, held_out):
+        """Source-supported correction against separate operator-labeled tasks.
+
+        Engagement is telemetry, never truth, permission or participant benefit.
+        No publication is possible in this explicitly simulated path.
+        """
+        import json
+        from db.models import Action
+        from services.community_reply import supported_reply, PREFIX
+        if feedback.get("simulated") is not True or not held_out:
+            raise ValueError("labeled simulation and separate held-out tasks required")
+        topic, source_id = feedback["topic"], feedback["source_id"]
+        source = sources.get(source_id)
+        supported = bool(source and source["topic"] == topic and source["fact"] == feedback["correction"])
+        prior = self.memory.get_recent_improvement_notes(session)
+        candidate_note = PREFIX + json.dumps({"topic": topic, "source_id": source_id,
+            "fact": feedback["correction"]}, sort_keys=True)
+        rows = []
+        for case in held_out:
+            if case["id"] == feedback["id"]:
+                raise ValueError("evaluation must use separate later tasks")
+            baseline = supported_reply(case["topic"], prior, sources)
+            candidate = supported_reply(case["topic"], prior + [candidate_note], sources) if supported else baseline
+            rows.append({"id": case["id"], "expected": case["expected"], "baseline": baseline, "candidate": candidate})
+        baseline_score = sum(r["baseline"] == r["expected"] for r in rows)
+        candidate_score = sum(r["candidate"] == r["expected"] for r in rows)
+        retain = supported and candidate_score > baseline_score and candidate_score == len(rows)
+        result = {"classification": "SIMULATED_COMMUNITY_FEEDBACK", "feedback": feedback, "source_evidence": source,
+            "proposed_response": feedback["correction"] if supported else "Request verifiable evidence.",
+            "rows": rows, "baseline_correct": baseline_score, "candidate_correct": candidate_score,
+            "decision": "retain" if retain else "regress" if candidate_score < baseline_score else "no_improvement",
+            "communication_metrics": {"engagement": feedback.get("engagement", 0)},
+            "participant_outcomes": "not observed; fixture answer accuracy only", "model_calls": 0,
+            "publication": False, "authority_change": False}
+        session.add(Action(kind="simulated_feedback_evaluation", meta_json=result)); session.commit()
+        if retain:
+            self.memory.add_improvement_note(session, candidate_note)
+        return result
+
     def generate_daily_improvement_note(self, session: Session) -> str:
         """Generate a daily improvement note based on recent performance"""
         try:
