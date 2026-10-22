@@ -1,0 +1,66 @@
+F.FFF.............                                                       [100%]
+=================================== FAILURES ===================================
+______________________ test_outbound_requests_are_signed _______________________
+tests/test_signed_bridge_client.py:77: in test_outbound_requests_are_signed
+    assessment = client.evaluate(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:126: in _evaluate_http
+    body = json.dumps(packet_to_wire(packet)).encode()
+                      ^^^^^^^^^^^^^^^^^^^^^^
+services/venture_protocol.py:87: in packet_to_wire
+    validate_contract(payload, 'wire-opportunity-packet')
+../../kernel-boundary-deps/adapters/contract_validation.py:45: in validate_contract
+    raise ValueError(f'{name}: {errors[0].message}')
+E   ValueError: wire-opportunity-packet: {'id': 'c502bf8f-6503-4b03-bd57-171063e02519', 'source': '', 'source_ref': '', 'signal_type': 'operator_thought', 'observed_pain': '', 'core_thesis': '', 'audience': '', 'cultural_context': '', 'language': 'en', 'customer_segment': '', 'buyer_type': '', 'urgency': 'medium', 'evidence': ['e1'], 'possible_offer': 'guide', 'monetization_paths': ['paid guide'], 'risk_flags': [], 'smallest_validation_action': '', 'confidence': 0.5, 'created_at': '2026-09-08T11:40:09.163599+00:00', 'status': 'pending', 'schema_version': '1.1'} is not valid under any of the given schemas
+___________________ test_replayed_response_nonce_is_rejected ___________________
+tests/test_signed_bridge_client.py:114: in test_replayed_response_nonce_is_rejected
+    canned = _signed_response(packet)  # one signed response, served twice
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_signed_bridge_client.py:61: in _signed_response
+    return Response(packet)
+           ^^^^^^^^^^^^^^^^
+tests/bridge_fixtures.py:38: in __init__
+    request_body = json.dumps(packet_to_wire(packet)).encode()
+                              ^^^^^^^^^^^^^^^^^^^^^^
+services/venture_protocol.py:87: in packet_to_wire
+    validate_contract(payload, 'wire-opportunity-packet')
+../../kernel-boundary-deps/adapters/contract_validation.py:45: in validate_contract
+    raise ValueError(f'{name}: {errors[0].message}')
+E   ValueError: wire-opportunity-packet: {'id': '66947710-2bca-42a5-b8fa-586e2a6d42e0', 'source': '', 'source_ref': '', 'signal_type': 'operator_thought', 'observed_pain': '', 'core_thesis': '', 'audience': '', 'cultural_context': '', 'language': 'en', 'customer_segment': '', 'buyer_type': '', 'urgency': 'medium', 'evidence': ['e1'], 'possible_offer': 'guide', 'monetization_paths': ['paid guide'], 'risk_flags': [], 'smallest_validation_action': '', 'confidence': 0.5, 'created_at': '2026-09-08T11:40:09.195495+00:00', 'status': 'pending', 'schema_version': '1.1'} is not valid under any of the given schemas
+_________________ test_circuit_breaker_opens_and_fails_closed __________________
+tests/test_signed_bridge_client.py:134: in test_circuit_breaker_opens_and_fails_closed
+    client.evaluate(packet)
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:126: in _evaluate_http
+    body = json.dumps(packet_to_wire(packet)).encode()
+                      ^^^^^^^^^^^^^^^^^^^^^^
+services/venture_protocol.py:87: in packet_to_wire
+    validate_contract(payload, 'wire-opportunity-packet')
+../../kernel-boundary-deps/adapters/contract_validation.py:45: in validate_contract
+    raise ValueError(f'{name}: {errors[0].message}')
+E   ValueError: wire-opportunity-packet: {'id': '6923ceff-79fc-4788-ad1c-1d77ceb0ab2f', 'source': '', 'source_ref': '', 'signal_type': 'operator_thought', 'observed_pain': '', 'core_thesis': '', 'audience': '', 'cultural_context': '', 'language': 'en', 'customer_segment': '', 'buyer_type': '', 'urgency': 'medium', 'evidence': ['e1'], 'possible_offer': 'guide', 'monetization_paths': ['paid guide'], 'risk_flags': [], 'smallest_validation_action': '', 'confidence': 0.5, 'created_at': '2026-09-08T11:40:09.202443+00:00', 'status': 'pending', 'schema_version': '1.1'} is not valid under any of the given schemas
+_____________________ test_unsigned_local_mode_is_refused ______________________
+tests/test_signed_bridge_client.py:157: in test_unsigned_local_mode_is_refused
+    client.evaluate(packet)
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:126: in _evaluate_http
+    body = json.dumps(packet_to_wire(packet)).encode()
+                      ^^^^^^^^^^^^^^^^^^^^^^
+services/venture_protocol.py:87: in packet_to_wire
+    validate_contract(payload, 'wire-opportunity-packet')
+../../kernel-boundary-deps/adapters/contract_validation.py:45: in validate_contract
+    raise ValueError(f'{name}: {errors[0].message}')
+E   ValueError: wire-opportunity-packet: {'id': '007e06ed-0df7-4427-bda8-9cd53adfe815', 'source': '', 'source_ref': '', 'signal_type': 'operator_thought', 'observed_pain': '', 'core_thesis': '', 'audience': '', 'cultural_context': '', 'language': 'en', 'customer_segment': '', 'buyer_type': '', 'urgency': 'medium', 'evidence': ['e1'], 'possible_offer': 'guide', 'monetization_paths': ['paid guide'], 'risk_flags': [], 'smallest_validation_action': '', 'confidence': 0.5, 'created_at': '2026-09-08T11:40:09.211723+00:00', 'status': 'pending', 'schema_version': '1.1'} is not valid under any of the given schemas
+=========================== short test summary info ============================
+FAILED tests/test_signed_bridge_client.py::test_outbound_requests_are_signed
+FAILED tests/test_signed_bridge_client.py::test_replayed_response_nonce_is_rejected
+FAILED tests/test_signed_bridge_client.py::test_circuit_breaker_opens_and_fails_closed
+FAILED tests/test_signed_bridge_client.py::test_unsigned_local_mode_is_refused
+4 failed, 14 passed in 0.36s

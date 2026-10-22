@@ -89,6 +89,7 @@ def test_mixed_tag_index_searches_both_representations(tmp_path, monkeypatch):
     index.add("hash era lesson about energy queues")
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    index.embeddings._mode = "openai"  # paid mode now requires explicit selection
     index.add("openai era lesson about energy queues")
 
     tags = {r["emb"]["provider"] for r in index.records()}

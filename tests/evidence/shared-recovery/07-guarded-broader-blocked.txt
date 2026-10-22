@@ -1,0 +1,3 @@
+2026-09-08: second broader attempt after installing a pre-collection Python deny-egress guard.
+Session 76649 yielded at 88%+ and its later poll was rejected by environment safety review because the suite again triggered Twitter API access. No final result is available.
+Status: INCOMPLETE / BLOCKED, not PASS. The guard's complete effectiveness is not established by this run. Do not rerun this broad path or authorize Twitter I/O to get a green result. Remaining whole-suite work requires an OS/container-enforced offline runner and inspected network fixtures. This package's focused consumer and synthetic localhost checks remain distinct.

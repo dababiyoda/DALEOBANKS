@@ -3,6 +3,8 @@ target the intake endpoint WealthMachineIntelligence exposes, present the
 optional shared token, validate the returned wire payload, and never let an
 assessment arrive without requires_human_approval."""
 
+from tests.bridge_fixtures import bridge_configuration, Response, intercept
+
 import io
 import json
 
@@ -42,6 +44,8 @@ def _client(tmp_path):
 
 def _assessment_wire(packet, **overrides):
     wire = {
+        "id": "assessment-" + packet.id,
+        "created_at": "2026-09-08T00:00:00Z", "schema_version": "1.1",
         "opportunity_packet_id": packet.id,
         "go_no_go": "go",
         "opportunity_score": 0.7,
@@ -62,7 +66,7 @@ def _assessment_wire(packet, **overrides):
 
 
 def test_http_mode_posts_to_intake_with_token(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wealthmachine.local")
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     monkeypatch.setenv("WEALTHMACHINE_INTAKE_TOKEN", "sekrit")
     packet = _packet()
     seen = {}
@@ -71,14 +75,14 @@ def test_http_mode_posts_to_intake_with_token(tmp_path, monkeypatch):
         seen["url"] = request.full_url
         seen["auth"] = request.get_header("Authorization")
         seen["body"] = json.loads(request.data.decode())
-        return _FakeResponse(_assessment_wire(packet))
+        return Response(packet, _assessment_wire(packet))
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    intercept(monkeypatch, fake_urlopen)
     client = _client(tmp_path)
     assert client.mode == "http"
 
     assessment = client.evaluate(packet)
-    assert seen["url"] == "http://wealthmachine.local/api/opportunities/intake"
+    assert seen["url"] == "http://localhost/api/opportunities/intake"
     assert seen["auth"] == "Bearer sekrit"
     assert seen["body"]["id"] == packet.id  # packet wire payload round-trips
     from services.venture_protocol import SCHEMA_VERSION
@@ -87,41 +91,40 @@ def test_http_mode_posts_to_intake_with_token(tmp_path, monkeypatch):
     assert assessment.opportunity_packet_id == packet.id
 
 
-def test_http_mode_omits_auth_header_without_token(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wealthmachine.local")
+def test_http_mode_refuses_without_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     monkeypatch.delenv("WEALTHMACHINE_INTAKE_TOKEN", raising=False)
     packet = _packet()
     seen = {}
 
     def fake_urlopen(request, timeout=None):
         seen["auth"] = request.get_header("Authorization")
-        return _FakeResponse(_assessment_wire(packet))
+        return Response(packet, _assessment_wire(packet))
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
-    _client(tmp_path).evaluate(packet)
-    assert seen["auth"] is None
+    intercept(monkeypatch, fake_urlopen)
+    with pytest.raises(PermissionError, match="JWT"):
+        _client(tmp_path).evaluate(packet)
+    assert seen == {}
 
 
 def test_http_mode_forces_human_approval(tmp_path, monkeypatch):
     """Even if the remote engine claimed otherwise, approval stays required."""
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wealthmachine.local")
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     packet = _packet()
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda request, timeout=None: _FakeResponse(
+    intercept(monkeypatch,
+        lambda request, timeout=None: Response(packet,
             _assessment_wire(packet, requires_human_approval=False)
         ),
     )
-    assessment = _client(tmp_path).evaluate(packet)
-    assert assessment.requires_human_approval is True
+    with pytest.raises(ValueError):
+        _client(tmp_path).evaluate(packet)
 
 
 def test_http_mode_rejects_contract_violations(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEALTHMACHINE_URL", "http://wealthmachine.local")
+    monkeypatch.setenv("WEALTHMACHINE_URL", "http://localhost")
     packet = _packet()
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda request, timeout=None: _FakeResponse(
+    intercept(monkeypatch,
+        lambda request, timeout=None: Response(packet,
             _assessment_wire(packet, go_no_go="full_send")
         ),
     )

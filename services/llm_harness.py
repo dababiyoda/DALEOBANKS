@@ -31,6 +31,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from services.idea_refinery import EDUCATIONAL_DISCLOSURE, check_educational
 from services.ledger import DecisionLedger
 from services.logging_utils import get_logger
+from services.model_settings import model_settings
 from services.prompt_firewall import get_firewall
 
 logger = get_logger(__name__)
@@ -385,11 +386,7 @@ class ModelRouter:
     def route(self, role: str) -> str:
         if role == "screen":
             return "deterministic"  # the firewall screens; no model required
-        if os.getenv("OPENAI_API_KEY"):
-            return "openai"
-        if os.getenv("OLLAMA_URL"):
-            return "ollama"
-        return "template"
+        return model_settings().provider
 
 
 class FallbackManager:
@@ -407,7 +404,7 @@ class FallbackManager:
         role: str,
     ) -> Tuple[str, str]:
         provider = self.router.route(role)
-        if provider in ("openai", "ollama") and llm_adapter is not None:
+        if provider in ("openai", "ollama", "local") and llm_adapter is not None:
             try:
                 reply = await llm_adapter.chat(system, [{"role": "user", "content": user_text}])
                 return reply, provider

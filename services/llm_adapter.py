@@ -1,5 +1,5 @@
 """
-OpenAI LLM Adapter with retry logic and budgets
+Local-first LLM adapter with retry logic and budgets
 """
 
 import asyncio
@@ -13,6 +13,8 @@ import openai
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from config import get_config
+from services.model_settings import model_settings
+import httpx
 from services.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -28,11 +30,19 @@ class LLMBudget:
     day_reset_time: datetime = field(default_factory=datetime.now)
 
 class LLMAdapter:
-    """OpenAI adapter with retry logic and budget management"""
+    """Local-first adapter with explicit provider selection and budget management."""
     
     def __init__(self):
         self.config = get_config()
-        self.client = openai.AsyncOpenAI(api_key=self.config.OPENAI_API_KEY)
+        self.settings = model_settings()
+        self.model = self.settings.model
+        self.client = None if self.settings.provider == "template" else openai.AsyncOpenAI(
+            api_key=self.settings.api_key,
+            base_url=self.settings.base_url,
+            timeout=120.0,
+            max_retries=0,
+            http_client=httpx.AsyncClient(trust_env=False, follow_redirects=False),
+        )
         self.budget = LLMBudget()
         self.template_fallback_enabled = True
         
@@ -90,6 +100,9 @@ class LLMAdapter:
         Returns:
             Generated text response
         """
+        # No provider call is made in explicitly offline template mode.
+        if self.client is None:
+            return self._template_fallback(system, messages)
         # Check budget
         if not self._check_budget():
             if self.template_fallback_enabled:
@@ -106,7 +119,7 @@ class LLMAdapter:
             # Make API call
             start_time = time.time()
             response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.model,
                 messages=chat_messages,
                 temperature=temperature,
                 max_tokens=max_tokens or self.budget.max_tokens_per_call

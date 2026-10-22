@@ -144,3 +144,29 @@ def test_institutional_metrics_report(tmp_path):
         assert metrics["evidence_weighted"]["evidence_weighted_j"] > 0.0
     finally:
         reset_shared_instances()
+
+
+def test_shadow_rehearsals_earn_no_evidence_weight(tmp_path):
+    """A shadow ValidationResult proves plumbing, not reality: it neither
+    opens the window nor lifts the multiplier, and metrics count it apart."""
+    ledger = _setup(tmp_path)
+    try:
+        with get_db_session() as session:
+            packet = OpportunityPacket(source="operator", core_thesis="t", evidence=["e"])
+            session.add(packet)
+            session.add(ValidationResult(
+                opportunity_packet_id=packet.id, evidence_tier="payment",
+                evidence_quality=1.0, result_classification="success",
+                metadata={"mode": "shadow"},
+            ))
+            session.commit()
+
+            assert evidence_window(session)["empty"] is True
+            assert evidence_quality_multiplier(session) == 0.0
+            assert evidence_weighted_j(0.9, session, ledger)["evidence_weighted_j"] == 0.0
+            metrics = institutional_metrics(session, ledger=ledger)
+        assert metrics["validation_results_total"] == 0
+        assert metrics["shadow_runs_excluded"] == 1
+        assert metrics["closed"] == 0 and metrics["shadow_closed"] == 1
+    finally:
+        reset_shared_instances()

@@ -129,6 +129,11 @@ def build_episode(
     }
     episode["missing_stages"] = [s for s in STAGES if not episode.get(s)]
     episode["loop_closed"] = "validation_result" not in episode["missing_stages"]
+    # A loop closed only by shadow rehearsals proved the plumbing, not the
+    # market. Keep the two visibly distinct.
+    external = [r for r in results if (r.metadata or {}).get("mode") != "shadow"]
+    episode["externally_closed"] = bool(external)
+    episode["shadow_only"] = bool(results) and not external
     return episode
 
 
@@ -144,10 +149,11 @@ def list_episodes(session: Any, ledger: Optional[DecisionLedger] = None) -> List
 
 def loop_closure_rate(session: Any, ledger: Optional[DecisionLedger] = None) -> Dict[str, Any]:
     episodes = list_episodes(session, ledger=ledger)
-    closed = sum(1 for e in episodes if e["loop_closed"])
+    closed = sum(1 for e in episodes if e["externally_closed"])
     return {
         "episodes": len(episodes),
         "closed": closed,
+        "shadow_closed": sum(1 for e in episodes if e["shadow_only"]),
         "loop_closure_rate": (closed / len(episodes)) if episodes else 0.0,
     }
 

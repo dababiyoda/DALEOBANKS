@@ -35,6 +35,22 @@ sys.modules.setdefault(
 from services.x_client import XClient
 
 
+@pytest.fixture(autouse=True)
+def isolated_client_configuration(monkeypatch):
+    """These unit cases replace the client explicitly; initialization needs no service.
+
+    Other tests edit the shared Config object. Restore all mutations here and
+    ensure synthetic settings cannot accidentally trigger Tweepy's get_me call.
+    OS-level network isolation is supplied independently by offline_test.py.
+    """
+    from config import get_config
+    config = get_config()
+    for name in ("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET", "X_BEARER_TOKEN"):
+        monkeypatch.setattr(config, name, "")
+    for name in ("LIVE", "ENABLE_DMS", "ENABLE_MEDIA"):
+        monkeypatch.setattr(config, name, getattr(config, name))
+
+
 def _bind_async(method, instance):
     return types.MethodType(method, instance)
 

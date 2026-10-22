@@ -1,0 +1,151 @@
+F.FFF..F.FFFFFFFFF                                                       [100%]
+=================================== FAILURES ===================================
+______________________ test_outbound_requests_are_signed _______________________
+tests/test_signed_bridge_client.py:81: in test_outbound_requests_are_signed
+    assessment = client.evaluate(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+___________________ test_replayed_response_nonce_is_rejected ___________________
+tests/test_signed_bridge_client.py:122: in test_replayed_response_nonce_is_rejected
+    client.evaluate(packet)  # first use of the nonce: fine
+    ^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+_________________ test_circuit_breaker_opens_and_fails_closed __________________
+tests/test_signed_bridge_client.py:139: in test_circuit_breaker_opens_and_fails_closed
+    client.evaluate(packet)
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+_____________________ test_unsigned_local_mode_still_works _____________________
+tests/test_signed_bridge_client.py:161: in test_unsigned_local_mode_still_works
+    assessment = client.evaluate(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+_______ TestOutboundPackets.test_dialect_packet_becomes_valid_kernel_law _______
+../../kernel-boundary-deps/adapters/daleobanks_opportunity.py:109: in _validate_wire
+    validate_contract(wire, 'wire-opportunity-packet')
+../../kernel-boundary-deps/adapters/contract_validation.py:45: in validate_contract
+    raise ValueError(f'{name}: {errors[0].message}')
+E   ValueError: wire-opportunity-packet: 'schema_version' is a required property
+
+The above exception was the direct cause of the following exception:
+tests/test_kernel_contract_parity.py:81: in test_dialect_packet_becomes_valid_kernel_law
+    kernel = kc.wire_packet_to_kernel(self._wire_packet(),
+../../kernel-boundary-deps/adapters/daleobanks_opportunity.py:204: in enrich
+    _validate_wire(wire)
+../../kernel-boundary-deps/adapters/daleobanks_opportunity.py:111: in _validate_wire
+    raise AdapterError(str(exc)) from exc
+E   adapters.daleobanks_opportunity.AdapterError: wire-opportunity-packet: 'schema_version' is a required property
+_________________ TestOutboundPackets.test_missing_id_refuses __________________
+tests/test_kernel_contract_parity.py:96: in test_missing_id_refuses
+    with pytest.raises(kc.ContractRefusal, match="id"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'id'
+E     Actual message: "wire-opportunity-packet: '' should be non-empty"
+___ TestInboundAssessments.test_dialect_assessment_becomes_valid_kernel_law ____
+tests/test_kernel_contract_parity.py:109: in test_dialect_assessment_becomes_valid_kernel_law
+    kernel = kc.wire_assessment_to_kernel(self._wire_assessment())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/kernel_contracts.py:23: in wire_assessment_to_kernel
+    return _assessment(wire, transport_identity="wealthmachine")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../kernel-boundary-deps/adapters/wealthmachine_assessment.py:95: in adapt
+    raise AdapterError(f"wire assessment lacks required committee cases {missing}; "
+E   adapters.daleobanks_opportunity.AdapterError: wire assessment lacks required committee cases ['bull', 'bear', 'do_nothing']; the adapter does not invent adversarial arguments
+_ TestInboundAssessments.test_constitutional_violation_on_wire_refused_not_sanitized _
+tests/test_kernel_contract_parity.py:116: in test_constitutional_violation_on_wire_refused_not_sanitized
+    with pytest.raises(kc.ContractRefusal, match="constitution"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'constitution'
+E     Actual message: 'wire assessment violates its contract: True was expected'
+_____________ TestInboundAssessments.test_unknown_verdict_refused ______________
+tests/test_kernel_contract_parity.py:123: in test_unknown_verdict_refused
+    with pytest.raises(kc.ContractRefusal, match="go_no_go"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'go_no_go'
+E     Actual message: "wire assessment violates its contract: 'maybe' is not one of ['go', 'defer', 'kill', 'needs_more_evidence']"
+_____________ TestInboundAssessments.test_all_dialect_verdicts_map _____________
+tests/test_kernel_contract_parity.py:128: in test_all_dialect_verdicts_map
+    kernel = kc.wire_assessment_to_kernel(self._wire_assessment(go_no_go=verdict))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/kernel_contracts.py:23: in wire_assessment_to_kernel
+    return _assessment(wire, transport_identity="wealthmachine")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../kernel-boundary-deps/adapters/wealthmachine_assessment.py:95: in adapt
+    raise AdapterError(f"wire assessment lacks required committee cases {missing}; "
+E   adapters.daleobanks_opportunity.AdapterError: wire assessment lacks required committee cases ['bull', 'bear', 'do_nothing']; the adapter does not invent adversarial arguments
+__________________ test_http_mode_posts_to_intake_with_token ___________________
+tests/test_wealthmachine_http.py:80: in test_http_mode_posts_to_intake_with_token
+    assessment = client.evaluate(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+________________ test_http_mode_omits_auth_header_without_token ________________
+tests/test_wealthmachine_http.py:101: in test_http_mode_omits_auth_header_without_token
+    _client(tmp_path).evaluate(packet)
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+_____________________ test_http_mode_forces_human_approval _____________________
+tests/test_wealthmachine_http.py:115: in test_http_mode_forces_human_approval
+    assessment = _client(tmp_path).evaluate(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+__________________ test_http_mode_rejects_contract_violations __________________
+tests/test_wealthmachine_http.py:129: in test_http_mode_rejects_contract_violations
+    _client(tmp_path).evaluate(packet)
+services/wealthmachine_client.py:101: in evaluate
+    assessment = self._evaluate_http(packet)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/wealthmachine_client.py:119: in _evaluate_http
+    raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
+E   adapters.bridge_transport.BridgeSecurityError: live Kernel-mediated adapter not configured; direct organ bypass refused
+=========================== short test summary info ============================
+FAILED tests/test_signed_bridge_client.py::test_outbound_requests_are_signed
+FAILED tests/test_signed_bridge_client.py::test_replayed_response_nonce_is_rejected
+FAILED tests/test_signed_bridge_client.py::test_circuit_breaker_opens_and_fails_closed
+FAILED tests/test_signed_bridge_client.py::test_unsigned_local_mode_still_works
+FAILED tests/test_kernel_contract_parity.py::TestOutboundPackets::test_dialect_packet_becomes_valid_kernel_law
+FAILED tests/test_kernel_contract_parity.py::TestOutboundPackets::test_missing_id_refuses
+FAILED tests/test_kernel_contract_parity.py::TestInboundAssessments::test_dialect_assessment_becomes_valid_kernel_law
+FAILED tests/test_kernel_contract_parity.py::TestInboundAssessments::test_constitutional_violation_on_wire_refused_not_sanitized
+FAILED tests/test_kernel_contract_parity.py::TestInboundAssessments::test_unknown_verdict_refused
+FAILED tests/test_kernel_contract_parity.py::TestInboundAssessments::test_all_dialect_verdicts_map
+FAILED tests/test_wealthmachine_http.py::test_http_mode_posts_to_intake_with_token
+FAILED tests/test_wealthmachine_http.py::test_http_mode_omits_auth_header_without_token
+FAILED tests/test_wealthmachine_http.py::test_http_mode_forces_human_approval
+FAILED tests/test_wealthmachine_http.py::test_http_mode_rejects_contract_violations
+14 failed, 4 passed in 0.23s

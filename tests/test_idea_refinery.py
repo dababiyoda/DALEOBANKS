@@ -142,12 +142,13 @@ def test_go_defer_kill_behavior(tmp_path):
     client = WealthMachineClient(ledger=ledger)
 
     strong = OpportunityPacket(
+        observed_pain="Teams need practical workshop instruction",
         evidence=["e1", "e2", "e3"], urgency="high",
         possible_offer="workshop", monetization_paths=["paid workshop"],
     )
-    weak = OpportunityPacket(evidence=["one reply"], urgency="low")
-    risky = OpportunityPacket(evidence=["e1"], risk_flags=["legal_risk"])
-    unknown = OpportunityPacket(evidence=[])
+    weak = OpportunityPacket(observed_pain="A team needs help", evidence=["one reply"], urgency="low")
+    risky = OpportunityPacket(observed_pain="A regulated need requires review", evidence=["e1"], risk_flags=["legal_risk"])
+    unknown = OpportunityPacket(observed_pain="An unvalidated need", evidence=[])
 
     assert client.evaluate(strong).go_no_go == "go"
     assert client.evaluate(weak).go_no_go == "defer"

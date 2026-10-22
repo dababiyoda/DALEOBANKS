@@ -1,0 +1,13 @@
+2026-09-08 UTC; Python 3.12.13; isolated synthetic consumer controls only.
+Consumer base: ed5e95d7f48e006d180b972efe138179325c31d2 plus this retained patch.
+Canonical Kernel: 3e059c20331d96e05a44daac1b097896aaabde93, package 0.1.1.
+Installed local wheel SHA256: 3dbe7b916528d6fd132c334e53d914762ebdfeead5a02278159b5ca107bfe053
+Dependencies: pytest 9.1.1, jsonschema 4.26.0, rfc3339-validator 0.1.4,
+httpx 0.28.1, PyYAML 6.0.3. Installed from the shared target environment;
+this execution does not prove a Docker image, dependency lock or external runtime.
+Command: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/workspace/scratch/c1c408c41c36/tmp/wmi-test-deps:/workspace/scratch/c1c408c41c36/tmp/kernel-boundary-deps python -m pytest -q tests/test_shared_response_boundary.py tests/test_signed_bridge_client.py tests/test_wealthmachine_http.py tests/test_kernel_contract_parity.py --tb=short
+Exit: 0. Raw output: 08-final-pinned-kernel-focused.txt (33 passed in 0.28s).
+Failed broad attempts and collection errors remain in files 04-07.
+No further broad rerun after safety-review rejection. An independent OS-level
+offline runner and network-fixture review are required before that gate resumes.
+CMC and VDM unchanged. Independent adoption review pending.

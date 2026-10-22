@@ -1,3 +1,2 @@
-# DALEOBANKS AI entrypoint
+Before new or resumed UNIIMENTE work in this fork, read `AGENTS.md` and its pinned collaboration guide. Refresh the founder Discussion, work board, current heads and overlapping claims. Preserve existing local and nested instructions. Coordination grants no runtime or external-effect authority.
 
-Read `AGENTS.md` before any new or resumed task. It pins the canonical UNIIMENTE collaboration protocol and states this repository's boundaries. Preserve all more-specific local instructions and evidence; do not infer authority from this file.

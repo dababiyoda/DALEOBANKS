@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from db.models import ApprovalRequest, MediaAssetDraft, OpportunityPacket, VentureAssessment
@@ -29,7 +30,10 @@ from services.bridge_security import (
     build_headers,
     signing_key,
     verify_headers,
+    body_digest,
 )
+from adapters.contract_validation import strict_json
+from events.bridge_state import BridgeState
 from services.ledger import DecisionLedger, get_ledger
 from services.logging_utils import get_logger
 from services.venture_protocol import SCHEMA_VERSION, packet_to_wire, validate_assessment_wire
@@ -43,6 +47,11 @@ class CircuitOpenError(ConnectionError):
     """Too many consecutive bridge failures — failing closed for a cooldown."""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise BridgeSecurityError('adapter redirects refused; credentials are recipient-bound')
+
+
 class WealthMachineClient:
     # Circuit breaker: after this many consecutive transport failures the
     # bridge opens and fails closed for a cooldown instead of hammering a
@@ -54,7 +63,20 @@ class WealthMachineClient:
         self._ledger = ledger
         self._consecutive_failures = 0
         self._circuit_open_until = 0.0
-        self._response_nonces = NonceCache()
+        self._response_nonces = None
+
+    def close(self):
+        if self._response_nonces is not None:
+            self._response_nonces.close()
+            self._response_nonces = None
+
+    def _durable_state(self):
+        if self._response_nonces is None:
+            self._response_nonces = BridgeState(
+                os.getenv('UNIIMENTE_BRIDGE_STATE_PATH', ''),
+                os.getenv('UNIIMENTE_CONSTITUTION_HASH', ''), owner='daleobanks',
+                legal_principal=os.getenv('UNIIMENTE_LEGAL_PRINCIPAL', ''))
+        return self._response_nonces
 
     @property
     def ledger(self) -> DecisionLedger:
@@ -89,6 +111,12 @@ class WealthMachineClient:
 
     def _evaluate_http(self, packet: OpportunityPacket) -> VentureAssessment:
         import time as _time
+        from urllib.parse import urlparse
+        parsed = urlparse(self.url)
+        if (os.getenv('UNIIMENTE_BRIDGE_MODE') != 'synthetic-localhost'
+                or parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1', '::1')
+                or parsed.username or parsed.password):
+            raise BridgeSecurityError('live Kernel-mediated adapter not configured; direct organ bypass refused')
 
         if _time.time() < self._circuit_open_until:
             raise CircuitOpenError(
@@ -98,41 +126,51 @@ class WealthMachineClient:
         body = json.dumps(packet_to_wire(packet)).encode()
         headers = {"Content-Type": "application/json"}
         token = os.getenv("WEALTHMACHINE_INTAKE_TOKEN", "")
-        if token:
-            # Shared-secret auth with the WealthMachine intake endpoint;
-            # optional so the bridge still runs credential-free locally.
-            headers["Authorization"] = f"Bearer {token}"
+        if not token.strip():
+            raise BridgeSecurityError('verified JWT admission token required')
+        # This is a JWT supplied by the isolated test fixture, not issued here.
+        # WMI verifies signature/issuer/audience/expiry and sender-to-sub binding.
+        headers["Authorization"] = f"Bearer {token}"
         # Signed transport: identity, timestamp, nonce, idempotency key.
         # The packet id doubles as the idempotency key — resending the same
         # packet must not run the engine twice.
         headers.update(build_headers(
             body, identity="daleobanks", schema_version=SCHEMA_VERSION,
             idempotency_key=packet.id, trace_id=packet.id,
+            recipient='wealthmachine', operation='opportunity.evaluate',
         ))
         request = urllib.request.Request(
             f"{self.url}/api/opportunities/intake",
             data=body, headers=headers, method="POST",
         )
         timeout = float(os.getenv("WEALTHMACHINE_TIMEOUT", "20"))
+        state = self._durable_state()  # configuration/history admission before any dispatch
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.build_opener(_NoRedirect).open(request, timeout=timeout) as response:
                 raw = response.read()
                 response_headers = dict(response.headers.items())
         except Exception:
             self._record_failure()
             raise
         try:
-            if signing_key():
-                # Response authenticity: same key, same canonical form.
-                verify_headers(response_headers, raw,
-                               nonce_cache=self._response_nonces)
-            payload = json.loads(raw)
+            transport = verify_headers(response_headers, raw,
+                nonce_cache=state, expected_sender='wealthmachine',
+                expected_recipient='daleobanks', expected_operation='opportunity.evaluate',
+                request_digest=body_digest(body), direction='response', status='200')
+            if transport['idempotency_key'] != packet.id or transport['schema_version'] != SCHEMA_VERSION:
+                raise BridgeSecurityError('response logical key or version mismatch')
+            payload = strict_json(raw)
             validate_assessment_wire(payload)
+            if (payload['opportunity_packet_id'] != packet.id
+                    or payload['schema_version'] != SCHEMA_VERSION):
+                raise BridgeSecurityError('response refers to another packet/version')
         except (BridgeSecurityError, ValueError):
             self._record_failure()
             raise
         self._consecutive_failures = 0
         return VentureAssessment(
+            id=payload['id'],
+            created_at=datetime.fromisoformat(payload['created_at'].replace('Z', '+00:00')),
             opportunity_packet_id=payload["opportunity_packet_id"],
             go_no_go=payload["go_no_go"],
             opportunity_score=float(payload.get("opportunity_score") or 0.0),
@@ -329,6 +367,8 @@ def get_wealthmachine_client() -> WealthMachineClient:
 
 def set_wealthmachine_client(client: Optional[WealthMachineClient]) -> None:
     global _SHARED_CLIENT
+    if _SHARED_CLIENT is not None and _SHARED_CLIENT is not client:
+        _SHARED_CLIENT.close()
     _SHARED_CLIENT = client
 
 

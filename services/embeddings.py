@@ -12,7 +12,8 @@ Provider modes (env `EMBEDDINGS_PROVIDER`, default ``hash``):
               ``text-embedding-3-small``) via a plain synchronous HTTPS
               call; every failure falls back to ``hash`` for that call, so
               memory never stops working.
-- ``auto``    ``openai`` when `OPENAI_API_KEY` is set, else ``hash``.
+- ``ollama`` or ``local`` use a loopback /v1/embeddings endpoint and fall back to hash.
+- ``auto``    local when LLM_BASE_URL or OLLAMA_URL is set, else hash. Keys never select billing.
 - ``shadow``  serves ``hash`` (behavior unchanged) while also exercising the
               OpenAI path and counting outcomes in :attr:`shadow_stats` — a
               safe observation window before switching.
@@ -32,6 +33,7 @@ import urllib.request
 from typing import Any, Dict, Optional, Tuple
 
 from services.logging_utils import get_logger
+from services.model_settings import local_base_url, local_opener
 
 logger = get_logger(__name__)
 
@@ -45,8 +47,8 @@ def hash_tag(dimensions: int = HASH_DIMENSIONS) -> Tag:
     return {"provider": "hash", "dim": dimensions}
 
 
-def tag_key(tag: Tag) -> Tuple[str, Any]:
-    return (str(tag.get("provider", "hash")), tag.get("dim"))
+def tag_key(tag: Tag) -> tuple:
+    return (str(tag.get("provider", "hash")), tag.get("model"), tag.get("dim"))
 
 
 class EmbeddingService:
@@ -76,7 +78,14 @@ class EmbeddingService:
         """Vector + tag for ``text`` under the configured mode. Never raises;
         never returns an unusable vector — hash is the universal fallback."""
         mode = self.mode
-        if mode == "openai" or (mode == "auto" and os.getenv("OPENAI_API_KEY")):
+        if mode in ("ollama", "local") or (
+            mode == "auto" and (os.getenv("LLM_BASE_URL") or os.getenv("OLLAMA_URL"))
+        ):
+            dense = self._local_embed(text)
+            if dense is not None:
+                return dense, {"provider": "local", "model": self.local_model, "dim": len(dense)}
+            logger.warning("Local embedding failed; falling back to hash")
+        elif mode == "openai":
             dense = self._openai_embed(text)
             if dense is not None:
                 return dense, {"provider": "openai", "model": self.model, "dim": len(dense)}
@@ -86,6 +95,38 @@ class EmbeddingService:
             with self._lock:
                 self.shadow_stats["ok" if dense is not None else "failed"] += 1
         return self.hash_embed(text), hash_tag(self.dimensions)
+
+    @property
+    def local_model(self) -> str:
+        return os.getenv("EMBEDDINGS_MODEL", "nomic-embed-text")
+
+    def _local_embed(self, text: str) -> Optional[Vector]:
+        try:
+            model = self.local_model
+            if not model.strip() or "cloud" in model.lower():
+                return None
+            base = local_base_url(os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")))
+            payload = json.dumps({"model": model, "input": text[:8000]}).encode()
+            request = urllib.request.Request(
+                base + "/embeddings", data=payload, method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with local_opener().open(request, timeout=10) as response:
+                body = response.read(1024 * 1024 + 1)
+            if len(body) > 1024 * 1024:
+                return None
+            values = json.loads(body)["data"][0]["embedding"]
+            if (not isinstance(values, list) or not values
+                    or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                           or not math.isfinite(v) for v in values)):
+                return None
+            norm = math.sqrt(sum(v * v for v in values))
+            if norm == 0 or not math.isfinite(norm):
+                return None
+            return {i: v / norm for i, v in enumerate(values)}
+        except Exception as exc:
+            logger.warning(f"Local embedding unavailable: {exc}")
+            return None
 
     def _openai_embed(self, text: str) -> Optional[Vector]:
         api_key = os.getenv("OPENAI_API_KEY")

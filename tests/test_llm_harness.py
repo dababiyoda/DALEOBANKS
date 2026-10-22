@@ -100,10 +100,10 @@ def test_extract_json_tolerates_fences_and_prefixes():
 # ---------------------------------------------------------------------- #
 # Offline-first: template fallback with zero credentials
 # ---------------------------------------------------------------------- #
-def test_router_defaults_to_template_without_credentials(monkeypatch):
+def test_router_defaults_to_local_without_credentials(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_URL", raising=False)
-    assert ModelRouter().route("draft") == "template"
+    assert ModelRouter().route("draft") == "ollama"
     assert ModelRouter().route("screen") == "deterministic"
 
 

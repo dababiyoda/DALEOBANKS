@@ -274,3 +274,44 @@ async def test_reply_mentions_instinct_blocks_ragebait(monkeypatch):
     assert published == []
     with get_db_session() as session:
         assert session.query(Tweet).count() == 0
+
+
+@pytest.mark.parametrize("granted", [False, True])
+async def test_engagement_is_recorded_only_when_it_happened(monkeypatch, granted):
+    """A live like or repost refused for lack of a grant returns False and
+    must not be logged as an engagement."""
+    import runner
+
+    class FakeXClient:
+        async def search_recent(self, query, max_results=5):
+            return [{"id": "t-1", "text": "coordination mechanisms matter"}]
+
+        async def like(self, tweet_id):
+            return granted
+
+        async def repost(self, tweet_id):
+            return granted
+
+    async def fake_decide():
+        return {"type": "SEARCH_ENGAGE", "search_terms": ["coordination"], "intensity": 1}
+
+    logged = []
+
+    async def fake_log(kind, meta):
+        logged.append(kind)
+
+    monkeypatch.setattr(runner, "x_client", FakeXClient())
+    monkeypatch.setattr(runner.config, "LIVE", True)
+    monkeypatch.setattr(runner.config, "ENABLE_LIKES", True)
+    monkeypatch.setattr(runner.config, "ENABLE_REPOSTS", True)
+    monkeypatch.setattr(runner.config, "ENABLE_QUOTES", False)
+    monkeypatch.setattr(runner.crisis_service, "guard", lambda action: True)
+    monkeypatch.setattr(runner.selector, "decide_next_action", fake_decide)
+    monkeypatch.setattr(runner, "_calculate_relevance", lambda text, term: 5)
+    monkeypatch.setattr(runner.random, "random", lambda: 0.0)
+    monkeypatch.setattr(runner, "_log_action", fake_log)
+
+    await runner.search_and_engage_job()
+
+    engagements = [k for k in logged if k in ("tweet_liked", "tweet_retweeted")]
+    assert engagements == (["tweet_liked", "tweet_retweeted"] if granted else [])

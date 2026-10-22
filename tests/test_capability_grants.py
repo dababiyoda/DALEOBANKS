@@ -255,3 +255,52 @@ def test_grants_never_widen_standing_autonomy(tmp_path):
         assert get_config().LIVE == live_before  # consuming never arms
     finally:
         reset_shared_instances()
+
+
+def test_approved_intent_is_immutable(tmp_path):
+    """What the human approved is fixed at decision time. Editing the
+    request afterwards, or forging 'approved' without a decision, mints
+    nothing."""
+    ledger, service, line = _setup(tmp_path)
+    try:
+        with get_db_session() as session:
+            approved = _approved_request(session, line)
+            assert approved.approved_digest
+            assert ledger.replay("approval_digest_fixed")
+
+            # Widen the payload after the YES: a new draft slips in.
+            approved.payload["draft_id"] = "draft-evil"
+            with pytest.raises(CapabilityError, match="altered"):
+                service.mint_from_approval(
+                    session, approved.id, "publish_post", "publish draft-evil", "draft-evil",
+                )
+            # Restoring the original makes it mintable again: the check is
+            # against the human's decision, not a one-way poison.
+            approved.payload["draft_id"] = "draft-1"
+            service.mint_from_approval(
+                session, approved.id, "publish_post", "publish draft-1", "draft-1",
+            )
+
+            # A summary rewritten after the decision is also a different intent.
+            approved.summary = "Publish anything"
+            with pytest.raises(CapabilityError, match="altered"):
+                service.mint_from_approval(
+                    session, approved.id, "publish_post", "publish draft-1", "draft-1",
+                )
+
+            # Setting status by hand is not a human decision.
+            forged = line.request_approval(
+                session, kind="publish", summary="Never decided",
+                payload={"draft_id": "draft-f"},
+            )
+            forged.status = "approved"
+            with pytest.raises(CapabilityError, match="digest"):
+                service.mint_from_approval(
+                    session, forged.id, "publish_post", "publish draft-f", "draft-f",
+                )
+
+        reasons = [e["payload"]["reason"] for e in ledger.replay("capability_rejected")]
+        assert reasons.count("approval_altered_after_decision") == 2
+        assert "approval_digest_missing" in reasons
+    finally:
+        reset_shared_instances()

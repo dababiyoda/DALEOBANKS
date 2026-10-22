@@ -10,6 +10,37 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+
+class ExternalNetworkForbidden(BaseException):
+    """A test attempted external I/O; do not let retry loops catch and retry it."""
+
+
+def pytest_sessionstart(session):
+    # Install before collection: optional real dependencies must never turn an
+    # offline suite into outreach. This is test isolation, not a runtime policy.
+    import socket
+    original_lookup = socket.getaddrinfo
+    original_connect = socket.socket.connect
+    original_sendto = socket.socket.sendto
+    def local(host):
+        return host in (None, 'localhost', '127.0.0.1', '::1', b'localhost', b'127.0.0.1', b'::1')
+    def lookup(host, *args, **kwargs):
+        if not local(host):
+            raise ExternalNetworkForbidden('offline suite refused external DNS: ' + str(host))
+        return original_lookup(host, *args, **kwargs)
+    def connect(sock, address):
+        if sock.family in (socket.AF_INET, socket.AF_INET6) and not local(address[0]):
+            raise ExternalNetworkForbidden('offline suite refused external connection')
+        return original_connect(sock, address)
+    def sendto(sock, data, *args):
+        if sock.family in (socket.AF_INET, socket.AF_INET6):
+            raise ExternalNetworkForbidden('offline suite refused network datagram')
+        return original_sendto(sock, data, *args)
+    socket.getaddrinfo = lookup
+    socket.socket.connect = connect
+    socket.socket.sendto = sendto
+
+
 # Fallback stubs for third-party packages (dotenv, numpy, openai, tenacity)
 # live in tests/stubs. Appending the directory to the END of sys.path means a
 # real installed package always takes precedence; the stubs only kick in when
