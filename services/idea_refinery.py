@@ -57,11 +57,38 @@ def _is_finance_related(text: str) -> bool:
     return any(word in lower for word in _FINANCE_KEYWORDS)
 
 
+def _sentences(text: str) -> List[str]:
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if s.strip()]
+
+
 def _first_sentence(text: str) -> str:
-    for sentence in re.split(r"(?<=[.!?])\s+", (text or "").strip()):
-        if sentence.strip():
-            return sentence.strip()
-    return (text or "").strip()
+    sentences = _sentences(text)
+    return sentences[0] if sentences else (text or "").strip()
+
+
+# The packet carries what the thought states as evidence, not only its thesis:
+# a later sentence with a figure, or one that calls itself evidence. Bounded so
+# the provenance item plus these fill WealthMachine's signal window exactly.
+_MAX_STATED_EVIDENCE = 4
+_MAX_EVIDENCE_CHARS = 2000
+
+
+def stated_evidence(text: str) -> List[str]:
+    """The thought's own evidence statements after its thesis, deduplicated, in order.
+    They are the operator's claims, carried verbatim as data; nothing here checks them."""
+    found: List[str] = []
+    seen = set()
+    for sentence in _sentences(text)[1:]:
+        if not (re.search(r"\d", sentence) or sentence.lower().startswith("evidence")):
+            continue
+        item = sentence[:_MAX_EVIDENCE_CHARS]
+        if item.lower() in seen:
+            continue
+        seen.add(item.lower())
+        found.append(item)
+        if len(found) == _MAX_STATED_EVIDENCE:
+            break
+    return found
 
 
 class IdeaRefinery:
@@ -266,7 +293,7 @@ class IdeaRefinery:
             customer_segment="individual learners",
             buyer_type="consumer",
             urgency="medium",
-            evidence=[f"operator thought {idea.id}"],
+            evidence=[f"operator thought {idea.id}", *stated_evidence(idea.raw_text)],
             possible_offer=f"educational {offers[0]}",
             monetization_paths=[f"paid {offer}" for offer in offers[:3]],
             risk_flags=risk_flags,
@@ -278,4 +305,4 @@ class IdeaRefinery:
         )
 
 
-__all__ = ["IdeaRefinery", "check_educational", "EDUCATIONAL_DISCLOSURE"]
+__all__ = ["IdeaRefinery", "check_educational", "stated_evidence", "EDUCATIONAL_DISCLOSURE"]
