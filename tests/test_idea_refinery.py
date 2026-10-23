@@ -192,3 +192,38 @@ def test_full_loop_offline_and_live_default_unchanged(tmp_path, monkeypatch):
 
     assert get_config().LIVE == live_before  # the refinery never touches arming
     assert ledger.replay("venture_assessment")  # important events are logged
+
+
+# ---------------------------------------------------------------------- #
+# The packet carries the thought's stated evidence, not only its thesis
+# ---------------------------------------------------------------------- #
+FIGURES_THOUGHT = (
+    "Dock crews burn out when staffing is guessed. "
+    "Last week 3 of 5 shifts ran short by 2 people. "
+    "Evidence from the certified plan: docks need 4 and the line needs 6. "
+    "A staffing checklist could help supervisors. "
+    "Last week 3 of 5 shifts ran short by 2 people."
+)
+
+
+def test_figures_after_the_thesis_reach_the_packet_evidence():
+    packet = _refine(FIGURES_THOUGHT)["opportunity"]
+    assert packet.core_thesis == "Dock crews burn out when staffing is guessed."
+    assert packet.evidence == [
+        f"operator thought {packet.source_ref}",
+        "Last week 3 of 5 shifts ran short by 2 people.",          # once: a repeat is not a second witness
+        "Evidence from the certified plan: docks need 4 and the line needs 6.",
+    ]
+
+
+def test_a_thought_without_stated_evidence_keeps_only_its_provenance():
+    packet = _refine()["opportunity"]
+    assert packet.evidence == [f"operator thought {packet.source_ref}"]
+
+
+def test_stated_evidence_is_bounded():
+    from services.idea_refinery import stated_evidence
+    text = "Thesis. " + " ".join(f"Item {i} counts." for i in range(10)) + " " + "9" * 5000 + "."
+    items = stated_evidence(text)
+    assert items == [f"Item {i} counts." for i in range(4)]
+    assert all(len(i) <= 2000 for i in stated_evidence("Thesis. " + "9" * 5000 + "."))
